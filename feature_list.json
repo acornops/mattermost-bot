@@ -20,11 +20,12 @@
           "Confirm required harness files exist.",
           "Confirm init.sh is executable.",
           "Confirm feature_list.json contains required fields.",
+          "Confirm AGENTS.md contains startup workflow, required artifacts, definition of done, and end-of-session instructions.",
           "Confirm AGENTS.md links to startup and harness docs."
         ]
       },
-      "evidence": "./init.sh passed on 2026-05-25; scripts/verify-harness.sh reported: Harness verification passed.",
-      "notes": "Created before the product stack is selected."
+      "evidence": "./init.sh passed on 2026-05-25; scripts/verify-harness.sh reported: Harness verification passed. AGENTS.md hardened with end-of-session instructions on 2026-05-25.",
+      "notes": "Created before the product stack is selected; later tightened against the provided AGENTS.md template."
     },
     {
       "id": "H02",
