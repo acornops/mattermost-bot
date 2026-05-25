@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "status_values": ["not_started", "active", "blocked", "passing"],
+  "rules": {
+    "wip_limit": 1,
+    "passing_requires_evidence": true,
+    "source_of_truth": "This file is the source of truth for planned harness and product work."
+  },
+  "features": [
+    {
+      "id": "H01",
+      "priority": 1,
+      "area": "harness",
+      "title": "Initialize minimal harness structure",
+      "user_visible_behavior": "A fresh agent session can identify the repository purpose, startup command, verification command, current progress, and next action from repo files.",
+      "status": "passing",
+      "verification": {
+        "command": "./scripts/verify-harness.sh",
+        "steps": [
+          "Confirm required harness files exist.",
+          "Confirm init.sh is executable.",
+          "Confirm feature_list.json contains required fields.",
+          "Confirm AGENTS.md links to startup and harness docs."
+        ]
+      },
+      "evidence": "./init.sh passed on 2026-05-25; scripts/verify-harness.sh reported: Harness verification passed.",
+      "notes": "Created before the product stack is selected."
+    },
+    {
+      "id": "H02",
+      "priority": 2,
+      "area": "harness",
+      "title": "Choose product goal and implementation stack",
+      "user_visible_behavior": "The repository documents the project goal, stack, install command, test command, lint command, build command, and dev server command.",
+      "status": "not_started",
+      "verification": {
+        "command": "Manual review plus updated ./init.sh",
+        "steps": [
+          "Record the chosen product goal in AGENTS.md or README.md.",
+          "Record the chosen stack and versions.",
+          "Update init.sh with real install, verification, and start commands.",
+          "Run the updated init.sh successfully."
+        ]
+      },
+      "evidence": "",
+      "notes": "Requires user direction before implementation."
+    },
+    {
+      "id": "H03",
+      "priority": 3,
+      "area": "verification",
+      "title": "Replace placeholder verification with stack-specific checks",
+      "user_visible_behavior": "A future agent can run one command to verify setup, tests, linting, and build for the selected project stack.",
+      "status": "not_started",
+      "verification": {
+        "command": "./init.sh",
+        "steps": [
+          "Install or validate dependencies.",
+          "Run test suite.",
+          "Run lint or static checks.",
+          "Run build or equivalent readiness check."
+        ]
+      },
+      "evidence": "",
+      "notes": "Depends on H02."
+    },
+    {
+      "id": "H04",
+      "priority": 4,
+      "area": "scope",
+      "title": "Create first product feature set",
+      "user_visible_behavior": "feature_list.json contains at least three product features, each small enough for one session and each with executable verification criteria.",
+      "status": "not_started",
+      "verification": {
+        "command": "./scripts/verify-harness.sh",
+        "steps": [
+          "Confirm product features exist in feature_list.json.",
+          "Confirm every feature has behavior, status, verification, evidence, and notes fields.",
+          "Confirm no more than one feature is active."
+        ]
+      },
+      "evidence": "",
+      "notes": "Depends on H02."
+    }
+  ]
+}
