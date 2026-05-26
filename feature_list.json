@@ -115,7 +115,7 @@
       "area": "mattermost",
       "title": "Explore Mattermost bot integration options",
       "user_visible_behavior": "The repository documents the recommended first integration style for the ChatOps bot and why it fits the authentication workflow.",
-      "status": "not_started",
+      "status": "passing",
       "verification": {
         "command": "Manual review plus ./init.sh",
         "steps": [
@@ -126,8 +126,8 @@
           "Run ./init.sh successfully."
         ]
       },
-      "evidence": "",
-      "notes": "Backend API contract can remain mocked or pending during this feature."
+      "evidence": "On 2026-05-26, reviewed current Mattermost integration docs for slash commands, incoming webhooks, outgoing webhooks, bot accounts, REST API use, plugins, and the deprecated Apps framework. Added docs/bot-integrations.md with tradeoffs and security notes. Recorded the decision in DECISIONS.md to use a custom slash command as the first prototype integration style, adding bot account plus REST API access only when durable bot identity, delayed responses, direct messages, or proactive posts are needed. ./init.sh passed after artifact updates.",
+      "notes": "Backend API contract can remain mocked or pending during this feature. Next prototype namespace should be /csit."
     },
     {
       "id": "B01",

@@ -13,6 +13,7 @@
 - Local Mattermost is verified through the official Docker Compose deployment without NGINX at `http://localhost:8065`.
 - `./scripts/verify-mattermost.sh` passes when run with host-local access.
 - Mattermost team `csit-lab` and channel `chatops-lab` exist.
+- First Mattermost integration style is selected: custom slash command, documented in `docs/bot-integrations.md`.
 
 ## Changes This Session
 
@@ -29,16 +30,19 @@
 - Added `scripts/verify-mattermost.sh`.
 - Created local admin username `csit-admin`, team `csit-lab`, and channel `chatops-lab`.
 - Recorded L03 evidence in `PROGRESS.md`, `feature_list.json`, `DECISIONS.md`, and `docs/local-environment.md`.
+- Reviewed Mattermost slash commands, webhooks, bot accounts, REST API, plugins, and the deprecated Apps framework for `L04`.
+- Added `docs/bot-integrations.md` and recorded the slash-command-first decision.
 
 ## Still Broken Or Unverified
 
 - No product source code exists yet.
 - No application install, test, lint, build, start, smoke, or end-to-end command exists yet.
+- No local `/csit` slash command receiver exists yet.
 - The Mattermost checkout and data currently live under `/private/tmp/mattermost-docker-csit`; move them to a durable location if this local server should survive temporary-directory cleanup.
 
 ## Next Best Action
 
-Start `L04`: explore Mattermost bot integration options and choose the first prototype integration style.
+Start `B01`: choose and scaffold the bot implementation runtime, using a custom `/csit` slash command receiver as the first prototype behavior.
 
 ## Commands
 

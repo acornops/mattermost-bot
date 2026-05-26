@@ -40,12 +40,12 @@ The backend API contract will be provided later. Until then, the repository shou
 - kubectl for cluster interaction.
 - Helm as a likely deployment tool to evaluate.
 - Mattermost local Docker deployment or preview image for chat-platform learning.
+- Custom slash command as the first Mattermost integration style.
 
 ## Open Decisions
 
 - Bot implementation language and framework.
 - Backend API authentication protocol.
-- Mattermost integration style: slash command, bot account, plugin, app, or combination.
 - Local development topology: all Docker Compose, K3s-hosted services, or hybrid.
 - How much cluster-management behavior should be mocked before the real API exists.
 

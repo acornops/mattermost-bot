@@ -35,3 +35,9 @@
 - Decision: Use the official Mattermost Docker Compose deployment for `L03`, running without the included NGINX reverse proxy for local access at `http://localhost:8065`.
 - Reason: Even though the goal is familiarisation, the multi-container deployment is closer to production than the all-in-one preview image because it separates the Mattermost app and database containers.
 - Consequence: Setup requires the official `mattermost/docker` checkout, `.env` configuration, local Docker socket access, and Docker Compose lifecycle commands. On Apple Silicon, the Mattermost application container currently needs a local Compose override with `platform: linux/amd64`.
+
+## 2026-05-26: Prototype Mattermost integration with a custom slash command
+
+- Decision: Use a custom Mattermost slash command as the first ChatOps bot integration style, with a bot account plus Mattermost REST API calls added only when durable bot identity, direct messages, delayed responses, or proactive posts are needed.
+- Reason: Authentication and cluster-management actions should be explicit user commands, and slash commands preserve the invoking user context while staying lighter than a custom plugin. Outgoing webhooks are public-channel only, incoming webhooks do not receive user commands, plugins are too heavy for the first prototype, and the old Apps framework repository is deprecated.
+- Consequence: The next implementation step should scaffold a small HTTP command receiver for `/csit`, validate the Mattermost command token, map Mattermost `user_id` to the pending backend authentication flow, and keep sensitive responses ephemeral by default.

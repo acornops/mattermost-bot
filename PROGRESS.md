@@ -7,11 +7,12 @@
 - Product direction: Mattermost ChatOps bot for authenticating users to a Kubernetes cluster-management backend
 - Local learning stack: K3s, kubectl, Helm evaluation, local Mattermost via Docker
 - Bot implementation stack: not selected yet
+- First Mattermost integration style: custom slash command
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify-harness.sh`
 - K3s readiness verification path: `./scripts/verify-k3s.sh`
-- Highest priority unfinished feature: `L04`
-- Current blocker: local Mattermost team/channel were created through the API, but no bot integration style has been selected yet
+- Highest priority unfinished feature: `B01`
+- Current blocker: bot implementation runtime and backend API contract are not selected yet
 
 ## Completed
 
@@ -20,6 +21,7 @@
 - `L01`: Verify local K3s access.
 - `L02`: Deploy first K3s learning workload.
 - `L03`: Set up local Mattermost.
+- `L04`: Explore Mattermost bot integration options.
 
 ## In Progress
 
@@ -34,8 +36,8 @@
 
 ## Next Steps
 
-1. Explore Mattermost bot integration options.
-2. Choose and scaffold the bot implementation runtime once the backend API contract is available or mocked.
+1. Choose and scaffold the bot implementation runtime once the backend API contract is available or mocked.
+2. Prototype `/csit` as a custom Mattermost slash command.
 
 ## Session Log
 
@@ -85,3 +87,12 @@
 - Evidence recorded: local URL is `http://localhost:8065`; Mattermost version header was `11.7.0`; local admin username is `csit-admin`; team `csit-lab` was created with id `bfnj9akc4fytxp4gwbn9ak5cer`; channel `chatops-lab` was created with id `ez1crw7et3fztdsxywargec1sr`.
 - Known risks: The Mattermost checkout and data live under `/private/tmp/mattermost-docker-csit`; move to a durable location if the local server should survive temporary-directory cleanup. The Apple Silicon override uses AMD64 emulation, which is acceptable for familiarisation but should be revisited for performance-sensitive testing.
 - Next best action: start `L04` by exploring Mattermost bot integration options.
+
+### 2026-05-26 - Mattermost bot integration style selected
+
+- Goal: Start `L04` by exploring Mattermost bot integration options.
+- Completed: Reviewed current Mattermost integration docs for custom slash commands, incoming webhooks, outgoing webhooks, bot accounts, REST API use, plugins, and the legacy Apps framework; added `docs/bot-integrations.md`; selected a custom slash command as the first prototype integration style.
+- Verification run: `./init.sh` passed before documentation work; final `./init.sh` passed after artifact updates.
+- Evidence recorded: `docs/bot-integrations.md` records tradeoffs, security notes, and official references checked on 2026-05-26. `DECISIONS.md` records the slash-command-first decision.
+- Known risks: Backend API contract remains pending; bot implementation runtime remains undecided; no local `/csit` command receiver exists yet.
+- Next best action: start `B01` by choosing and scaffolding the bot implementation runtime, using a `/csit` custom slash command receiver as the first local behavior.

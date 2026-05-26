@@ -87,8 +87,8 @@ Local evaluation targets:
 
 - Mattermost server starts locally.
 - A local team and channel can be created.
-- A bot account or integration can be created.
-- A test message can be sent through the chosen integration style.
+- A custom slash command integration can be created.
+- A test command can be sent through the chosen integration style.
 
 Chosen local path for `L03`: official Mattermost Docker Compose deployment without the included NGINX reverse proxy.
 
