@@ -54,6 +54,7 @@ npm start
 - The bot authenticates to Mattermost as a bot account using `CSIT_MATTERMOST_TOKEN`.
 - The bot opens Mattermost's WebSocket endpoint and authenticates after connecting.
 - The bot responds to direct messages and channel posts that mention `@csit`.
+- The bot posts responses as normal channel messages instead of threaded replies.
 - The bot ignores messages authored by itself.
 - `help`, `login`, `status`, and `clusters` return placeholder text responses.
 - Backend authentication and cluster listing are placeholders until the backend API contract exists.

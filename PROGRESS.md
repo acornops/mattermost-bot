@@ -125,3 +125,11 @@
 - Evidence recorded: Direct-message channel `fqxfhfozojystmibobinn8p94w`; test user post `dof79es14pyy7fnyifteyieiow` sent message `status`; bot reply `o6tjjqjohpg6ikkbrqtxhmx34c` was authored by `csit` and contained `CSIT status`, `Mattermost user: @csit-alice (rcnutpf7fff4mjthsd1gck5p1y)`, `Backend authentication: not connected`, and `Cluster access: not loaded`.
 - Known risks: The local bot token was generated for this development Mattermost instance and must stay outside committed files. Backend authentication and cluster listing remain placeholders until the backend API contract is available.
 - Next best action: design the backend authentication handoff once the API contract is available, including how direct-message prompts and channel mentions should differ for sensitive actions.
+
+### 2026-05-26 - Bot replies moved out of threads
+
+- Goal: Make bot responses appear as normal Mattermost messages instead of threaded replies.
+- Completed: Removed the `root_id` assignment from bot-created posts so responses land in the main direct-message or channel timeline.
+- Verification run: `npm run verify:bot` passed with 12 tests; `./init.sh` passed; manual Mattermost direct-message verification passed.
+- Evidence recorded: Test user post `n6g8tkb9ypdoiewe3yd87mjqae` sent message `status`; bot reply `4pm7b7i43jyxtgj6g19fs15oby` was authored by `csit`, contained the CSIT status placeholder response, and had `root_id` set to an empty string.
+- Known risks: Existing historical test reply `o6tjjqjohpg6ikkbrqtxhmx34c` remains threaded in local Mattermost data because it was created before this change.

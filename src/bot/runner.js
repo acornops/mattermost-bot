@@ -88,8 +88,7 @@ export async function handlePostedEvent({ client, event, botUser, botUsername = 
   logger.log(`Responding to Mattermost post ${post.id} in channel ${post.channel_id}.`);
   return await client.createPost({
     channelId: post.channel_id,
-    message: response,
-    rootId: post.root_id || post.id
+    message: response
   });
 }
 

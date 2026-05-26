@@ -42,7 +42,7 @@ test("runner tolerates websocket authentication challenge", async () => {
   assert.equal(socket.sent.length, 1);
 });
 
-test("handlePostedEvent responds to direct message posts", async () => {
+test("handlePostedEvent responds to direct message posts in the main timeline", async () => {
   const posts = [];
   const client = fakeClient({
     createPost: async (post) => {
@@ -75,7 +75,7 @@ test("handlePostedEvent responds to direct message posts", async () => {
 
   assert.equal(result.id, "reply-1");
   assert.equal(posts[0].channelId, "channel-1");
-  assert.equal(posts[0].rootId, "post-1");
+  assert.equal(posts[0].rootId, undefined);
   assert.match(posts[0].message, /alice \(user-1\)/);
 });
 
