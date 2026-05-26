@@ -53,9 +53,9 @@
       "area": "kubernetes",
       "title": "Verify local K3s access",
       "user_visible_behavior": "A developer can confirm local Kubernetes access with K3s and see recorded evidence of node, namespace, and cluster-info checks.",
-      "status": "not_started",
+      "status": "passing",
       "verification": {
-        "command": "Manual K3s verification plus ./init.sh",
+        "command": "./scripts/verify-k3s.sh plus ./init.sh",
         "steps": [
           "Confirm the local K3s installation or access method.",
           "Run kubectl or sudo k3s kubectl node and namespace checks.",
@@ -64,8 +64,8 @@
           "Run ./init.sh successfully."
         ]
       },
-      "evidence": "",
-      "notes": "Do not auto-install K3s from init.sh yet because it changes host-level services."
+      "evidence": "On 2026-05-26, installed k3d 5.8.3 with Homebrew and created local cluster csit-lab with one server and one agent. ./scripts/verify-k3s.sh passed for kubectl context k3d-csit-lab. Evidence: kubectl cluster-info reached the control plane; kubectl get nodes -o wide showed k3d-csit-lab-server-0 and k3d-csit-lab-agent-0 Ready on K3s v1.33.6+k3s1; kubectl get namespaces showed default, kube-node-lease, kube-public, and kube-system Active.",
+      "notes": "Local macOS path uses Docker Desktop plus k3d instead of a host-level K3s service. Do not auto-install or start K3s from init.sh."
     },
     {
       "id": "L02",
@@ -73,7 +73,7 @@
       "area": "kubernetes",
       "title": "Deploy first K3s learning workload",
       "user_visible_behavior": "A developer can deploy, inspect, log, and clean up a simple workload in a local K3s namespace.",
-      "status": "not_started",
+      "status": "passing",
       "verification": {
         "command": "Manual workload verification plus ./init.sh",
         "steps": [
@@ -86,8 +86,8 @@
           "Run ./init.sh successfully."
         ]
       },
-      "evidence": "",
-      "notes": "Depends on L01."
+      "evidence": "On 2026-05-26, used kubectl context k3d-csit-lab to create namespace csit-lab, deploy hello-nginx from nginx:stable, expose it on port 80, and verify rollout. Evidence: rollout status reported deployment \"hello-nginx\" successfully rolled out; kubectl get all --namespace csit-lab -o wide showed pod 1/1 Running, service hello-nginx ClusterIP on 80/TCP, deployment 1/1 available, and matching ReplicaSet 1/1 ready; kubectl logs --namespace csit-lab deploy/hello-nginx showed nginx startup completed. Cleanup evidence: kubectl delete namespace csit-lab completed, and kubectl get namespace csit-lab returned NotFound.",
+      "notes": "Depends on L01. The learning namespace was intentionally removed after verification."
     },
     {
       "id": "L03",

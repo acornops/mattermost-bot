@@ -11,7 +11,32 @@ Use the official K3s docs as the source of truth before installing:
 - Quick start: https://docs.k3s.io/quick-start
 - Installation: https://docs.k3s.io/installation
 
-Expected verification once K3s is installed:
+This Mac uses Docker Desktop plus `k3d` for local K3s learning. K3s is Linux-native, so `k3d` keeps the cluster inside Docker containers instead of installing a host-level Linux service on macOS.
+
+Verified local setup on 2026-05-26:
+
+- Host: macOS arm64
+- Docker Desktop: available and running
+- k3d: installed with Homebrew as `k3d` 5.8.3
+- Cluster: `csit-lab`
+- kubectl context: `k3d-csit-lab`
+- K3s version observed on nodes: `v1.33.6+k3s1`
+
+Create the local learning cluster:
+
+```sh
+brew install k3d
+k3d cluster create csit-lab --agents 1
+kubectl config current-context
+```
+
+Read-only K3s verification:
+
+```sh
+./scripts/verify-k3s.sh
+```
+
+Manual verification once K3s is installed:
 
 ```sh
 sudo k3s kubectl get nodes
@@ -24,6 +49,14 @@ If using a copied kubeconfig for regular `kubectl`, verify with:
 kubectl cluster-info
 kubectl get nodes
 kubectl get namespaces
+```
+
+For this repo's `k3d` cluster, use:
+
+```sh
+kubectl --context k3d-csit-lab cluster-info
+kubectl --context k3d-csit-lab get nodes -o wide
+kubectl --context k3d-csit-lab get namespaces
 ```
 
 First workload exercise:
