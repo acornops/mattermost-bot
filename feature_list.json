@@ -135,7 +135,7 @@
       "area": "bot",
       "title": "Choose and scaffold bot implementation runtime",
       "user_visible_behavior": "The repository contains the first bot skeleton with documented install, test, lint, build, and local run commands.",
-      "status": "not_started",
+      "status": "passing",
       "verification": {
         "command": "./init.sh",
         "steps": [
@@ -146,8 +146,28 @@
           "Run ./init.sh successfully."
         ]
       },
+      "evidence": "On 2026-05-26, selected Node.js ECMAScript modules with the built-in node:http server and node:test runner. Added package scripts for install via npm install, test via npm test, lint via npm run lint, build via npm run build, local run via npm start, and full bot verification via npm run verify:bot. Scaffolded src/bot/command.js, src/bot/server.js, tests, scripts/verify-bot.sh, and docs/bot-runtime.md. npm run verify:bot passed with 9 tests, and ./init.sh passed after adding bot verification to startup.",
+      "notes": "Depends on L03 and L04. The backend API is mocked with placeholder command responses until the real contract is available."
+    },
+    {
+      "id": "B02",
+      "priority": 8,
+      "area": "bot",
+      "title": "Wire local Mattermost slash command to bot receiver",
+      "user_visible_behavior": "A developer can run the bot locally, configure Mattermost /csit to call it, and verify an end-to-end ephemeral response in the local Mattermost team.",
+      "status": "not_started",
+      "verification": {
+        "command": "Manual Mattermost slash-command verification plus ./init.sh",
+        "steps": [
+          "Start the local bot receiver with CSIT_MATTERMOST_COMMAND_TOKEN set.",
+          "Expose the receiver to the local Mattermost container if needed.",
+          "Create or update the Mattermost custom slash command for /csit.",
+          "Run /csit status from the local Mattermost channel and record the response evidence.",
+          "Run ./init.sh successfully."
+        ]
+      },
       "evidence": "",
-      "notes": "Depends on L03 and L04. The backend API may be mocked if the real contract is still unavailable."
+      "notes": "Depends on B01 and L03. The exact container-to-host URL may need host.docker.internal or a tunnel depending on where the Mattermost container sends the slash command request."
     }
   ]
 }

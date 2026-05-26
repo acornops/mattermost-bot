@@ -1,0 +1,18 @@
+{
+  "name": "csit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mattermost ChatOps bot prototype for CSIT.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/bot/server.js",
+    "dev": "node --watch src/bot/server.js",
+    "test": "node --test",
+    "lint": "./scripts/lint-bot.sh",
+    "build": "./scripts/build-bot.sh",
+    "verify:bot": "./scripts/verify-bot.sh"
+  }
+}

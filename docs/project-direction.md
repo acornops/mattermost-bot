@@ -10,7 +10,7 @@ The backend API contract will be provided later. Until then, the repository shou
 2. Local workload deployment and inspection.
 3. Local Mattermost setup.
 4. Mattermost bot integration options.
-5. Bot runtime selection after the backend API shape is clearer.
+5. Bot runtime selection and command receiver scaffolding.
 
 ## Current Learning Path
 
@@ -29,8 +29,7 @@ The backend API contract will be provided later. Until then, the repository shou
 
 ### Phase 3: ChatOps Prototype
 
-- Choose a bot implementation runtime.
-- Create a minimal local bot that can receive a Mattermost command and respond.
+- Use the selected Node.js runtime to receive Mattermost commands and respond.
 - Add a placeholder authentication flow until the backend API is available.
 - Replace the placeholder with the real API integration when provided.
 
@@ -41,10 +40,10 @@ The backend API contract will be provided later. Until then, the repository shou
 - Helm as a likely deployment tool to evaluate.
 - Mattermost local Docker deployment or preview image for chat-platform learning.
 - Custom slash command as the first Mattermost integration style.
+- Node.js ECMAScript modules with the built-in HTTP server for the first bot receiver.
 
 ## Open Decisions
 
-- Bot implementation language and framework.
 - Backend API authentication protocol.
 - Local development topology: all Docker Compose, K3s-hosted services, or hybrid.
 - How much cluster-management behavior should be mocked before the real API exists.

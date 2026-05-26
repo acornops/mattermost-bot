@@ -19,7 +19,7 @@ The product direction is to build a bot that helps authenticate Mattermost users
 - Deployment tooling to evaluate: Helm
 - Chat platform: Mattermost local Docker deployment or preview image
 - First Mattermost integration style: custom slash command
-- Bot implementation stack: not selected yet
+- Bot implementation stack: Node.js ECMAScript modules with the built-in HTTP server
 - Backend cluster-management API: pending external contract
 
 ## Primary Docs
@@ -27,5 +27,6 @@ The product direction is to build a bot that helps authenticate Mattermost users
 - `docs/project-direction.md`: product direction, learning path, and open decisions.
 - `docs/local-environment.md`: local K3s and Mattermost setup notes.
 - `docs/bot-integrations.md`: Mattermost bot integration options and first prototype decision.
+- `docs/bot-runtime.md`: bot runtime decision, command receiver shape, and local commands.
 - `feature_list.json`: source of truth for current work items.
 - `PROGRESS.md`: current verified state and session log.

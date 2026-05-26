@@ -41,3 +41,9 @@
 - Decision: Use a custom Mattermost slash command as the first ChatOps bot integration style, with a bot account plus Mattermost REST API calls added only when durable bot identity, direct messages, delayed responses, or proactive posts are needed.
 - Reason: Authentication and cluster-management actions should be explicit user commands, and slash commands preserve the invoking user context while staying lighter than a custom plugin. Outgoing webhooks are public-channel only, incoming webhooks do not receive user commands, plugins are too heavy for the first prototype, and the old Apps framework repository is deprecated.
 - Consequence: The next implementation step should scaffold a small HTTP command receiver for `/csit`, validate the Mattermost command token, map Mattermost `user_id` to the pending backend authentication flow, and keep sensitive responses ephemeral by default.
+
+## 2026-05-26: Use Node.js built-in HTTP for the first bot receiver
+
+- Decision: Scaffold the first `/csit` command receiver with Node.js ECMAScript modules, `node:http`, and the built-in `node:test` runner.
+- Reason: The backend API contract is still pending, so the first bot needs a verifiable Mattermost HTTP receiver more than it needs a larger web framework or dependency stack.
+- Consequence: The repository now has dependency-light install, lint, build, test, and local run commands. Revisit Express, Fastify, TypeScript, persistence, and Mattermost REST API client dependencies only when the next feature needs them.

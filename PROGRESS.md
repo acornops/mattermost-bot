@@ -6,13 +6,14 @@
 - Current phase: local learning and platform setup
 - Product direction: Mattermost ChatOps bot for authenticating users to a Kubernetes cluster-management backend
 - Local learning stack: K3s, kubectl, Helm evaluation, local Mattermost via Docker
-- Bot implementation stack: not selected yet
+- Bot implementation stack: Node.js ECMAScript modules with the built-in HTTP server
 - First Mattermost integration style: custom slash command
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify-harness.sh`
 - K3s readiness verification path: `./scripts/verify-k3s.sh`
-- Highest priority unfinished feature: `B01`
-- Current blocker: bot implementation runtime and backend API contract are not selected yet
+- Bot verification path: `./scripts/verify-bot.sh`
+- Highest priority unfinished feature: `B02`
+- Current blocker: backend API contract is not available yet; end-to-end Mattermost slash command wiring is not verified yet
 
 ## Completed
 
@@ -22,6 +23,7 @@
 - `L02`: Deploy first K3s learning workload.
 - `L03`: Set up local Mattermost.
 - `L04`: Explore Mattermost bot integration options.
+- `B01`: Choose and scaffold bot implementation runtime.
 
 ## In Progress
 
@@ -36,8 +38,8 @@
 
 ## Next Steps
 
-1. Choose and scaffold the bot implementation runtime once the backend API contract is available or mocked.
-2. Prototype `/csit` as a custom Mattermost slash command.
+1. Wire the local Mattermost `/csit` custom slash command to the bot receiver.
+2. Record end-to-end Mattermost response evidence.
 
 ## Session Log
 
@@ -96,3 +98,12 @@
 - Evidence recorded: `docs/bot-integrations.md` records tradeoffs, security notes, and official references checked on 2026-05-26. `DECISIONS.md` records the slash-command-first decision.
 - Known risks: Backend API contract remains pending; bot implementation runtime remains undecided; no local `/csit` command receiver exists yet.
 - Next best action: start `B01` by choosing and scaffolding the bot implementation runtime, using a `/csit` custom slash command receiver as the first local behavior.
+
+### 2026-05-26 - Bot runtime scaffolded
+
+- Goal: Start `B01` by choosing and scaffolding the bot implementation runtime around a `/csit` slash command receiver.
+- Completed: Selected Node.js ECMAScript modules with the built-in `node:http` server and `node:test` runner; added a dependency-light bot scaffold in `src/bot`; added `package.json`, `package-lock.json`, tests, bot lint/build/verify scripts, and `docs/bot-runtime.md`; updated `./init.sh` to include bot verification.
+- Verification run: `npm run verify:bot` passed with lint, build, and 9 passing tests; `./init.sh` passed after artifact updates.
+- Evidence recorded: `GET /healthz` handler test passed; `POST /mattermost/slash/csit` handler tests passed for valid and invalid command tokens; command tests covered Mattermost form parsing, token validation, help, and status responses.
+- Known risks: The local Mattermost `/csit` custom command is not wired to the receiver yet; backend authentication and cluster listing remain placeholders until the backend API contract is available.
+- Next best action: start `B02` by wiring local Mattermost `/csit` to the bot receiver and recording end-to-end response evidence.

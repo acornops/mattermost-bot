@@ -14,6 +14,9 @@
 - `./scripts/verify-mattermost.sh` passes when run with host-local access.
 - Mattermost team `csit-lab` and channel `chatops-lab` exist.
 - First Mattermost integration style is selected: custom slash command, documented in `docs/bot-integrations.md`.
+- Bot implementation runtime is selected: Node.js ECMAScript modules with the built-in HTTP server.
+- `./scripts/verify-bot.sh` passes and is included in `./init.sh`.
+- A local `/csit` slash command receiver exists at `POST /mattermost/slash/csit`.
 
 ## Changes This Session
 
@@ -32,17 +35,19 @@
 - Recorded L03 evidence in `PROGRESS.md`, `feature_list.json`, `DECISIONS.md`, and `docs/local-environment.md`.
 - Reviewed Mattermost slash commands, webhooks, bot accounts, REST API, plugins, and the deprecated Apps framework for `L04`.
 - Added `docs/bot-integrations.md` and recorded the slash-command-first decision.
+- Selected Node.js built-in HTTP for `B01`.
+- Added `package.json`, `package-lock.json`, `src/bot`, `test`, `scripts/verify-bot.sh`, `scripts/lint-bot.sh`, `scripts/build-bot.sh`, and `docs/bot-runtime.md`.
+- Updated `./init.sh` to run bot verification after harness verification.
 
 ## Still Broken Or Unverified
 
-- No product source code exists yet.
-- No application install, test, lint, build, start, smoke, or end-to-end command exists yet.
-- No local `/csit` slash command receiver exists yet.
+- The local `/csit` slash command receiver is not wired into Mattermost yet.
+- Backend authentication and cluster listing are placeholders until the backend API exists.
 - The Mattermost checkout and data currently live under `/private/tmp/mattermost-docker-csit`; move them to a durable location if this local server should survive temporary-directory cleanup.
 
 ## Next Best Action
 
-Start `B01`: choose and scaffold the bot implementation runtime, using a custom `/csit` slash command receiver as the first prototype behavior.
+Start `B02`: wire local Mattermost `/csit` to the bot receiver and record end-to-end response evidence.
 
 ## Commands
 
@@ -55,3 +60,9 @@ Start `B01`: choose and scaffold the bot implementation runtime, using a custom 
 - Mattermost start: from `/private/tmp/mattermost-docker-csit`, run `docker compose -f docker-compose.yml -f docker-compose.without-nginx.yml -f docker-compose.codex-apple-silicon.yml up -d`
 - Mattermost status: from `/private/tmp/mattermost-docker-csit`, run `docker compose -f docker-compose.yml -f docker-compose.without-nginx.yml -f docker-compose.codex-apple-silicon.yml ps`
 - Mattermost cleanup: from `/private/tmp/mattermost-docker-csit`, run `docker compose -f docker-compose.yml -f docker-compose.without-nginx.yml -f docker-compose.codex-apple-silicon.yml down`
+- Bot install: `npm install`
+- Bot test: `npm test`
+- Bot lint: `npm run lint`
+- Bot build check: `npm run build`
+- Bot verification: `npm run verify:bot`
+- Bot local run: `CSIT_MATTERMOST_COMMAND_TOKEN=replace-with-mattermost-token npm start`
