@@ -126,8 +126,8 @@
           "Run ./init.sh successfully."
         ]
       },
-      "evidence": "On 2026-05-26, reviewed current Mattermost integration docs for slash commands, incoming webhooks, outgoing webhooks, bot accounts, REST API use, plugins, and the deprecated Apps framework. Added docs/bot-integrations.md with tradeoffs and security notes. Recorded the decision in DECISIONS.md to use a custom slash command as the first prototype integration style, adding bot account plus REST API access only when durable bot identity, delayed responses, direct messages, or proactive posts are needed. ./init.sh passed after artifact updates.",
-      "notes": "Backend API contract can remain mocked or pending during this feature. Next prototype namespace should be /csit."
+      "evidence": "On 2026-05-26, reviewed current Mattermost integration docs for slash commands, incoming webhooks, outgoing webhooks, bot accounts, REST API use, plugins, and the deprecated Apps framework. Added docs/bot-integrations.md with tradeoffs and security notes. Later corrected the first prototype decision to use a dedicated Mattermost bot account named csit because the intended user experience is talking to a stable bot identity, not invoking a slash command from any chat. Confirmed local Mattermost had zero custom slash commands before the bot-account implementation pivot.",
+      "notes": "Backend API contract can remain mocked or pending during this feature. First prototype bot account should be @csit."
     },
     {
       "id": "B01",
@@ -146,28 +146,29 @@
           "Run ./init.sh successfully."
         ]
       },
-      "evidence": "On 2026-05-26, selected Node.js ECMAScript modules with the built-in node:http server and node:test runner. Added package scripts for install via npm install, test via npm test, lint via npm run lint, build via npm run build, local run via npm start, and full bot verification via npm run verify:bot. Scaffolded src/bot/command.js, src/bot/server.js, tests, scripts/verify-bot.sh, and docs/bot-runtime.md. npm run verify:bot passed with 9 tests, and ./init.sh passed after adding bot verification to startup.",
-      "notes": "Depends on L03 and L04. The backend API is mocked with placeholder command responses until the real contract is available."
+      "evidence": "On 2026-05-26, selected Node.js ECMAScript modules with built-in Node.js runtime APIs and node:test. Added package scripts for install via npm install, test via npm test, lint via npm run lint, build via npm run build, local run via npm start, and full bot verification via npm run verify:bot. Scaffolded src/bot command/message handling, tests, scripts/verify-bot.sh, and docs/bot-runtime.md. npm run verify:bot passed, and ./init.sh passed after adding bot verification to startup.",
+      "notes": "Depends on L03 and L04. The backend API is mocked with placeholder bot responses until the real contract is available."
     },
     {
       "id": "B02",
       "priority": 8,
       "area": "bot",
-      "title": "Wire local Mattermost slash command to bot receiver",
-      "user_visible_behavior": "A developer can run the bot locally, configure Mattermost /csit to call it, and verify an end-to-end ephemeral response in the local Mattermost team.",
-      "status": "not_started",
+      "title": "Wire local Mattermost bot account conversation",
+      "user_visible_behavior": "A developer can run the bot locally, talk to the @csit Mattermost bot account, and verify an end-to-end response in the local Mattermost team.",
+      "status": "passing",
       "verification": {
-        "command": "Manual Mattermost slash-command verification plus ./init.sh",
+        "command": "Manual Mattermost bot-account verification plus ./init.sh",
         "steps": [
-          "Start the local bot receiver with CSIT_MATTERMOST_COMMAND_TOKEN set.",
-          "Expose the receiver to the local Mattermost container if needed.",
-          "Create or update the Mattermost custom slash command for /csit.",
-          "Run /csit status from the local Mattermost channel and record the response evidence.",
+          "Confirm no leftover local /csit custom slash command exists.",
+          "Create or confirm the local Mattermost bot account named csit.",
+          "Start the local bot process with a bot access token stored outside committed files.",
+          "Send a direct message or mention to @csit from a non-bot Mattermost user.",
+          "Record the bot response evidence.",
           "Run ./init.sh successfully."
         ]
       },
-      "evidence": "",
-      "notes": "Depends on B01 and L03. The exact container-to-host URL may need host.docker.internal or a tunnel depending on where the Mattermost container sends the slash command request."
+      "evidence": "On 2026-05-26, confirmed local Mattermost had zero custom slash commands before implementation, created local bot account csit with id 6bcr1d8zxpraxnz77skinxwtoa, generated a bot token outside committed files, and created local test user csit-alice with id rcnutpf7fff4mjthsd1gck5p1y. Replaced the slash-command HTTP receiver with a bot-account process that authenticates to Mattermost, opens the WebSocket event stream, responds to direct messages and @csit mentions, ignores self-authored posts, and posts replies through the Mattermost REST API. npm run verify:bot passed with 12 tests. Manual end-to-end verification passed in direct-message channel fqxfhfozojystmibobinn8p94w: csit-alice sent post dof79es14pyy7fnyifteyieiow with message status; bot reply o6tjjqjohpg6ikkbrqtxhmx34c was authored by csit and contained CSIT status, Mattermost user @csit-alice (rcnutpf7fff4mjthsd1gck5p1y), Backend authentication: not connected, and Cluster access: not loaded. Final ./init.sh passed.",
+      "notes": "Depends on B01 and L03. The local bot token must stay outside committed files. Backend authentication and cluster listing remain placeholders until the backend API contract is available."
     }
   ]
 }

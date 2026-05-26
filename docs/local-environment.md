@@ -87,7 +87,7 @@ Local evaluation targets:
 
 - Mattermost server starts locally.
 - A local team and channel can be created.
-- A custom slash command integration can be created.
+- A dedicated `csit` bot account can be created.
 - A test command can be sent through the chosen integration style.
 
 Chosen local path for `L03`: official Mattermost Docker Compose deployment without the included NGINX reverse proxy.
@@ -163,7 +163,27 @@ Manual setup target after the server is reachable:
 2. Create the first admin account.
 3. Create a local team named `csit-lab`.
 4. Create a local channel named `chatops-lab`.
-5. Record the created team and channel in `PROGRESS.md`.
+5. Create a local bot account named `csit`.
+6. Record the created team, channel, and bot account in `PROGRESS.md`.
+
+Local bot account setup can be done from the Mattermost container:
+
+```sh
+docker exec mattermost-docker-csit-mattermost-1 mmctl --local user create \
+  --email csit-bot@example.com \
+  --username csit \
+  --password replace-with-local-password \
+  --firstname CSIT \
+  --lastname Bot \
+  --nickname CSIT \
+  --email-verified \
+  --disable-welcome-email
+
+docker exec mattermost-docker-csit-mattermost-1 mmctl --local user convert csit --bot
+docker exec mattermost-docker-csit-mattermost-1 mmctl --local token generate csit csit-local-bot-token
+```
+
+Keep the generated token outside committed files.
 
 Cleanup:
 

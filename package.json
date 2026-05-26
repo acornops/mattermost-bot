@@ -5,11 +5,11 @@
   "type": "module",
   "description": "Mattermost ChatOps bot prototype for CSIT.",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
-    "start": "node src/bot/server.js",
-    "dev": "node --watch src/bot/server.js",
+    "start": "node src/bot/index.js",
+    "dev": "node --watch src/bot/index.js",
     "test": "node --test",
     "lint": "./scripts/lint-bot.sh",
     "build": "./scripts/build-bot.sh",

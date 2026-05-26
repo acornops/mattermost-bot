@@ -15,5 +15,5 @@ cat <<'MSG'
 Initialization complete.
 
 Project direction: Mattermost ChatOps bot for authenticating users to a Kubernetes cluster-management backend.
-Next action: wire the local Mattermost /csit slash command to the bot receiver and record end-to-end evidence.
+Next action: replace placeholder bot responses with the backend authentication flow once the API contract is available.
 MSG

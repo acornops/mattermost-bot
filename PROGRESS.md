@@ -6,14 +6,14 @@
 - Current phase: local learning and platform setup
 - Product direction: Mattermost ChatOps bot for authenticating users to a Kubernetes cluster-management backend
 - Local learning stack: K3s, kubectl, Helm evaluation, local Mattermost via Docker
-- Bot implementation stack: Node.js ECMAScript modules with the built-in HTTP server
-- First Mattermost integration style: custom slash command
+- Bot implementation stack: Node.js ECMAScript modules with built-in runtime APIs
+- First Mattermost integration style: dedicated bot account
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify-harness.sh`
 - K3s readiness verification path: `./scripts/verify-k3s.sh`
 - Bot verification path: `./scripts/verify-bot.sh`
-- Highest priority unfinished feature: `B02`
-- Current blocker: backend API contract is not available yet; end-to-end Mattermost slash command wiring is not verified yet
+- Highest priority unfinished feature: none
+- Current blocker: backend API contract is not available yet; bot responses are placeholders until the backend API contract exists
 
 ## Completed
 
@@ -24,6 +24,7 @@
 - `L03`: Set up local Mattermost.
 - `L04`: Explore Mattermost bot integration options.
 - `B01`: Choose and scaffold bot implementation runtime.
+- `B02`: Wire local Mattermost bot account conversation.
 
 ## In Progress
 
@@ -38,8 +39,8 @@
 
 ## Next Steps
 
-1. Wire the local Mattermost `/csit` custom slash command to the bot receiver.
-2. Record end-to-end Mattermost response evidence.
+1. Replace placeholder bot responses with the backend authentication flow once the backend API contract is available.
+2. Decide whether channel mentions should be enabled by default or direct-message only for authentication-sensitive actions.
 
 ## Session Log
 
@@ -93,17 +94,34 @@
 ### 2026-05-26 - Mattermost bot integration style selected
 
 - Goal: Start `L04` by exploring Mattermost bot integration options.
-- Completed: Reviewed current Mattermost integration docs for custom slash commands, incoming webhooks, outgoing webhooks, bot accounts, REST API use, plugins, and the legacy Apps framework; added `docs/bot-integrations.md`; selected a custom slash command as the first prototype integration style.
+- Completed: Reviewed current Mattermost integration docs for custom slash commands, incoming webhooks, outgoing webhooks, bot accounts, REST API use, plugins, and the legacy Apps framework; added `docs/bot-integrations.md`; selected a custom slash command as the initial first prototype integration style.
 - Verification run: `./init.sh` passed before documentation work; final `./init.sh` passed after artifact updates.
-- Evidence recorded: `docs/bot-integrations.md` records tradeoffs, security notes, and official references checked on 2026-05-26. `DECISIONS.md` records the slash-command-first decision.
-- Known risks: Backend API contract remains pending; bot implementation runtime remains undecided; no local `/csit` command receiver exists yet.
-- Next best action: start `B01` by choosing and scaffolding the bot implementation runtime, using a `/csit` custom slash command receiver as the first local behavior.
+- Evidence recorded: `docs/bot-integrations.md` records tradeoffs, security notes, and official references checked on 2026-05-26. `DECISIONS.md` records the corrected bot-account-first decision.
+- Known risks: Backend API contract remains pending; bot implementation runtime remains undecided; no local Mattermost bot account exists yet.
+- Next best action: start `B01` by choosing and scaffolding the bot implementation runtime.
 
 ### 2026-05-26 - Bot runtime scaffolded
 
-- Goal: Start `B01` by choosing and scaffolding the bot implementation runtime around a `/csit` slash command receiver.
-- Completed: Selected Node.js ECMAScript modules with the built-in `node:http` server and `node:test` runner; added a dependency-light bot scaffold in `src/bot`; added `package.json`, `package-lock.json`, tests, bot lint/build/verify scripts, and `docs/bot-runtime.md`; updated `./init.sh` to include bot verification.
+- Goal: Start `B01` by choosing and scaffolding the bot implementation runtime around a local Mattermost message handler.
+- Completed: Selected Node.js ECMAScript modules with built-in Node.js runtime APIs and `node:test`; added a dependency-light bot scaffold in `src/bot`; added `package.json`, `package-lock.json`, tests, bot lint/build/verify scripts, and `docs/bot-runtime.md`; updated `./init.sh` to include bot verification.
 - Verification run: `npm run verify:bot` passed with lint, build, and 9 passing tests; `./init.sh` passed after artifact updates.
-- Evidence recorded: `GET /healthz` handler test passed; `POST /mattermost/slash/csit` handler tests passed for valid and invalid command tokens; command tests covered Mattermost form parsing, token validation, help, and status responses.
-- Known risks: The local Mattermost `/csit` custom command is not wired to the receiver yet; backend authentication and cluster listing remain placeholders until the backend API contract is available.
-- Next best action: start `B02` by wiring local Mattermost `/csit` to the bot receiver and recording end-to-end response evidence.
+- Evidence recorded: bot message handler and Mattermost runner tests pass; tests cover direct-message response selection, mention response selection, self-post ignore behavior, WebSocket authentication challenge handling, Mattermost post creation, help, and status responses.
+- Known risks: The local Mattermost `csit` bot account is not wired to a running bot process yet; backend authentication and cluster listing remain placeholders until the backend API contract is available.
+- Next best action: start `B02` by configuring the local Mattermost `csit` bot account and recording end-to-end response evidence.
+
+### 2026-05-26 - Integration direction corrected to bot account
+
+- Goal: Correct the next bot wiring task before implementation.
+- Completed: Confirmed local Mattermost has zero custom slash commands and no existing `csit` bot account; updated the selected integration direction from custom slash command to dedicated bot account in `docs/bot-integrations.md`, `docs/project-direction.md`, and `DECISIONS.md`.
+- Verification run: Mattermost command list checked with `mmctl --local command list csit-lab --json`, which returned zero commands; bot list checked with `mmctl --local bot list --json`, which returned only built-in bots `calls`, `playbooks`, and `system-bot`.
+- Known risks: End-to-end `@csit` bot account conversation is not implemented or verified yet.
+- Next best action: update the Node bot receiver from slash-command HTTP handling to bot-account message handling, then create the local `csit` bot account and verify a response.
+
+### 2026-05-26 - Mattermost bot account wired end to end
+
+- Goal: Start `B02` by wiring a local Mattermost bot account conversation.
+- Completed: Replaced the slash-command HTTP receiver with a bot-account process that authenticates to Mattermost, opens the WebSocket event stream, responds to direct messages and `@csit` mentions, ignores self-authored posts, and posts replies through the Mattermost REST API. Created local bot account `csit` with id `6bcr1d8zxpraxnz77skinxwtoa`; created local test user `csit-alice` with id `rcnutpf7fff4mjthsd1gck5p1y`; confirmed local Mattermost still has zero custom slash commands.
+- Verification run: `npm run verify:bot` passed with 12 tests; manual Mattermost bot-account verification passed; final `./init.sh` passed.
+- Evidence recorded: Direct-message channel `fqxfhfozojystmibobinn8p94w`; test user post `dof79es14pyy7fnyifteyieiow` sent message `status`; bot reply `o6tjjqjohpg6ikkbrqtxhmx34c` was authored by `csit` and contained `CSIT status`, `Mattermost user: @csit-alice (rcnutpf7fff4mjthsd1gck5p1y)`, `Backend authentication: not connected`, and `Cluster access: not loaded`.
+- Known risks: The local bot token was generated for this development Mattermost instance and must stay outside committed files. Backend authentication and cluster listing remain placeholders until the backend API contract is available.
+- Next best action: design the backend authentication handoff once the API contract is available, including how direct-message prompts and channel mentions should differ for sensitive actions.

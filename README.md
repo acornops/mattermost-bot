@@ -9,7 +9,7 @@ The product direction is to build a bot that helps authenticate Mattermost users
 1. Learn Kubernetes locally with K3s.
 2. Deploy and inspect simple workloads on K3s.
 3. Set up Mattermost locally for bot and ChatOps exploration.
-4. Prototype the first Mattermost integration as a custom slash command.
+4. Prototype the first Mattermost integration as a dedicated bot account.
 5. Decide the bot implementation runtime once the backend API shape is known.
 
 ## Local Learning Stack
@@ -18,8 +18,8 @@ The product direction is to build a bot that helps authenticate Mattermost users
 - Kubernetes client: kubectl, including the kubectl installed by K3s
 - Deployment tooling to evaluate: Helm
 - Chat platform: Mattermost local Docker deployment or preview image
-- First Mattermost integration style: custom slash command
-- Bot implementation stack: Node.js ECMAScript modules with the built-in HTTP server
+- First Mattermost integration style: dedicated Mattermost bot account
+- Bot implementation stack: Node.js ECMAScript modules with built-in runtime APIs
 - Backend cluster-management API: pending external contract
 
 ## Primary Docs

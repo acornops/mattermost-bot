@@ -13,10 +13,10 @@
 - Local Mattermost is verified through the official Docker Compose deployment without NGINX at `http://localhost:8065`.
 - `./scripts/verify-mattermost.sh` passes when run with host-local access.
 - Mattermost team `csit-lab` and channel `chatops-lab` exist.
-- First Mattermost integration style is selected: custom slash command, documented in `docs/bot-integrations.md`.
-- Bot implementation runtime is selected: Node.js ECMAScript modules with the built-in HTTP server.
+- First Mattermost integration style is selected: dedicated bot account, documented in `docs/bot-integrations.md`.
+- Bot implementation runtime is selected: Node.js ECMAScript modules with built-in runtime APIs.
 - `./scripts/verify-bot.sh` passes and is included in `./init.sh`.
-- A local `/csit` slash command receiver exists at `POST /mattermost/slash/csit`.
+- Local Mattermost bot account `csit` exists and can respond to direct messages.
 
 ## Changes This Session
 
@@ -34,20 +34,23 @@
 - Created local admin username `csit-admin`, team `csit-lab`, and channel `chatops-lab`.
 - Recorded L03 evidence in `PROGRESS.md`, `feature_list.json`, `DECISIONS.md`, and `docs/local-environment.md`.
 - Reviewed Mattermost slash commands, webhooks, bot accounts, REST API, plugins, and the deprecated Apps framework for `L04`.
-- Added `docs/bot-integrations.md` and recorded the slash-command-first decision.
-- Selected Node.js built-in HTTP for `B01`.
+- Added `docs/bot-integrations.md`; later corrected the first integration decision to a dedicated `@csit` bot account.
+- Selected Node.js built-in runtime APIs for `B01`.
 - Added `package.json`, `package-lock.json`, `src/bot`, `test`, `scripts/verify-bot.sh`, `scripts/lint-bot.sh`, `scripts/build-bot.sh`, and `docs/bot-runtime.md`.
 - Updated `./init.sh` to run bot verification after harness verification.
+- Replaced the slash-command HTTP receiver with a Mattermost bot-account process using REST plus WebSocket events.
+- Created local bot account `csit` with id `6bcr1d8zxpraxnz77skinxwtoa` and local test user `csit-alice` with id `rcnutpf7fff4mjthsd1gck5p1y`.
+- Verified direct-message response in channel `fqxfhfozojystmibobinn8p94w`; user post `dof79es14pyy7fnyifteyieiow` received bot reply `o6tjjqjohpg6ikkbrqtxhmx34c`.
 
 ## Still Broken Or Unverified
 
-- The local `/csit` slash command receiver is not wired into Mattermost yet.
 - Backend authentication and cluster listing are placeholders until the backend API exists.
+- The local Mattermost bot token was generated for development and must stay outside committed files.
 - The Mattermost checkout and data currently live under `/private/tmp/mattermost-docker-csit`; move them to a durable location if this local server should survive temporary-directory cleanup.
 
 ## Next Best Action
 
-Start `B02`: wire local Mattermost `/csit` to the bot receiver and record end-to-end response evidence.
+Design the backend authentication handoff once the backend API contract is available, including how direct-message prompts and channel mentions should differ for sensitive actions.
 
 ## Commands
 
@@ -65,4 +68,4 @@ Start `B02`: wire local Mattermost `/csit` to the bot receiver and record end-to
 - Bot lint: `npm run lint`
 - Bot build check: `npm run build`
 - Bot verification: `npm run verify:bot`
-- Bot local run: `CSIT_MATTERMOST_COMMAND_TOKEN=replace-with-mattermost-token npm start`
+- Bot local run: `CSIT_MATTERMOST_URL=http://localhost:8065 CSIT_MATTERMOST_TOKEN=replace-with-bot-token CSIT_MATTERMOST_BOT_USERNAME=csit npm start`

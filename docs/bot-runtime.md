@@ -4,9 +4,9 @@ This note records the `B01` bot runtime scaffold decision and the commands a fut
 
 ## Decision
 
-Use Node.js with ECMAScript modules and the built-in `node:http` server for the first `/csit` slash command receiver.
+Use Node.js with ECMAScript modules and built-in runtime APIs for the first Mattermost bot-account process.
 
-The first scaffold intentionally avoids Express, Fastify, TypeScript, databases, queues, or Mattermost REST API clients. The backend API contract is still pending, so a dependency-light receiver is enough to validate the Mattermost command shape, token handling, and local command lifecycle.
+The first scaffold intentionally avoids Express, Fastify, TypeScript, databases, queues, or third-party Mattermost clients. The backend API contract is still pending, so a dependency-light bot is enough to validate Mattermost bot identity, message handling, and local command lifecycle.
 
 ## Local Commands
 
@@ -40,34 +40,33 @@ Run all bot verification:
 npm run verify:bot
 ```
 
-Run the local bot server:
+Run the local bot process:
 
 ```sh
-CSIT_MATTERMOST_COMMAND_TOKEN=replace-with-mattermost-token npm start
-```
-
-The local slash command request URL is:
-
-```text
-http://127.0.0.1:3000/mattermost/slash/csit
-```
-
-The health check URL is:
-
-```text
-http://127.0.0.1:3000/healthz
+CSIT_MATTERMOST_URL=http://localhost:8065 \
+CSIT_MATTERMOST_TOKEN=replace-with-bot-token \
+CSIT_MATTERMOST_BOT_USERNAME=csit \
+npm start
 ```
 
 ## Current Behavior
 
-- `GET /healthz` returns JSON health status.
-- `POST /mattermost/slash/csit` accepts Mattermost custom slash command form posts.
-- The receiver validates the Mattermost slash command token against `CSIT_MATTERMOST_COMMAND_TOKEN`.
-- `/csit help`, `/csit login`, `/csit status`, and `/csit clusters` return ephemeral JSON responses.
+- The bot authenticates to Mattermost as a bot account using `CSIT_MATTERMOST_TOKEN`.
+- The bot opens Mattermost's WebSocket endpoint and authenticates after connecting.
+- The bot responds to direct messages and channel posts that mention `@csit`.
+- The bot ignores messages authored by itself.
+- `help`, `login`, `status`, and `clusters` return placeholder text responses.
 - Backend authentication and cluster listing are placeholders until the backend API contract exists.
+
+## Local Mattermost Account Target
+
+- Bot username: `csit`
+- Display name: `CSIT`
+- Token storage: local environment only; do not commit bot tokens.
+- First verification path: send a direct message or channel mention to `@csit` from a non-bot user and record the response evidence.
 
 ## Runtime Versions
 
 - Node.js verified locally: `v25.8.1`
 - npm verified locally: `11.11.0`
-- Minimum Node.js declared in `package.json`: `>=20`
+- Minimum Node.js declared in `package.json`: `>=22`
