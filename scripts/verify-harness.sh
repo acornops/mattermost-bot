@@ -28,6 +28,9 @@ require_file "feature_list.json"
 require_file "session-handoff.md"
 require_file "docs/startup-readiness.md"
 require_file "docs/harness-notes.md"
+require_file "docs/project-direction.md"
+require_file "docs/local-environment.md"
+require_file "README.md"
 
 [[ -x "${ROOT_DIR}/init.sh" ]] || fail "init.sh is not executable." "Run: chmod +x init.sh"
 [[ -x "${ROOT_DIR}/scripts/verify-harness.sh" ]] || fail "scripts/verify-harness.sh is not executable." "Run: chmod +x scripts/verify-harness.sh"
@@ -41,5 +44,8 @@ require_contains "DECISIONS.md" "Decision Log" "Keep durable decisions in DECISI
 require_contains "feature_list.json" "\"features\"" "Add a features array to feature_list.json."
 require_contains "feature_list.json" "\"H02\"" "Keep H02 as the next setup feature until the product goal and stack are selected."
 require_contains "session-handoff.md" "Next Best Action" "Keep session-handoff.md ready for larger sessions or interrupted work."
+require_contains "README.md" "Mattermost ChatOps bot" "Document the selected product direction in README.md."
+require_contains "docs/project-direction.md" "K3s" "Document the Kubernetes learning path."
+require_contains "docs/project-direction.md" "Mattermost" "Document the Mattermost learning path."
 
 echo "Harness verification passed."

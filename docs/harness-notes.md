@@ -32,3 +32,5 @@ Once the product goal and stack are selected:
 3. Add product features to `feature_list.json`.
 4. Add module-level docs near code as the architecture grows.
 5. Add end-to-end checks for cross-component behavior.
+
+The current product direction is selected, but application code has not started. The immediate upgrade path is to verify local K3s access, then verify local Mattermost access, then choose and scaffold the bot runtime.

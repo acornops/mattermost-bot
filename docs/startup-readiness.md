@@ -4,7 +4,8 @@
 
 - Repository initialized: yes
 - Harness files present: yes
-- Product stack selected: no
+- Product direction selected: yes
+- Local learning stack selected: partial
 - Application code present: no
 - Application tests present: no
 
@@ -21,12 +22,15 @@
 - [x] Repository has machine-readable scope state in `feature_list.json`.
 - [x] Repository has a standard initializer command.
 - [x] Repository has a harness verification command.
-- [ ] Product goal is documented.
-- [ ] Product stack and versions are documented.
-- [ ] Install command is documented and verified.
-- [ ] Test command is documented and verified.
-- [ ] Lint/static check command is documented and verified.
-- [ ] Build/start command is documented and verified.
+- [x] Product goal is documented.
+- [x] Initial local learning stack is documented.
+- [ ] Bot implementation stack and versions are documented.
+- [ ] K3s install or access path is verified.
+- [ ] Mattermost local setup path is verified.
+- [ ] Application install command is documented and verified.
+- [ ] Application test command is documented and verified.
+- [ ] Application lint/static check command is documented and verified.
+- [ ] Application build/start command is documented and verified.
 
 ## Fresh Session Test
 

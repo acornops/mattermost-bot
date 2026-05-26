@@ -3,9 +3,9 @@
 This repository is designed for long-running coding-agent work. The goal is not to maximize raw code output. The goal is to leave the repo in a state where the next session can continue without guessing.
 
 ## Project Status
-This repository is in initializer phase. No product stack or business feature has been selected yet.
+This repository is in local learning and platform setup phase.
 
-The current goal is to keep the workspace agent-readable, verifiable, and easy to resume while the project direction is clarified.
+The project direction is a Mattermost ChatOps bot that authenticates Mattermost users to a backend system for managing Kubernetes clusters. The backend API will be provided later. Current work should first make the local Kubernetes and Mattermost learning path agent-readable and verifiable.
 
 ## Startup Workflow
 Before writing code:
@@ -25,7 +25,7 @@ If baseline verification is already failing, fix that first. Do not stack new fe
 - Harness verification: `./scripts/verify-harness.sh`
 - Standard initialization: `./init.sh`
 
-Until a product stack exists, verification means the harness files are present, readable, and internally consistent enough for the next session to resume.
+Until application code exists, verification means the harness files and project-direction docs are present, readable, and internally consistent enough for the next session to resume.
 
 ## Required Artifacts
 - `feature_list.json`: source of truth for feature and harness work state.
@@ -67,3 +67,5 @@ Before ending a session:
 ## Topic Docs
 - `docs/startup-readiness.md` - initialization acceptance checklist and current startup state.
 - `docs/harness-notes.md` - harness design notes and why these files exist.
+- `docs/project-direction.md` - product direction, learning path, and open decisions.
+- `docs/local-environment.md` - local K3s and Mattermost setup notes.

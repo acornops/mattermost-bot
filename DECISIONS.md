@@ -17,3 +17,15 @@
 - Decision: `feature_list.json` allows only one active feature at a time.
 - Reason: Agents overreach when multiple features are active, which lowers verified completion rate.
 - Consequence: Future sessions should finish or block the active item before selecting another.
+
+## 2026-05-26: Build toward a Mattermost ChatOps bot
+
+- Decision: The project direction is a Mattermost ChatOps bot that authenticates Mattermost users to a backend system for managing Kubernetes clusters.
+- Reason: The user selected this direction and noted that the backend API will arrive later.
+- Consequence: Current work should focus on local K3s learning, local Mattermost setup, and integration discovery before product bot implementation.
+
+## 2026-05-26: Keep host-level setup explicit during learning phase
+
+- Decision: `./init.sh` will not install K3s or start Mattermost automatically yet.
+- Reason: K3s installs host-level services and Mattermost local deployment can create persistent Docker state.
+- Consequence: Setup docs will provide explicit commands and verification evidence until the local topology is chosen.

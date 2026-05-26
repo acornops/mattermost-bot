@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "Repository root: ${ROOT_DIR}"
-echo "Phase: harness initializer"
+echo "Phase: local learning and platform setup"
 echo
 
 "${ROOT_DIR}/scripts/verify-harness.sh"
@@ -13,6 +13,6 @@ cat <<'MSG'
 
 Initialization complete.
 
-No product stack has been selected yet.
-Next action: choose the project goal and stack, then update init.sh with real install, verify, and start commands.
+Project direction: Mattermost ChatOps bot for authenticating users to a Kubernetes cluster-management backend.
+Next action: verify local K3s access, then document the exact local setup evidence before moving to Mattermost.
 MSG
