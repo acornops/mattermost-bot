@@ -26,7 +26,7 @@
 - [x] Initial local learning stack is documented.
 - [ ] Bot implementation stack and versions are documented.
 - [x] K3s install or access path is verified.
-- [ ] Mattermost local setup path is verified.
+- [x] Mattermost local setup path is verified.
 - [ ] Application install command is documented and verified.
 - [ ] Application test command is documented and verified.
 - [ ] Application lint/static check command is documented and verified.

@@ -95,7 +95,7 @@
       "area": "mattermost",
       "title": "Set up local Mattermost",
       "user_visible_behavior": "A developer can start local Mattermost, create a team and channel, and identify the local URL for integration testing.",
-      "status": "not_started",
+      "status": "passing",
       "verification": {
         "command": "Manual Mattermost verification plus ./init.sh",
         "steps": [
@@ -106,8 +106,8 @@
           "Run ./init.sh successfully."
         ]
       },
-      "evidence": "",
-      "notes": "Depends on L01 or L02 only if Mattermost will be deployed into K3s; otherwise it can be done with Docker independently."
+      "evidence": "On 2026-05-26, selected the official Mattermost Docker Compose deployment without NGINX for first local familiarisation after checking current Mattermost docs and after user clarified that the setup should resemble production more closely than the preview image. Cloned https://github.com/mattermost/docker to /private/tmp/mattermost-docker-csit, configured .env with DOMAIN=localhost and MM_SERVICESETTINGS_SITEURL=http://localhost:8065, created the Mattermost volume directories, and added a local Apple Silicon override with platform: linux/amd64 because mattermost/mattermost-enterprise-edition:11.7.0 did not publish a linux/arm64/v8 manifest. Docker Compose started Postgres and Mattermost; docker compose ps showed mattermost-docker-csit-mattermost-1 Up and healthy on 0.0.0.0:8065->8065/tcp and postgres Up. curl http://localhost:8065/api/v4/system/ping returned HTTP/1.1 200 OK with JSON status OK and Mattermost version 11.7.0. ./scripts/verify-mattermost.sh passed with host-local access. Created local admin username csit-admin, team csit-lab with id bfnj9akc4fytxp4gwbn9ak5cer, and channel chatops-lab with id ez1crw7et3fztdsxywargec1sr.",
+      "notes": "Depends on L01 or L02 only if Mattermost will be deployed into K3s; otherwise it can be done with Docker independently. Current chosen path is the official mattermost/docker checkout with docker compose -f docker-compose.yml -f docker-compose.without-nginx.yml up -d. On Apple Silicon, include a local override file that sets services.mattermost.platform to linux/amd64. The current checkout and local data live under /private/tmp/mattermost-docker-csit."
     },
     {
       "id": "L04",

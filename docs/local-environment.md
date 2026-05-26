@@ -81,6 +81,7 @@ Use the official Mattermost container docs as the source of truth:
 
 - Docker install: https://docs.mattermost.com/deployment-guide/server/containers/install-docker.html
 - Container deployment: https://docs.mattermost.com/deployment-guide/server/deploy-containers.html
+- Quick start evaluation: https://docs.mattermost.com/deployment-guide/quick-start-evaluation.html
 
 Local evaluation targets:
 
@@ -88,6 +89,99 @@ Local evaluation targets:
 - A local team and channel can be created.
 - A bot account or integration can be created.
 - A test message can be sent through the chosen integration style.
+
+Chosen local path for `L03`: official Mattermost Docker Compose deployment without the included NGINX reverse proxy.
+
+This path is still local familiarisation, but it is closer to production than the preview image because it uses the official multi-container deployment with a separate database container and Mattermost application container. The local setup skips NGINX and TLS for now so the server is reachable at `http://localhost:8065`.
+
+Prepare the official Docker deployment checkout outside this repository:
+
+```sh
+git clone https://github.com/mattermost/docker
+cd docker
+cp env.example .env
+```
+
+Edit `.env` for local development:
+
+```text
+DOMAIN=localhost
+MM_SUPPORTSETTINGS_SUPPORTEMAIL=admin@example.com
+```
+
+Create the Mattermost data directories:
+
+```sh
+mkdir -p ./volumes/app/mattermost/{config,data,logs,plugins,client/plugins,bleve-indexes}
+```
+
+For Linux hosts, the official docs set ownership for the Mattermost container user:
+
+```sh
+sudo chown -R 2000:2000 ./volumes/app/mattermost
+```
+
+On M1/M2/M3 Macs, Mattermost documents that permission issues may be resolved by redoing the directory step and skipping the `chown` command.
+
+Start Mattermost without NGINX:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.without-nginx.yml up -d
+```
+
+Apple Silicon note:
+
+The official Mattermost Enterprise image tag `11.7.0` did not publish a `linux/arm64/v8` image when verified on this machine. Docker Desktop can run the Mattermost application container through AMD64 emulation with a local override file in the official Docker checkout:
+
+```yaml
+services:
+  mattermost:
+    platform: linux/amd64
+```
+
+Start with the override:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.without-nginx.yml -f docker-compose.codex-apple-silicon.yml up -d
+```
+
+Local URL:
+
+```text
+http://localhost:8065
+```
+
+Verify local readiness from this repository:
+
+```sh
+./scripts/verify-mattermost.sh
+```
+
+Manual setup target after the server is reachable:
+
+1. Open `http://localhost:8065`.
+2. Create the first admin account.
+3. Create a local team named `csit-lab`.
+4. Create a local channel named `chatops-lab`.
+5. Record the created team and channel in `PROGRESS.md`.
+
+Cleanup:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.without-nginx.yml down
+```
+
+Cleanup with the Apple Silicon override:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.without-nginx.yml -f docker-compose.codex-apple-silicon.yml down
+```
+
+Remove all local Mattermost data and settings from the official Docker deployment checkout:
+
+```sh
+sudo rm -rf ./volumes
+```
 
 ## Repo Verification During Learning Phase
 

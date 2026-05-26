@@ -29,3 +29,9 @@
 - Decision: `./init.sh` will not install K3s or start Mattermost automatically yet.
 - Reason: K3s installs host-level services and Mattermost local deployment can create persistent Docker state.
 - Consequence: Setup docs will provide explicit commands and verification evidence until the local topology is chosen.
+
+## 2026-05-26: Use official Mattermost Docker Compose for first local setup
+
+- Decision: Use the official Mattermost Docker Compose deployment for `L03`, running without the included NGINX reverse proxy for local access at `http://localhost:8065`.
+- Reason: Even though the goal is familiarisation, the multi-container deployment is closer to production than the all-in-one preview image because it separates the Mattermost app and database containers.
+- Consequence: Setup requires the official `mattermost/docker` checkout, `.env` configuration, local Docker socket access, and Docker Compose lifecycle commands. On Apple Silicon, the Mattermost application container currently needs a local Compose override with `platform: linux/amd64`.

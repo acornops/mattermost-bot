@@ -14,5 +14,5 @@ cat <<'MSG'
 Initialization complete.
 
 Project direction: Mattermost ChatOps bot for authenticating users to a Kubernetes cluster-management backend.
-Next action: set up local Mattermost, then record the URL, deployment command, cleanup command, and team/channel evidence.
+Next action: explore Mattermost bot integration options and choose the first prototype integration style.
 MSG
