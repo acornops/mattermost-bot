@@ -59,6 +59,16 @@ npm start
 - `help`, `login`, `status`, and `clusters` return placeholder text responses.
 - Backend authentication and cluster listing are placeholders until the backend API contract exists.
 
+## Message Flow
+
+1. `src/bot/index.js` reads `CSIT_MATTERMOST_URL`, `CSIT_MATTERMOST_TOKEN`, and `CSIT_MATTERMOST_BOT_USERNAME`.
+2. `src/bot/mattermost-client.js` verifies the token with `GET /api/v4/users/me`.
+3. `src/bot/runner.js` opens `/api/v4/websocket` and authenticates the WebSocket connection.
+4. Mattermost emits `posted` events for new messages the bot can see.
+5. `src/bot/message.js` ignores bot-authored posts, accepts direct messages, and accepts channel posts that mention `@csit`.
+6. The bot generates a placeholder response for `help`, `login`, `status`, or `clusters`.
+7. `src/bot/mattermost-client.js` posts the response with `POST /api/v4/posts` and no `root_id`, so Mattermost renders it in the main timeline instead of a thread.
+
 ## Local Mattermost Account Target
 
 - Bot username: `csit`

@@ -17,12 +17,12 @@ The backend API contract is still pending, so the first integration should be ea
 - Fit for CSIT: Useful later as a shortcut, but not the right first user experience. The user should talk to a named CSIT bot account instead of relying on a global slash command that appears to work in any chat.
 - Local development notes: Run a small local HTTP service and configure the command request URL in Mattermost. Validate the slash command token on every request.
 
-### Bot Account With Mattermost REST API
+### Bot Account With Mattermost REST API And WebSocket Events
 
-- Shape: A dedicated bot identity uses a bot access token to call the Mattermost REST API and listens for messages through Mattermost events.
+- Shape: A dedicated bot identity uses a bot access token to call the Mattermost REST API and listens for messages through Mattermost WebSocket `posted` events.
 - Strengths: Good for durable bot identity, direct-message conversations, mentions in channels, proactive follow-up messages, and richer workflow state.
 - Fit for CSIT: Best first prototype. Authentication should feel like a conversation with the CSIT bot account, and later backend login state can be tied to the human Mattermost user who messaged the bot.
-- Local development notes: Self-hosted Mattermost disables bot account creation by default unless enabled in integration settings, while plugins can still create and manage bot accounts.
+- Local development notes: A bot account can be created through Mattermost tooling or APIs, then its generated token can call the REST API on behalf of that bot. Keep the token outside committed files.
 
 ### Outgoing Webhook
 
@@ -74,15 +74,18 @@ clusters
 
 - Treat the sender Mattermost `user_id` as the chat identity to map to the backend authentication flow.
 - Prefer direct-message responses for authentication status and sensitive prompts.
+- Post bot responses as normal channel messages unless the product explicitly needs threads.
 - Avoid human or System Admin personal access tokens for bot automation.
 - Store integration secrets outside committed files.
 - Ignore messages authored by the bot itself to avoid reply loops.
 
-## References Checked On 2026-05-26
+## References Checked On 2026-05-28
 
 - Mattermost Integrations Guide: https://docs.mattermost.com/integrations-guide/integrations-guide-index.html
 - Mattermost Slash Commands guide: https://docs.mattermost.com/integrations-guide/slash-commands.html
 - Custom slash command developer docs: https://developers.mattermost.com/integrate/slash-commands/custom/
+- Mattermost Bot Accounts reference: https://developers.mattermost.com/integrate/reference/bot-accounts/
+- Mattermost API documentation: https://developers.mattermost.com/api-documentation/
 - Mattermost Outgoing Webhooks guide: https://docs.mattermost.com/integrations-guide/outgoing-webhooks.html
 - Mattermost webhook developer docs: https://developers.mattermost.com/integrate/webhooks/
 - Mattermost integration configuration settings: https://docs.mattermost.com/administration-guide/configure/integrations-configuration-settings.html

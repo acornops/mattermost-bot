@@ -23,9 +23,12 @@ If baseline verification is already failing, fix that first. Do not stack new fe
 
 ## Verification Commands
 - Harness verification: `./scripts/verify-harness.sh`
+- Bot verification: `./scripts/verify-bot.sh`
+- Mattermost readiness: `./scripts/verify-mattermost.sh`
+- K3s readiness: `./scripts/verify-k3s.sh`
 - Standard initialization: `./init.sh`
 
-Until application code exists, verification means the harness files and project-direction docs are present, readable, and internally consistent enough for the next session to resume.
+`./init.sh` verifies the harness and bot code. It does not start host-level services such as Docker Compose Mattermost or k3d.
 
 ## Required Artifacts
 - `feature_list.json`: source of truth for feature and harness work state.
@@ -69,3 +72,5 @@ Before ending a session:
 - `docs/harness-notes.md` - harness design notes and why these files exist.
 - `docs/project-direction.md` - product direction, learning path, and open decisions.
 - `docs/local-environment.md` - local K3s and Mattermost setup notes.
+- `docs/bot-integrations.md` - Mattermost integration tradeoffs and bot-account decision.
+- `docs/bot-runtime.md` - Node.js bot process architecture, commands, and runtime notes.

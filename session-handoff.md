@@ -9,9 +9,10 @@
 - Initial local learning stack is documented: K3s, kubectl, Helm evaluation, and local Mattermost via Docker.
 - Local K3s access is verified through Docker Desktop plus `k3d`.
 - `./scripts/verify-k3s.sh` passes when Docker Desktop is running and the `k3d-csit-lab` cluster exists.
+- K3s was not reachable during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections; restart or recreate the cluster before K3s-dependent work.
 - A first nginx workload was deployed, inspected, logged, and cleaned up in K3s.
 - Local Mattermost is verified through the official Docker Compose deployment without NGINX at `http://localhost:8065`.
-- `./scripts/verify-mattermost.sh` passes when run with host-local access.
+- `./scripts/verify-mattermost.sh` passed on 2026-05-28.
 - Mattermost team `csit-lab` and channel `chatops-lab` exist.
 - First Mattermost integration style is selected: dedicated bot account, documented in `docs/bot-integrations.md`.
 - Bot implementation runtime is selected: Node.js ECMAScript modules with built-in runtime APIs.
@@ -42,6 +43,8 @@
 - Created local bot account `csit` with id `6bcr1d8zxpraxnz77skinxwtoa` and local test user `csit-alice` with id `rcnutpf7fff4mjthsd1gck5p1y`.
 - Verified direct-message response in channel `fqxfhfozojystmibobinn8p94w`; user post `dof79es14pyy7fnyifteyieiow` received bot reply `o6tjjqjohpg6ikkbrqtxhmx34c`.
 - Updated bot replies to omit `root_id`, so new responses appear as normal main-timeline messages instead of threaded replies. Verified with user post `n6g8tkb9ypdoiewe3yd87mjqae` and bot reply `4pm7b7i43jyxtgj6g19fs15oby`.
+- Refreshed repository docs on 2026-05-28 so current state, next action, verification commands, and bot-account architecture match the implemented code.
+- Added `B03` as the next not-started feature: define the backend authentication integration boundary without inventing unsupported backend API details.
 
 ## Still Broken Or Unverified
 
@@ -51,7 +54,7 @@
 
 ## Next Best Action
 
-Design the backend authentication handoff once the backend API contract is available, including how direct-message prompts and channel mentions should differ for sensitive actions.
+Start `B03`: document the backend authentication handoff boundary, including how Mattermost user identity maps to the future backend and how direct-message prompts should differ from channel mentions for sensitive actions.
 
 ## Commands
 

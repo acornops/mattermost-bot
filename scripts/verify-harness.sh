@@ -42,7 +42,7 @@ require_contains "AGENTS.md" "End Of Session" "Add an End Of Session section wit
 require_contains "PROGRESS.md" "Current Verified State" "Add current repo state, verification path, and next action."
 require_contains "DECISIONS.md" "Decision Log" "Keep durable decisions in DECISIONS.md."
 require_contains "feature_list.json" "\"features\"" "Add a features array to feature_list.json."
-require_contains "feature_list.json" "\"H02\"" "Keep H02 as the next setup feature until the product goal and stack are selected."
+require_contains "feature_list.json" "\"features\"" "Keep feature_list.json as the source of truth for completed and upcoming work."
 require_contains "session-handoff.md" "Next Best Action" "Keep session-handoff.md ready for larger sessions or interrupted work."
 require_contains "README.md" "Mattermost ChatOps bot" "Document the selected product direction in README.md."
 require_contains "docs/project-direction.md" "K3s" "Document the Kubernetes learning path."

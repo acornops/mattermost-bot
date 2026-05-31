@@ -25,12 +25,12 @@ This repository starts with a harness-first baseline. The harness exists to make
 
 ## Upgrade Path
 
-Once the product goal and stack are selected:
+The product goal, local learning stack, and first bot runtime are now selected. Continue upgrading the harness by:
 
-1. Add stack-specific setup commands to `init.sh`.
-2. Add real test, lint, build, and start commands.
-3. Add product features to `feature_list.json`.
-4. Add module-level docs near code as the architecture grows.
-5. Add end-to-end checks for cross-component behavior.
+1. Keeping `./init.sh` focused on non-mutating repo and bot verification.
+2. Keeping host-level services such as k3d and Mattermost explicit until the local topology is settled.
+3. Adding product features to `feature_list.json` before implementation begins.
+4. Adding module-level docs near code as the architecture grows.
+5. Adding repeatable end-to-end checks for cross-component behavior when they can run without leaking local secrets.
 
-The current product direction is selected, but application code has not started. The immediate upgrade path is to verify local K3s access, then verify local Mattermost access, then choose and scaffold the bot runtime.
+The immediate next product path is to define the backend authentication integration boundary while the real backend API contract is pending.

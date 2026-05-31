@@ -4,13 +4,14 @@
 
 Build a Mattermost ChatOps bot that authenticates Mattermost users to a backend system for managing Kubernetes clusters.
 
-The backend API contract will be provided later. Until then, the repository should focus on learning and documenting the local platform pieces that the bot will depend on:
+The backend API contract will be provided later. Until then, the repository should keep the verified local platform and bot-account prototype restartable:
 
 1. Kubernetes fundamentals with K3s.
 2. Local workload deployment and inspection.
 3. Local Mattermost setup.
 4. Mattermost bot integration options.
 5. Bot runtime selection and bot-account conversation scaffolding.
+6. Backend authentication boundary documentation.
 
 ## Current Learning Path
 
@@ -30,7 +31,7 @@ The backend API contract will be provided later. Until then, the repository shou
 ### Phase 3: ChatOps Prototype
 
 - Use the selected Node.js runtime to run a Mattermost bot account that receives messages and responds.
-- Add a placeholder authentication flow until the backend API is available.
+- Keep placeholder authentication and cluster-listing responses honest until the backend API is available.
 - Replace the placeholder with the real API integration when provided.
 
 ## Initial Stack
@@ -47,6 +48,7 @@ The backend API contract will be provided later. Until then, the repository shou
 - Backend API authentication protocol.
 - Local development topology: all Docker Compose, K3s-hosted services, or hybrid.
 - How much cluster-management behavior should be mocked before the real API exists.
+- Whether authentication-sensitive actions should be direct-message only, even if general status/help works in channel mentions.
 
 ## Official References
 

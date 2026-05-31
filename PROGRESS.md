@@ -11,8 +11,9 @@
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify-harness.sh`
 - K3s readiness verification path: `./scripts/verify-k3s.sh`
+- Mattermost readiness verification path: `./scripts/verify-mattermost.sh`
 - Bot verification path: `./scripts/verify-bot.sh`
-- Highest priority unfinished feature: none
+- Highest priority unfinished feature: `B03`
 - Current blocker: backend API contract is not available yet; bot responses are placeholders until the backend API contract exists
 
 ## Completed
@@ -32,17 +33,19 @@
 
 ## Known Issues
 
-- No product source code exists yet.
-- No application-level test, lint, build, or end-to-end command exists yet.
-- Bot implementation runtime remains undecided until the backend API shape is clearer.
+- Backend authentication and cluster listing are placeholders until the backend API contract exists.
+- The K3s verification command did not pass during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections.
 - Mattermost is running locally through the official Docker Compose deployment without NGINX.
+- Mattermost and K3s remain explicit local services; `./init.sh` verifies repo and bot code but does not start Docker Compose or k3d.
 
 ## Next Steps
 
-1. Replace placeholder bot responses with the backend authentication flow once the backend API contract is available.
+1. Start `B03` by documenting the backend authentication integration boundary and safe placeholder behavior.
 2. Decide whether channel mentions should be enabled by default or direct-message only for authentication-sensitive actions.
 
 ## Session Log
+
+Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
 
 ### 2026-05-25 - Initializer pass
 
@@ -70,7 +73,7 @@
 - Completed: Documented the Mattermost ChatOps bot direction, K3s-first learning path, local Mattermost setup path, and open bot-runtime decisions.
 - Verification run: `./init.sh` passed.
 - Evidence recorded: official docs referenced in `docs/project-direction.md` and `docs/local-environment.md`; H02 updated in `feature_list.json`; `./init.sh` passed on 2026-05-26.
-- Known risks: K3s and Mattermost have not been installed or verified locally yet; backend API is not available; bot runtime remains undecided.
+- Known risks at the time: K3s and Mattermost had not been installed or verified locally yet; backend API was not available; bot runtime was undecided.
 - Next best action: start `L01` by verifying local K3s access.
 
 ### 2026-05-26 - Local K3s verified and first workload deployed
@@ -94,10 +97,10 @@
 ### 2026-05-26 - Mattermost bot integration style selected
 
 - Goal: Start `L04` by exploring Mattermost bot integration options.
-- Completed: Reviewed current Mattermost integration docs for custom slash commands, incoming webhooks, outgoing webhooks, bot accounts, REST API use, plugins, and the legacy Apps framework; added `docs/bot-integrations.md`; selected a custom slash command as the initial first prototype integration style.
+- Completed: Reviewed current Mattermost integration docs for custom slash commands, incoming webhooks, outgoing webhooks, bot accounts, REST API use, plugins, and the legacy Apps framework; added `docs/bot-integrations.md`; initially selected a custom slash command before later correcting the direction to a dedicated bot account.
 - Verification run: `./init.sh` passed before documentation work; final `./init.sh` passed after artifact updates.
 - Evidence recorded: `docs/bot-integrations.md` records tradeoffs, security notes, and official references checked on 2026-05-26. `DECISIONS.md` records the corrected bot-account-first decision.
-- Known risks: Backend API contract remains pending; bot implementation runtime remains undecided; no local Mattermost bot account exists yet.
+- Known risks at the time: Backend API contract remained pending; bot implementation runtime was undecided; no local Mattermost bot account existed yet.
 - Next best action: start `B01` by choosing and scaffolding the bot implementation runtime.
 
 ### 2026-05-26 - Bot runtime scaffolded
@@ -106,7 +109,7 @@
 - Completed: Selected Node.js ECMAScript modules with built-in Node.js runtime APIs and `node:test`; added a dependency-light bot scaffold in `src/bot`; added `package.json`, `package-lock.json`, tests, bot lint/build/verify scripts, and `docs/bot-runtime.md`; updated `./init.sh` to include bot verification.
 - Verification run: `npm run verify:bot` passed with lint, build, and 9 passing tests; `./init.sh` passed after artifact updates.
 - Evidence recorded: bot message handler and Mattermost runner tests pass; tests cover direct-message response selection, mention response selection, self-post ignore behavior, WebSocket authentication challenge handling, Mattermost post creation, help, and status responses.
-- Known risks: The local Mattermost `csit` bot account is not wired to a running bot process yet; backend authentication and cluster listing remain placeholders until the backend API contract is available.
+- Known risks at the time: The local Mattermost `csit` bot account was not wired to a running bot process yet; backend authentication and cluster listing remained placeholders until the backend API contract became available.
 - Next best action: start `B02` by configuring the local Mattermost `csit` bot account and recording end-to-end response evidence.
 
 ### 2026-05-26 - Integration direction corrected to bot account
@@ -133,3 +136,12 @@
 - Verification run: `npm run verify:bot` passed with 12 tests; `./init.sh` passed; manual Mattermost direct-message verification passed.
 - Evidence recorded: Test user post `n6g8tkb9ypdoiewe3yd87mjqae` sent message `status`; bot reply `4pm7b7i43jyxtgj6g19fs15oby` was authored by `csit`, contained the CSIT status placeholder response, and had `root_id` set to an empty string.
 - Known risks: Existing historical test reply `o6tjjqjohpg6ikkbrqtxhmx34c` remains threaded in local Mattermost data because it was created before this change.
+
+### 2026-05-28 - Documentation refreshed for next agent session
+
+- Goal: Review all repository docs and remove deprecated or misleading state before the next agent session.
+- Completed: Updated README, startup readiness, harness notes, local environment, project direction, bot integration, bot runtime, AGENTS.md, feature list, and session handoff language to reflect the current bot-account implementation. Added `B03` as the next not-started feature for the backend authentication integration boundary.
+- Verification run: `./init.sh` passed; `./scripts/verify-mattermost.sh` passed.
+- Evidence recorded: Mattermost readiness check reported `Mattermost is responding at http://localhost:8065` on 2026-05-28. Node.js remained `v25.8.1`, npm remained `11.11.0`, Docker reported `29.4.3`, and k3d reported `v5.8.3` with default K3s `v1.33.6-k3s1`.
+- Known risks: `kubectl --context k3d-csit-lab get nodes -o wide` failed on 2026-05-28 because the saved API port refused connections. Restart or recreate the k3d cluster before K3s-dependent work.
+- Next best action: start `B03`.

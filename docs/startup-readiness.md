@@ -5,9 +5,11 @@
 - Repository initialized: yes
 - Harness files present: yes
 - Product direction selected: yes
-- Local learning stack selected: partial
-- Application code present: no
-- Application tests present: no
+- Local learning stack selected: yes
+- Application code present: yes
+- Application tests present: yes
+- Mattermost local readiness: verified on 2026-05-28 with `./scripts/verify-mattermost.sh`
+- K3s local readiness: previously verified, but not reachable during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections
 
 ## Start Commands
 
@@ -24,13 +26,13 @@
 - [x] Repository has a harness verification command.
 - [x] Product goal is documented.
 - [x] Initial local learning stack is documented.
-- [ ] Bot implementation stack and versions are documented.
+- [x] Bot implementation stack and versions are documented.
 - [x] K3s install or access path is verified.
 - [x] Mattermost local setup path is verified.
-- [ ] Application install command is documented and verified.
-- [ ] Application test command is documented and verified.
-- [ ] Application lint/static check command is documented and verified.
-- [ ] Application build/start command is documented and verified.
+- [x] Application install command is documented.
+- [x] Application test command is documented and verified through `./init.sh`.
+- [x] Application lint/static check command is documented and verified through `./init.sh`.
+- [x] Application build/start command is documented and verified through `./init.sh`.
 
 ## Fresh Session Test
 

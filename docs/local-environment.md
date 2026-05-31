@@ -13,14 +13,16 @@ Use the official K3s docs as the source of truth before installing:
 
 This Mac uses Docker Desktop plus `k3d` for local K3s learning. K3s is Linux-native, so `k3d` keeps the cluster inside Docker containers instead of installing a host-level Linux service on macOS.
 
-Verified local setup on 2026-05-26:
+Verified local setup:
 
 - Host: macOS arm64
-- Docker Desktop: available and running
+- Docker Desktop: available
 - k3d: installed with Homebrew as `k3d` 5.8.3
 - Cluster: `csit-lab`
 - kubectl context: `k3d-csit-lab`
 - K3s version observed on nodes: `v1.33.6+k3s1`
+- Last successful repo-recorded K3s verification: 2026-05-26
+- 2026-05-28 docs audit note: `kubectl --context k3d-csit-lab get nodes -o wide` failed with connection refused on the saved API port, so restart or recreate the k3d cluster before relying on K3s behavior.
 
 Create the local learning cluster:
 
@@ -157,6 +159,11 @@ Verify local readiness from this repository:
 ./scripts/verify-mattermost.sh
 ```
 
+Current local readiness:
+
+- Last successful repo-recorded Mattermost verification: 2026-05-28
+- Verification evidence: `./scripts/verify-mattermost.sh` reported that Mattermost is responding at `http://localhost:8065`.
+
 Manual setup target after the server is reachable:
 
 1. Open `http://localhost:8065`.
@@ -203,13 +210,19 @@ Remove all local Mattermost data and settings from the official Docker deploymen
 sudo rm -rf ./volumes
 ```
 
-## Repo Verification During Learning Phase
-
-Until application code exists:
+## Repo Verification
 
 ```sh
 ./init.sh
 ./scripts/verify-harness.sh
+./scripts/verify-bot.sh
 ```
 
-After K3s or Mattermost setup begins, add a script that verifies only local readiness and does not mutate host services.
+For local services, use the readiness scripts separately:
+
+```sh
+./scripts/verify-mattermost.sh
+./scripts/verify-k3s.sh
+```
+
+`./init.sh` intentionally does not install or start K3s, Mattermost, or Docker containers.

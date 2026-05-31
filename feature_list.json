@@ -169,6 +169,26 @@
       },
       "evidence": "On 2026-05-26, confirmed local Mattermost had zero custom slash commands before implementation, created local bot account csit with id 6bcr1d8zxpraxnz77skinxwtoa, generated a bot token outside committed files, and created local test user csit-alice with id rcnutpf7fff4mjthsd1gck5p1y. Replaced the slash-command HTTP receiver with a bot-account process that authenticates to Mattermost, opens the WebSocket event stream, responds to direct messages and @csit mentions, ignores self-authored posts, and posts replies through the Mattermost REST API. npm run verify:bot passed with 12 tests. Manual end-to-end verification passed in direct-message channel fqxfhfozojystmibobinn8p94w: csit-alice sent post dof79es14pyy7fnyifteyieiow with message status; bot reply o6tjjqjohpg6ikkbrqtxhmx34c was authored by csit and contained CSIT status, Mattermost user @csit-alice (rcnutpf7fff4mjthsd1gck5p1y), Backend authentication: not connected, and Cluster access: not loaded. Follow-up verification changed bot replies to normal main-timeline messages: csit-alice sent post n6g8tkb9ypdoiewe3yd87mjqae with message status; bot reply 4pm7b7i43jyxtgj6g19fs15oby had root_id set to an empty string. Final ./init.sh passed.",
       "notes": "Depends on B01 and L03. The local bot token must stay outside committed files. Backend authentication and cluster listing remain placeholders until the backend API contract is available. Bot replies intentionally omit root_id so Mattermost renders them as normal channel or direct-message timeline posts, not threaded replies."
+    },
+    {
+      "id": "B03",
+      "priority": 9,
+      "area": "bot",
+      "title": "Define backend authentication integration boundary",
+      "user_visible_behavior": "A developer can see how Mattermost bot messages will map to the future backend authentication API, including safe placeholder behavior before the API exists.",
+      "status": "not_started",
+      "verification": {
+        "command": "./init.sh plus documentation review",
+        "steps": [
+          "Document expected backend authentication request and response boundaries without inventing unsupported API details.",
+          "Document how Mattermost user_id, username, channel type, and command text map into the backend handoff.",
+          "Decide which actions must stay direct-message only for sensitive authentication state.",
+          "Record placeholder behavior that remains valid until the backend API contract is available.",
+          "Run ./init.sh successfully."
+        ]
+      },
+      "evidence": "",
+      "notes": "Do not fabricate backend endpoints, tokens, or schemas. This feature should prepare the adapter boundary and safety rules so implementation can proceed quickly once the real API contract arrives."
     }
   ]
 }

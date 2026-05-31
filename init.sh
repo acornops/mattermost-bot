@@ -15,5 +15,5 @@ cat <<'MSG'
 Initialization complete.
 
 Project direction: Mattermost ChatOps bot for authenticating users to a Kubernetes cluster-management backend.
-Next action: replace placeholder bot responses with the backend authentication flow once the API contract is available.
+Next action: start B03 by documenting the backend authentication integration boundary and safe placeholder behavior.
 MSG
