@@ -2,14 +2,14 @@
 
 CSIT is a Mattermost ChatOps bot project.
 
-The product direction is to build a bot that helps authenticate Mattermost users to a backend system that manages Kubernetes clusters. The backend API will be provided later, so the current phase is local platform setup plus a verified Mattermost bot-account prototype.
+The product direction is to build a bot that helps authenticate Mattermost users to the AcornOps backend system that manages Kubernetes clusters. The current phase is local platform setup plus a verified Mattermost bot-account prototype.
 
 ## Current Project Phase
 
 1. Keep the local K3s and Mattermost learning environment restartable.
 2. Keep the dedicated Mattermost `@csit` bot account prototype verified.
-3. Define the backend authentication integration boundary while the real API contract is pending.
-4. Replace placeholder bot responses with backend-backed behavior once the API exists.
+3. Wire local bot commands to the AcornOps control-plane API in small stages.
+4. Replace the local development login bridge with an OIDC-backed login flow.
 
 ## Local Learning Stack
 
@@ -19,7 +19,7 @@ The product direction is to build a bot that helps authenticate Mattermost users
 - Chat platform: Mattermost local Docker deployment or preview image
 - First Mattermost integration style: dedicated Mattermost bot account
 - Bot implementation stack: Node.js ECMAScript modules with built-in runtime APIs
-- Backend cluster-management API: pending external contract
+- Backend cluster-management API: AcornOps control plane at `/Users/ryangoh/Desktop/Development/acornops/control-plane`
 
 ## Primary Docs
 

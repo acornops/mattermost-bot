@@ -110,6 +110,63 @@ test("handlePostedEvent skips unmentioned channel posts", async () => {
   assert.equal(result, null);
 });
 
+test("handlePostedEvent logs in through AcornOps for direct message login posts", async () => {
+  const posts = [];
+  const sessions = new Map();
+  const client = fakeClient({
+    createPost: async (post) => {
+      posts.push(post);
+      return { id: "reply-1", ...post };
+    }
+  });
+
+  const result = await handlePostedEvent({
+    client,
+    acornOpsClient: {
+      async devLogin(input) {
+        assert.deepEqual(input, {
+          email: "mattermost-user-1@csit.local",
+          name: "alice"
+        });
+        return {
+          mode: "dev",
+          sessionCookie: "acornops_cp_session=session-1",
+          user: {
+            id: "acorn-user-1",
+            email: input.email,
+            displayName: "alice"
+          }
+        };
+      }
+    },
+    authStore: {
+      set: (userId, session) => sessions.set(userId, session)
+    },
+    botUser: {
+      id: "bot",
+      username: "csit"
+    },
+    event: {
+      event: "posted",
+      data: {
+        channel_type: "D",
+        sender_name: "alice",
+        post: JSON.stringify({
+          id: "post-1",
+          channel_id: "channel-1",
+          user_id: "user-1",
+          message: "login"
+        })
+      }
+    },
+    logger: quietLogger()
+  });
+
+  assert.equal(result.id, "reply-1");
+  assert.match(posts[0].message, /AcornOps login complete\./);
+  assert.equal(sessions.get("user-1").user.id, "acorn-user-1");
+});
+
 function fakeClient(overrides = {}) {
   return {
     token: overrides.token ?? "token",

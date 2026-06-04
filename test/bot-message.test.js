@@ -46,8 +46,8 @@ test("shouldRespondToPost accepts mentions in channel posts", () => {
   }), true);
 });
 
-test("handleBotMessage returns identity-aware status placeholder", () => {
-  const response = handleBotMessage({
+test("handleBotMessage returns identity-aware status placeholder", async () => {
+  const response = await handleBotMessage({
     text: "@csit status",
     userId: "user-1",
     userName: "alice"
@@ -57,6 +57,77 @@ test("handleBotMessage returns identity-aware status placeholder", () => {
   assert.match(response, /alice \(user-1\)/);
 });
 
-test("handleBotMessage returns help by default", () => {
-  assert.match(handleBotMessage({ text: "" }), /CSIT commands:/);
+test("handleBotMessage returns help by default", async () => {
+  assert.match(await handleBotMessage({ text: "" }), /CSIT commands:/);
+});
+
+test("handleBotMessage logs in through AcornOps dev login for direct messages", async () => {
+  const sessions = new Map();
+  const response = await handleBotMessage({
+    text: "login",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "D",
+    authStore: {
+      set: (userId, session) => sessions.set(userId, session)
+    },
+    acornOpsClient: {
+      async devLogin(input) {
+        assert.deepEqual(input, {
+          email: "mattermost-mattermost-user-1@csit.local",
+          name: "alice"
+        });
+        return {
+          mode: "dev",
+          sessionCookie: "acornops_cp_session=session-1",
+          user: {
+            id: "acorn-user-1",
+            email: input.email,
+            displayName: "alice"
+          }
+        };
+      }
+    }
+  });
+
+  assert.match(response, /AcornOps login complete\./);
+  assert.match(response, /AcornOps user: alice \(acorn-user-1\)/);
+  assert.equal(sessions.get("mattermost-user-1").sessionCookie, "acornops_cp_session=session-1");
+});
+
+test("handleBotMessage keeps login direct-message only", async () => {
+  const response = await handleBotMessage({
+    text: "@csit login",
+    userId: "user-1",
+    userName: "alice",
+    channelType: "O",
+    acornOpsClient: {
+      async devLogin() {
+        throw new Error("devLogin should not be called");
+      }
+    }
+  });
+
+  assert.match(response, /direct message/);
+});
+
+test("handleBotMessage status reports stored AcornOps session", async () => {
+  const response = await handleBotMessage({
+    text: "status",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    authStore: {
+      get(userId) {
+        assert.equal(userId, "mattermost-user-1");
+        return {
+          user: {
+            id: "acorn-user-1",
+            displayName: "alice"
+          }
+        };
+      }
+    }
+  });
+
+  assert.match(response, /Backend authentication: connected as alice \(acorn-user-1\)/);
 });

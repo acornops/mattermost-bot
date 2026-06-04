@@ -4,7 +4,7 @@
 
 - Repository root directory: `/Users/ryangoh/Desktop/Development/csit`
 - Current phase: local learning and platform setup
-- Product direction: Mattermost ChatOps bot for authenticating users to a Kubernetes cluster-management backend
+- Product direction: Mattermost ChatOps bot for authenticating users to AcornOps, a Kubernetes cluster-management backend
 - Local learning stack: K3s, kubectl, Helm evaluation, local Mattermost via Docker
 - Bot implementation stack: Node.js ECMAScript modules with built-in runtime APIs
 - First Mattermost integration style: dedicated bot account
@@ -13,8 +13,8 @@
 - K3s readiness verification path: `./scripts/verify-k3s.sh`
 - Mattermost readiness verification path: `./scripts/verify-mattermost.sh`
 - Bot verification path: `./scripts/verify-bot.sh`
-- Highest priority unfinished feature: `B03`
-- Current blocker: backend API contract is not available yet; bot responses are placeholders until the backend API contract exists
+- Highest priority unfinished feature: `B04`
+- Current blocker: production login should use an OIDC-backed Mattermost identity link; the current `login` command uses AcornOps `dev-login` as a local-only bridge
 
 ## Completed
 
@@ -26,6 +26,7 @@
 - `L04`: Explore Mattermost bot integration options.
 - `B01`: Choose and scaffold bot implementation runtime.
 - `B02`: Wire local Mattermost bot account conversation.
+- `B03`: Wire first local AcornOps login command.
 
 ## In Progress
 
@@ -33,15 +34,16 @@
 
 ## Known Issues
 
-- Backend authentication and cluster listing are placeholders until the backend API contract exists.
+- `login` direct messages call local AcornOps control-plane `POST /api/v1/auth/dev-login`; this is a local-only bridge, not the production login flow.
+- Cluster listing is still a placeholder until wired to AcornOps cluster APIs.
 - The K3s verification command did not pass during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections.
 - Mattermost is running locally through the official Docker Compose deployment without NGINX.
 - Mattermost and K3s remain explicit local services; `./init.sh` verifies repo and bot code but does not start Docker Compose or k3d.
 
 ## Next Steps
 
-1. Start `B03` by documenting the backend authentication integration boundary and safe placeholder behavior.
-2. Decide whether channel mentions should be enabled by default or direct-message only for authentication-sensitive actions.
+1. Start `B04` by moving `login` from local `dev-login` to an OIDC-backed Mattermost identity link.
+2. Wire `clusters` to authenticated AcornOps APIs after the login identity model is settled.
 
 ## Session Log
 
@@ -145,3 +147,12 @@ Session log entries are historical. Superseded risks and decisions are corrected
 - Evidence recorded: Mattermost readiness check reported `Mattermost is responding at http://localhost:8065` on 2026-05-28. Node.js remained `v25.8.1`, npm remained `11.11.0`, Docker reported `29.4.3`, and k3d reported `v5.8.3` with default K3s `v1.33.6-k3s1`.
 - Known risks: `kubectl --context k3d-csit-lab get nodes -o wide` failed on 2026-05-28 because the saved API port refused connections. Restart or recreate the k3d cluster before K3s-dependent work.
 - Next best action: start `B03`.
+
+### 2026-06-04 - First local AcornOps login command wired
+
+- Goal: Start the backend-backed command path with `login`, using the real local AcornOps API in stages.
+- Completed: Explored `/Users/ryangoh/Desktop/Development/acornops` and confirmed the public backend API is the AcornOps control plane in `/Users/ryangoh/Desktop/Development/acornops/control-plane`, with standalone local URL `http://localhost:8081`. Added `src/bot/acornops-client.js` for `POST /api/v1/auth/dev-login`, `src/bot/auth-store.js` for in-memory session storage keyed by Mattermost `user_id`, and wired direct-message `login` through the bot runner. Channel `login` mentions now ask users to direct-message `@csit` instead of calling AcornOps. `status` reports a connected AcornOps user when a session is stored.
+- Verification run: `./init.sh` passed with 18 tests. Live AcornOps backend smoke passed against `http://localhost:8081`.
+- Evidence recorded: Tests cover deterministic Mattermost dev-login email generation, AcornOps dev-login request shape, session-cookie capture, direct-message-only login behavior, status after stored login, and runner-level login wiring. Live smoke evidence: `/health` returned `status=ok`; CSIT `AcornOpsClient.devLogin()` returned `mode=dev`, AcornOps user id `5fa96e56-06d5-4240-827d-9b679505639c`, email `mattermost-live-smoke-user@csit.local`, and a session cookie; command-level `login` plus `status` smoke returned `loginComplete=true` and `statusConnected=true`.
+- Known risks: The current login implementation uses AcornOps non-production `dev-login` only; production login should use OIDC identity linking.
+- Next best action: start `B04` by replacing the local `dev-login` bridge with an OIDC-backed Mattermost identity link.

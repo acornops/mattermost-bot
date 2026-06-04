@@ -2,6 +2,8 @@ import { handleBotMessage, shouldRespondToPost } from "./message.js";
 
 export function createMattermostBotRunner({
   client,
+  acornOpsClient = null,
+  authStore = null,
   websocketFactory,
   logger = console,
   botUsername = "csit"
@@ -28,6 +30,8 @@ export function createMattermostBotRunner({
           if (message.event === "posted") {
             await handlePostedEvent({
               client,
+              acornOpsClient,
+              authStore,
               event: message,
               botUser,
               botUsername,
@@ -62,7 +66,15 @@ function authenticateSocket(socket, token) {
   }));
 }
 
-export async function handlePostedEvent({ client, event, botUser, botUsername = "csit", logger = console }) {
+export async function handlePostedEvent({
+  client,
+  acornOpsClient = null,
+  authStore = null,
+  event,
+  botUser,
+  botUsername = "csit",
+  logger = console
+}) {
   const post = parsePostedPost(event);
   if (!post) {
     return null;
@@ -78,11 +90,14 @@ export async function handlePostedEvent({ client, event, botUser, botUsername = 
     return null;
   }
 
-  const response = handleBotMessage({
+  const response = await handleBotMessage({
     text: post.message ?? "",
     userId: post.user_id,
     userName: event.data?.sender_name ?? "",
-    botUsername
+    channelType,
+    botUsername,
+    acornOpsClient,
+    authStore
   });
 
   logger.log(`Responding to Mattermost post ${post.id} in channel ${post.channel_id}.`);

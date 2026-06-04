@@ -6,7 +6,7 @@ This note records the `L04` review of Mattermost integration styles for the CSIT
 
 Choose the first Mattermost integration style for a bot that authenticates Mattermost users to a backend system for managing Kubernetes clusters.
 
-The backend API contract is still pending, so the first integration should be easy to run locally, expose a stable bot identity that users can talk to, preserve the Mattermost user identity, and leave room for interactive authentication later.
+The AcornOps backend API is now available locally, so the first integration should be easy to run locally, expose a stable bot identity that users can talk to, preserve the Mattermost user identity, and leave room for interactive OIDC authentication later.
 
 ## Options Reviewed
 

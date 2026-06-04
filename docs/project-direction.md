@@ -2,16 +2,17 @@
 
 ## Goal
 
-Build a Mattermost ChatOps bot that authenticates Mattermost users to a backend system for managing Kubernetes clusters.
+Build a Mattermost ChatOps bot that authenticates Mattermost users to AcornOps, a backend system for managing Kubernetes clusters.
 
-The backend API contract will be provided later. Until then, the repository should keep the verified local platform and bot-account prototype restartable:
+The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/control-plane`. The repository should keep the verified local platform and bot-account prototype restartable while wiring backend-backed commands in small stages:
 
 1. Kubernetes fundamentals with K3s.
 2. Local workload deployment and inspection.
 3. Local Mattermost setup.
 4. Mattermost bot integration options.
 5. Bot runtime selection and bot-account conversation scaffolding.
-6. Backend authentication boundary documentation.
+6. Local AcornOps login command.
+7. OIDC-backed Mattermost identity linking.
 
 ## Current Learning Path
 
@@ -31,8 +32,9 @@ The backend API contract will be provided later. Until then, the repository shou
 ### Phase 3: ChatOps Prototype
 
 - Use the selected Node.js runtime to run a Mattermost bot account that receives messages and responds.
-- Keep placeholder authentication and cluster-listing responses honest until the backend API is available.
-- Replace the placeholder with the real API integration when provided.
+- Use local AcornOps `dev-login` only as a development bridge for the first backend-backed `login` command.
+- Replace the development bridge with OIDC-backed identity linking before treating login as product behavior.
+- Wire cluster-listing responses after the authenticated identity model is settled.
 
 ## Initial Stack
 
@@ -45,9 +47,9 @@ The backend API contract will be provided later. Until then, the repository shou
 
 ## Open Decisions
 
-- Backend API authentication protocol.
+- OIDC-backed Mattermost identity link protocol.
 - Local development topology: all Docker Compose, K3s-hosted services, or hybrid.
-- How much cluster-management behavior should be mocked before the real API exists.
+- How much cluster-management behavior should be mocked before authenticated AcornOps cluster APIs are wired.
 - Whether authentication-sensitive actions should be direct-message only, even if general status/help works in channel mentions.
 
 ## Official References

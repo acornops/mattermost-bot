@@ -45,5 +45,11 @@
 ## 2026-05-26: Use Node.js built-in runtime APIs for the first bot process
 
 - Decision: Scaffold the first bot process with Node.js ECMAScript modules, built-in runtime APIs, and the built-in `node:test` runner.
-- Reason: The backend API contract is still pending, so the first bot needs verifiable Mattermost message handling more than it needs a larger web framework or dependency stack.
+- Reason: At the time, the backend API contract was still pending, so the first bot needed verifiable Mattermost message handling more than it needed a larger web framework or dependency stack.
 - Consequence: The repository now has dependency-light install, lint, build, test, and local run commands. Revisit Express, Fastify, TypeScript, persistence, and third-party Mattermost client dependencies only when the next feature needs them.
+
+## 2026-06-04: Use AcornOps dev-login only for the first local bot login stage
+
+- Decision: The first local `login` command uses AcornOps control-plane `POST /api/v1/auth/dev-login` in direct messages only.
+- Reason: It exercises the real local backend API and session-cookie response without asking users to type AcornOps passwords into Mattermost. Normal AcornOps user auth is cookie-session based; Bearer tokens are not the browser-user login model.
+- Consequence: `dev-login` is a development bridge, not the product login flow. The next auth feature should move `login` to an OIDC-backed link flow that maps the authenticated AcornOps user to the Mattermost `user_id`.

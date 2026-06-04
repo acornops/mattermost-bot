@@ -1,8 +1,10 @@
+import { mattermostDevLoginEmail } from "./acornops-client.js";
+
 const helpText = [
   "CSIT commands:",
   "- `help` shows this help.",
-  "- `login` starts the backend authentication flow once the API exists.",
-  "- `status` shows the local chat identity and mocked auth state.",
+  "- `login` signs this Mattermost user into the local AcornOps backend.",
+  "- `status` shows the local chat identity and backend auth state.",
   "- `clusters` will list accessible clusters once the backend API exists."
 ].join("\n");
 
@@ -34,7 +36,15 @@ export function shouldRespondToPost({ post, botUserId, botUsername = "csit", cha
   return new RegExp(`(^|\\s)@${escapeRegExp(botUsername)}\\b`, "i").test(post.message ?? "");
 }
 
-export function handleBotMessage({ text, userId = "", userName = "", botUsername = "csit" }) {
+export async function handleBotMessage({
+  text,
+  userId = "",
+  userName = "",
+  botUsername = "csit",
+  channelType = "",
+  acornOpsClient = null,
+  authStore = null
+}) {
   const normalizedText = normalizeBotText(text, botUsername);
   const action = firstWord(normalizedText) || "help";
 
@@ -43,18 +53,19 @@ export function handleBotMessage({ text, userId = "", userName = "", botUsername
   }
 
   if (action === "login") {
-    return [
-      "Login flow placeholder.",
-      "The backend API contract is pending, so no external authentication request was sent yet.",
-      `Mattermost user: ${identityLabel({ userId, userName })}`
-    ].join("\n");
+    if (channelType !== "D") {
+      return `For account login, send me a direct message with \`login\`.`;
+    }
+
+    return await handleLogin({ userId, userName, acornOpsClient, authStore });
   }
 
   if (action === "status") {
+    const session = authStore?.get?.(userId);
     return [
       "CSIT status:",
       `- Mattermost user: ${identityLabel({ userId, userName })}`,
-      "- Backend authentication: not connected",
+      `- Backend authentication: ${session ? `connected as ${session.user.displayName} (${session.user.id})` : "not connected"}`,
       "- Cluster access: not loaded"
     ].join("\n");
   }
@@ -64,6 +75,38 @@ export function handleBotMessage({ text, userId = "", userName = "", botUsername
   }
 
   return `Unknown CSIT command: ${action}\n\n${helpText}`;
+}
+
+async function handleLogin({ userId, userName, acornOpsClient, authStore }) {
+  if (!acornOpsClient) {
+    return "AcornOps login is not configured. Set `CSIT_ACORNOPS_URL` and restart the bot.";
+  }
+
+  const email = mattermostDevLoginEmail(userId);
+  const name = userName || userId || "Mattermost User";
+  let result;
+
+  try {
+    result = await acornOpsClient.devLogin({ email, name });
+  } catch (error) {
+    return [
+      "AcornOps login failed.",
+      error instanceof Error ? error.message : String(error)
+    ].join("\n");
+  }
+
+  authStore?.set?.(userId, {
+    user: result.user,
+    mode: result.mode,
+    sessionCookie: result.sessionCookie
+  });
+
+  return [
+    "AcornOps login complete.",
+    `Mattermost user: ${identityLabel({ userId, userName })}`,
+    `AcornOps user: ${result.user.displayName} (${result.user.id})`,
+    `AcornOps email: ${result.user.email}`
+  ].join("\n");
 }
 
 function identityLabel({ userId, userName }) {

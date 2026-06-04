@@ -5,7 +5,7 @@
 - `./init.sh` passes.
 - `./scripts/verify-harness.sh` passes.
 - `AGENTS.md` includes mechanically checked startup, artifact, definition-of-done, and end-of-session sections.
-- Product direction is selected: Mattermost ChatOps bot for authenticating users to a Kubernetes cluster-management backend.
+- Product direction is selected: Mattermost ChatOps bot for authenticating users to AcornOps, a Kubernetes cluster-management backend.
 - Initial local learning stack is documented: K3s, kubectl, Helm evaluation, and local Mattermost via Docker.
 - Local K3s access is verified through Docker Desktop plus `k3d`.
 - `./scripts/verify-k3s.sh` passes when Docker Desktop is running and the `k3d-csit-lab` cluster exists.
@@ -18,6 +18,7 @@
 - Bot implementation runtime is selected: Node.js ECMAScript modules with built-in runtime APIs.
 - `./scripts/verify-bot.sh` passes and is included in `./init.sh`.
 - Local Mattermost bot account `csit` exists and can respond to direct messages.
+- Direct-message `login` now calls local AcornOps control-plane `POST /api/v1/auth/dev-login` and stores the returned session cookie in memory by Mattermost user id.
 
 ## Changes This Session
 
@@ -45,16 +46,20 @@
 - Updated bot replies to omit `root_id`, so new responses appear as normal main-timeline messages instead of threaded replies. Verified with user post `n6g8tkb9ypdoiewe3yd87mjqae` and bot reply `4pm7b7i43jyxtgj6g19fs15oby`.
 - Refreshed repository docs on 2026-05-28 so current state, next action, verification commands, and bot-account architecture match the implemented code.
 - Added `B03` as the next not-started feature: define the backend authentication integration boundary without inventing unsupported backend API details.
+- Re-scoped and completed `B03` on 2026-06-04 after the AcornOps backend repo was provided. Added `src/bot/acornops-client.js`, `src/bot/auth-store.js`, and wired direct-message `login` to AcornOps `dev-login`.
+- Added tests for AcornOps request shape, session-cookie capture, direct-message login behavior, channel login guard, status after login, and runner-level login wiring.
 
 ## Still Broken Or Unverified
 
-- Backend authentication and cluster listing are placeholders until the backend API exists.
+- `login` uses AcornOps non-production `dev-login` as a local-only bridge; production login still needs an OIDC-backed Mattermost identity link.
+- Cluster listing remains a placeholder until wired to authenticated AcornOps APIs.
+- Live AcornOps API smoke passed against `http://localhost:8081` on 2026-06-04 for `/health`, `AcornOpsClient.devLogin()`, and command-level `login` plus `status`.
 - The local Mattermost bot token was generated for development and must stay outside committed files.
 - The Mattermost checkout and data currently live under `/private/tmp/mattermost-docker-csit`; move them to a durable location if this local server should survive temporary-directory cleanup.
 
 ## Next Best Action
 
-Start `B03`: document the backend authentication handoff boundary, including how Mattermost user identity maps to the future backend and how direct-message prompts should differ from channel mentions for sensitive actions.
+Start `B04`: replace the local AcornOps `dev-login` bridge with an OIDC-backed login/link flow that maps AcornOps users to Mattermost user ids.
 
 ## Commands
 
@@ -72,4 +77,6 @@ Start `B03`: document the backend authentication handoff boundary, including how
 - Bot lint: `npm run lint`
 - Bot build check: `npm run build`
 - Bot verification: `npm run verify:bot`
-- Bot local run: `CSIT_MATTERMOST_URL=http://localhost:8065 CSIT_MATTERMOST_TOKEN=replace-with-bot-token CSIT_MATTERMOST_BOT_USERNAME=csit npm start`
+- Bot local run: `CSIT_MATTERMOST_URL=http://localhost:8065 CSIT_MATTERMOST_TOKEN=replace-with-bot-token CSIT_MATTERMOST_BOT_USERNAME=csit CSIT_ACORNOPS_URL=http://localhost:8081 npm start`
+- AcornOps control-plane standalone start: from `/Users/ryangoh/Desktop/Development/acornops/control-plane`, run `docker compose up -d --build`
+- AcornOps control-plane health: `curl -fsS http://localhost:8081/health`
