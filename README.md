@@ -7,7 +7,7 @@ The product direction is to build a bot that helps authenticate Mattermost users
 ## Current Project Phase
 
 1. Keep the local K3s and Mattermost learning environment restartable.
-2. Keep the dedicated Mattermost `@csit` bot account prototype verified.
+2. Keep the dedicated Mattermost `@acorn-ops-bot` bot account prototype verified.
 3. Wire local bot commands to the AcornOps control-plane API in small stages.
 4. Replace the local development login bridge with an OIDC-backed login flow.
 

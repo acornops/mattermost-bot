@@ -5,7 +5,7 @@ import { AcornOpsClient, mattermostDevLoginEmail } from "../src/bot/acornops-cli
 test("mattermostDevLoginEmail creates a deterministic local email", () => {
   assert.equal(
     mattermostDevLoginEmail("Mattermost User:1"),
-    "mattermost-mattermost-user-1@csit.local"
+    "mattermost-mattermost-user-1@acorn-ops-bot.local"
   );
 });
 
@@ -18,7 +18,7 @@ test("devLogin calls AcornOps dev-login and captures the session cookie", async 
       return okResponse({
         user: {
           id: "user-1",
-          email: "mattermost-user-1@csit.local",
+          email: "mattermost-user-1@acorn-ops-bot.local",
           displayName: "alice"
         },
         mode: "dev"
@@ -27,14 +27,14 @@ test("devLogin calls AcornOps dev-login and captures the session cookie", async 
   });
 
   const result = await client.devLogin({
-    email: "mattermost-user-1@csit.local",
+    email: "mattermost-user-1@acorn-ops-bot.local",
     name: "alice"
   });
 
   assert.deepEqual(result, {
     user: {
       id: "user-1",
-      email: "mattermost-user-1@csit.local",
+      email: "mattermost-user-1@acorn-ops-bot.local",
       displayName: "alice"
     },
     mode: "dev",
@@ -42,7 +42,7 @@ test("devLogin calls AcornOps dev-login and captures the session cookie", async 
   });
   assert.equal(calls[0].url, "http://acornops/api/v1/auth/dev-login");
   assert.deepEqual(JSON.parse(calls[0].options.body), {
-    email: "mattermost-user-1@csit.local",
+    email: "mattermost-user-1@acorn-ops-bot.local",
     name: "alice"
   });
 });

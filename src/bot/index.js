@@ -5,7 +5,7 @@ import { createMattermostBotRunner } from "./runner.js";
 
 const baseUrl = process.env.CSIT_MATTERMOST_URL || "http://localhost:8065";
 const token = process.env.CSIT_MATTERMOST_TOKEN || "";
-const botUsername = process.env.CSIT_MATTERMOST_BOT_USERNAME || "csit";
+const botUsername = process.env.CSIT_MATTERMOST_BOT_USERNAME || "acorn-ops-bot";
 const acornOpsUrl = process.env.CSIT_ACORNOPS_URL || "http://localhost:8081";
 
 if (typeof globalThis.WebSocket !== "function") {

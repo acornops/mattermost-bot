@@ -44,7 +44,7 @@ export class AcornOpsClient {
 }
 
 export function mattermostDevLoginEmail(userId) {
-  return `mattermost-${sanitizeMattermostUserId(userId)}@csit.local`;
+  return `mattermost-${sanitizeMattermostUserId(userId)}@acorn-ops-bot.local`;
 }
 
 function sanitizeMattermostUserId(userId) {

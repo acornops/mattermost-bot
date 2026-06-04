@@ -14,7 +14,7 @@
 - Mattermost readiness verification path: `./scripts/verify-mattermost.sh`
 - Bot verification path: `./scripts/verify-bot.sh`
 - Highest priority unfinished feature: `B04`
-- Current blocker: production login should use an OIDC-backed Mattermost identity link; the current `login` command uses AcornOps `dev-login` as a local-only bridge
+- Current blocker: production login should use an OIDC-backed Mattermost identity link, but AcornOps has no dedicated Mattermost chat-login API yet; pending chat login/session state should remain on the bot side for now
 
 ## Completed
 
@@ -35,6 +35,7 @@
 ## Known Issues
 
 - `login` direct messages call local AcornOps control-plane `POST /api/v1/auth/dev-login`; this is a local-only bridge, not the production login flow.
+- Official bot username is now `acorn-ops-bot`; older live Mattermost evidence used the previous local `csit` bot account and should be reverified after the local bot account is renamed or recreated.
 - Cluster listing is still a placeholder until wired to AcornOps cluster APIs.
 - The K3s verification command did not pass during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections.
 - Mattermost is running locally through the official Docker Compose deployment without NGINX.
@@ -42,7 +43,7 @@
 
 ## Next Steps
 
-1. Start `B04` by moving `login` from local `dev-login` to an OIDC-backed Mattermost identity link.
+1. Start `B04` by moving `login` from local `dev-login` to an OIDC-backed Mattermost identity link with bot-side pending login/session storage for now.
 2. Wire `clusters` to authenticated AcornOps APIs after the login identity model is settled.
 
 ## Session Log
@@ -151,8 +152,16 @@ Session log entries are historical. Superseded risks and decisions are corrected
 ### 2026-06-04 - First local AcornOps login command wired
 
 - Goal: Start the backend-backed command path with `login`, using the real local AcornOps API in stages.
-- Completed: Explored `/Users/ryangoh/Desktop/Development/acornops` and confirmed the public backend API is the AcornOps control plane in `/Users/ryangoh/Desktop/Development/acornops/control-plane`, with standalone local URL `http://localhost:8081`. Added `src/bot/acornops-client.js` for `POST /api/v1/auth/dev-login`, `src/bot/auth-store.js` for in-memory session storage keyed by Mattermost `user_id`, and wired direct-message `login` through the bot runner. Channel `login` mentions now ask users to direct-message `@csit` instead of calling AcornOps. `status` reports a connected AcornOps user when a session is stored.
+- Completed: Explored `/Users/ryangoh/Desktop/Development/acornops` and confirmed the public backend API is the AcornOps control plane in `/Users/ryangoh/Desktop/Development/acornops/control-plane`, with standalone local URL `http://localhost:8081`. Added `src/bot/acornops-client.js` for `POST /api/v1/auth/dev-login`, `src/bot/auth-store.js` for in-memory session storage keyed by Mattermost `user_id`, and wired direct-message `login` through the bot runner. Channel `login` mentions now ask users to direct-message the bot instead of calling AcornOps. `status` reports a connected AcornOps user when a session is stored.
 - Verification run: `./init.sh` passed with 18 tests. Live AcornOps backend smoke passed against `http://localhost:8081`.
 - Evidence recorded: Tests cover deterministic Mattermost dev-login email generation, AcornOps dev-login request shape, session-cookie capture, direct-message-only login behavior, status after stored login, and runner-level login wiring. Live smoke evidence: `/health` returned `status=ok`; CSIT `AcornOpsClient.devLogin()` returned `mode=dev`, AcornOps user id `5fa96e56-06d5-4240-827d-9b679505639c`, email `mattermost-live-smoke-user@csit.local`, and a session cookie; command-level `login` plus `status` smoke returned `loginComplete=true` and `statusConnected=true`.
 - Known risks: The current login implementation uses AcornOps non-production `dev-login` only; production login should use OIDC identity linking.
 - Next best action: start `B04` by replacing the local `dev-login` bridge with an OIDC-backed Mattermost identity link.
+
+### 2026-06-04 - Bad OIDC endpoint assumption removed and bot username corrected
+
+- Goal: Delete the incorrect CSIT-side commit that assumed non-existent AcornOps Mattermost chat-login endpoints, then align the bot username and returned text with `acorn-ops-bot`.
+- Completed: Removed commit `f1cafb1 Start OIDC Mattermost login link flow` from the local branch history. Restored the local AcornOps `dev-login` bridge and in-memory `authStore` session behavior. Changed bot defaults, command parsing tests, runner logs, local setup docs, runtime docs, and current source-of-truth notes from the old `csit` bot identity to `acorn-ops-bot`. Updated bot responses from `CSIT commands/status` to `AcornOps bot commands/status`.
+- Verification run: `./init.sh` passed with 18 tests after this correction.
+- Known risks: The local Mattermost bot account may still be named `csit`; reverify or recreate it as `acorn-ops-bot` before claiming live Mattermost evidence for the new username.
+- Next best action: run `./init.sh`, then continue B04 with bot-side pending login/session storage because AcornOps does not expose dedicated Mattermost chat-login endpoints.

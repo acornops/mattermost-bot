@@ -1,7 +1,7 @@
 import { mattermostDevLoginEmail } from "./acornops-client.js";
 
 const helpText = [
-  "CSIT commands:",
+  "AcornOps bot commands:",
   "- `help` shows this help.",
   "- `login` signs this Mattermost user into the local AcornOps backend.",
   "- `status` shows the local chat identity and backend auth state.",
@@ -12,14 +12,14 @@ function firstWord(text) {
   return text.trim().split(/\s+/, 1)[0]?.toLowerCase() ?? "";
 }
 
-export function normalizeBotText(text, botUsername = "csit") {
+export function normalizeBotText(text, botUsername = "acorn-ops-bot") {
   const trimmed = text.trim();
   const mentionPattern = new RegExp(`^@${escapeRegExp(botUsername)}\\b[:,]?\\s*`, "i");
 
   return trimmed.replace(mentionPattern, "").trim();
 }
 
-export function shouldRespondToPost({ post, botUserId, botUsername = "csit", channelType = "" }) {
+export function shouldRespondToPost({ post, botUserId, botUsername = "acorn-ops-bot", channelType = "" }) {
   if (!post || post.user_id === botUserId) {
     return false;
   }
@@ -40,7 +40,7 @@ export async function handleBotMessage({
   text,
   userId = "",
   userName = "",
-  botUsername = "csit",
+  botUsername = "acorn-ops-bot",
   channelType = "",
   acornOpsClient = null,
   authStore = null
@@ -63,7 +63,7 @@ export async function handleBotMessage({
   if (action === "status") {
     const session = authStore?.get?.(userId);
     return [
-      "CSIT status:",
+      "AcornOps bot status:",
       `- Mattermost user: ${identityLabel({ userId, userName })}`,
       `- Backend authentication: ${session ? `connected as ${session.user.displayName} (${session.user.id})` : "not connected"}`,
       "- Cluster access: not loaded"
@@ -74,7 +74,7 @@ export async function handleBotMessage({
     return "Cluster listing placeholder. The backend cluster-management API is not connected yet.";
   }
 
-  return `Unknown CSIT command: ${action}\n\n${helpText}`;
+  return `Unknown AcornOps bot command: ${action}\n\n${helpText}`;
 }
 
 async function handleLogin({ userId, userName, acornOpsClient, authStore }) {

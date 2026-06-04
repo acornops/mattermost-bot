@@ -38,9 +38,9 @@
 
 ## 2026-05-26: Prototype Mattermost integration with a bot account
 
-- Decision: Use a dedicated Mattermost bot account as the first ChatOps bot integration style. Users should talk to `@csit` in a direct message or mention it in a channel instead of using a global slash command.
+- Decision: Use a dedicated Mattermost bot account as the first ChatOps bot integration style. Users should talk to `@acorn-ops-bot` in a direct message or mention it in a channel instead of using a global slash command.
 - Reason: The intended experience is a stable assistant-like bot identity, not a command that appears to be available from any chat. A bot account also supports direct-message login prompts, proactive follow-ups, and later Mattermost REST API workflows without using a human admin token.
-- Consequence: The next implementation step should create or document the local `csit` bot account, store its token outside committed files, run a Node.js bot process that listens for Mattermost messages, map the sender `user_id` to the pending backend authentication flow, and ignore messages authored by the bot itself.
+- Consequence: The next implementation step should create or document the local `acorn-ops-bot` bot account, store its token outside committed files, run a Node.js bot process that listens for Mattermost messages, map the sender `user_id` to the pending backend authentication flow, and ignore messages authored by the bot itself.
 
 ## 2026-05-26: Use Node.js built-in runtime APIs for the first bot process
 

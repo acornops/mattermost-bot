@@ -6,7 +6,7 @@ export function createMattermostBotRunner({
   authStore = null,
   websocketFactory,
   logger = console,
-  botUsername = "csit"
+  botUsername = "acorn-ops-bot"
 }) {
   return {
     async start() {
@@ -15,7 +15,7 @@ export function createMattermostBotRunner({
 
       socket.addEventListener("open", () => {
         authenticateSocket(socket, client.token);
-        logger.log(`CSIT bot connected to Mattermost as @${botUser.username}`);
+        logger.log(`AcornOps bot connected to Mattermost as @${botUser.username}`);
       });
 
       socket.addEventListener("message", async (event) => {
@@ -72,7 +72,7 @@ export async function handlePostedEvent({
   authStore = null,
   event,
   botUser,
-  botUsername = "csit",
+  botUsername = "acorn-ops-bot",
   logger = console
 }) {
   const post = parsePostedPost(event);

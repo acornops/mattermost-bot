@@ -55,7 +55,7 @@ test("handlePostedEvent responds to direct message posts in the main timeline", 
     client,
     botUser: {
       id: "bot",
-      username: "csit"
+      username: "acorn-ops-bot"
     },
     event: {
       event: "posted",
@@ -90,7 +90,7 @@ test("handlePostedEvent skips unmentioned channel posts", async () => {
     client,
     botUser: {
       id: "bot",
-      username: "csit"
+      username: "acorn-ops-bot"
     },
     event: {
       event: "posted",
@@ -125,7 +125,7 @@ test("handlePostedEvent logs in through AcornOps for direct message login posts"
     acornOpsClient: {
       async devLogin(input) {
         assert.deepEqual(input, {
-          email: "mattermost-user-1@csit.local",
+          email: "mattermost-user-1@acorn-ops-bot.local",
           name: "alice"
         });
         return {
@@ -144,7 +144,7 @@ test("handlePostedEvent logs in through AcornOps for direct message login posts"
     },
     botUser: {
       id: "bot",
-      username: "csit"
+      username: "acorn-ops-bot"
     },
     event: {
       event: "posted",
@@ -172,7 +172,7 @@ function fakeClient(overrides = {}) {
     token: overrides.token ?? "token",
     getMe: overrides.getMe ?? (async () => ({
       id: "bot",
-      username: "csit"
+      username: "acorn-ops-bot"
     })),
     websocketUrl: () => overrides.websocketUrl ?? "ws://mattermost/api/v4/websocket",
     createPost: overrides.createPost ?? (async (post) => post)

@@ -127,7 +127,7 @@
         ]
       },
       "evidence": "On 2026-05-26, reviewed current Mattermost integration docs for slash commands, incoming webhooks, outgoing webhooks, bot accounts, REST API use, plugins, and the deprecated Apps framework. Added docs/bot-integrations.md with tradeoffs and security notes. Later corrected the first prototype decision to use a dedicated Mattermost bot account named csit because the intended user experience is talking to a stable bot identity, not invoking a slash command from any chat. Confirmed local Mattermost had zero custom slash commands before the bot-account implementation pivot.",
-      "notes": "Backend API contract can remain mocked or pending during this feature. First prototype bot account should be @csit."
+      "notes": "Backend API contract can remain mocked or pending during this feature. First prototype bot account should be @acorn-ops-bot."
     },
     {
       "id": "B01",
@@ -154,28 +154,28 @@
       "priority": 8,
       "area": "bot",
       "title": "Wire local Mattermost bot account conversation",
-      "user_visible_behavior": "A developer can run the bot locally, talk to the @csit Mattermost bot account, and verify an end-to-end response in the local Mattermost team.",
+      "user_visible_behavior": "A developer can run the bot locally, talk to the @acorn-ops-bot Mattermost bot account, and verify an end-to-end response in the local Mattermost team.",
       "status": "passing",
       "verification": {
         "command": "Manual Mattermost bot-account verification plus ./init.sh",
         "steps": [
           "Confirm no leftover local /csit custom slash command exists.",
-          "Create or confirm the local Mattermost bot account named csit.",
+          "Create or confirm the local Mattermost bot account named acorn-ops-bot.",
           "Start the local bot process with a bot access token stored outside committed files.",
-          "Send a direct message or mention to @csit from a non-bot Mattermost user.",
+          "Send a direct message or mention to @acorn-ops-bot from a non-bot Mattermost user.",
           "Record the bot response evidence.",
           "Run ./init.sh successfully."
         ]
       },
       "evidence": "On 2026-05-26, confirmed local Mattermost had zero custom slash commands before implementation, created local bot account csit with id 6bcr1d8zxpraxnz77skinxwtoa, generated a bot token outside committed files, and created local test user csit-alice with id rcnutpf7fff4mjthsd1gck5p1y. Replaced the slash-command HTTP receiver with a bot-account process that authenticates to Mattermost, opens the WebSocket event stream, responds to direct messages and @csit mentions, ignores self-authored posts, and posts replies through the Mattermost REST API. npm run verify:bot passed with 12 tests. Manual end-to-end verification passed in direct-message channel fqxfhfozojystmibobinn8p94w: csit-alice sent post dof79es14pyy7fnyifteyieiow with message status; bot reply o6tjjqjohpg6ikkbrqtxhmx34c was authored by csit and contained CSIT status, Mattermost user @csit-alice (rcnutpf7fff4mjthsd1gck5p1y), Backend authentication: not connected, and Cluster access: not loaded. Follow-up verification changed bot replies to normal main-timeline messages: csit-alice sent post n6g8tkb9ypdoiewe3yd87mjqae with message status; bot reply 4pm7b7i43jyxtgj6g19fs15oby had root_id set to an empty string. Final ./init.sh passed.",
-      "notes": "Depends on B01 and L03. The local bot token must stay outside committed files. Bot replies intentionally omit root_id so Mattermost renders them as normal channel or direct-message timeline posts, not threaded replies. Backend login is now tracked in B03 and later auth work."
+      "notes": "Depends on B01 and L03. The local bot token must stay outside committed files. Bot replies intentionally omit root_id so Mattermost renders them as normal channel or direct-message timeline posts, not threaded replies. The official bot username is now acorn-ops-bot; older evidence used the previous local csit account. Backend login is now tracked in B03 and later auth work."
     },
     {
       "id": "B03",
       "priority": 9,
       "area": "bot",
       "title": "Wire first local AcornOps login command",
-      "user_visible_behavior": "A developer can run the bot locally, direct-message @csit with login, and have the bot call the local AcornOps control-plane API instead of returning a placeholder.",
+      "user_visible_behavior": "A developer can run the bot locally, direct-message @acorn-ops-bot with login, and have the bot call the local AcornOps control-plane API instead of returning a placeholder.",
       "status": "passing",
       "verification": {
         "command": "./init.sh",
@@ -189,28 +189,28 @@
         ]
       },
       "evidence": "On 2026-06-04, explored /Users/ryangoh/Desktop/Development/acornops and confirmed the AcornOps control-plane API lives in /Users/ryangoh/Desktop/Development/acornops/control-plane. Added src/bot/acornops-client.js for POST /api/v1/auth/dev-login, src/bot/auth-store.js for in-memory Mattermost-user session storage, and wired direct-message login through the runner and message handler. Added tests for deterministic Mattermost dev-login email, dev-login request body, session-cookie capture, direct-message-only login behavior, status reporting after login, and runner-level login wiring. ./init.sh passed with 18 tests on 2026-06-04. Live AcornOps backend smoke passed against http://localhost:8081: /health returned ok, the CSIT AcornOps client received mode dev with a session cookie for mattermost-live-smoke-user@csit.local, and command-level login/status smoke reported loginComplete=true and statusConnected=true.",
-      "notes": "Uses AcornOps dev-login as a local-only bridge. Do not treat this as the production login flow; next step should implement an OIDC-backed Mattermost identity link."
+      "notes": "Uses AcornOps dev-login as a local-only bridge. Do not treat this as the production login flow; next step should implement an OIDC-backed Mattermost identity link, with pending chat login state stored on the bot side until AcornOps exposes a dedicated API."
     },
     {
       "id": "B04",
       "priority": 10,
       "area": "bot",
       "title": "Move login to OIDC-backed AcornOps identity linking",
-      "user_visible_behavior": "A Mattermost user can request login from @csit, receive an AcornOps browser login link, complete OIDC auth, and have the bot recognize the authenticated AcornOps identity.",
+      "user_visible_behavior": "A Mattermost user can request login from @acorn-ops-bot, receive an AcornOps browser login link, complete OIDC auth, and have the bot recognize the authenticated AcornOps identity.",
       "status": "not_started",
       "verification": {
         "command": "./init.sh plus local AcornOps login smoke",
         "steps": [
-          "Identify or add the AcornOps chat login state endpoint needed to link Mattermost user_id to an OIDC-authenticated AcornOps user.",
-          "Make @csit login generate an OIDC browser login link in direct messages.",
+          "Identify how the bot should store pending chat login state while AcornOps has no dedicated Mattermost chat-login endpoint.",
+          "Make @acorn-ops-bot login generate an OIDC browser login link in direct messages.",
           "Keep password collection out of Mattermost.",
-          "Replace dev-login storage with the OIDC-linked AcornOps identity/session model.",
+          "Replace dev-login storage with a bot-side OIDC-linked AcornOps identity/session model for now.",
           "Add automated tests and run ./init.sh.",
           "Run a local AcornOps smoke test when the stack is available."
         ]
       },
       "evidence": "",
-      "notes": "Depends on B03. Normal AcornOps user auth is cookie-session based; do not use Bearer tokens for user login."
+      "notes": "Depends on B03. Normal AcornOps user auth is cookie-session based; do not use Bearer tokens for user login. AcornOps currently has no POST /api/v1/auth/chat/mattermost/login or GET /api/v1/auth/chat/mattermost/identity/:mattermostUserId endpoint, so the bot must own the temporary chat login/session mapping for now."
     }
   ]
 }

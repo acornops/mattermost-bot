@@ -12,7 +12,7 @@ The AcornOps backend API is now available locally, so the first integration shou
 
 ### Custom Slash Command
 
-- Shape: A user types a command such as `/csit login` or `/csit clusters`; Mattermost sends an HTTP request to an external service.
+- Shape: A user types a command such as `/acorn-ops-bot login` or `/acorn-ops-bot clusters`; Mattermost sends an HTTP request to an external service.
 - Strengths: Explicit user intent, good ChatOps ergonomics, works in public channels, private channels, and direct messages, and includes fields such as user, channel, team, command text, token, trigger ID, and response URL.
 - Fit for CSIT: Useful later as a shortcut, but not the right first user experience. The user should talk to a named CSIT bot account instead of relying on a global slash command that appears to work in any chat.
 - Local development notes: Run a small local HTTP service and configure the command request URL in Mattermost. Validate the slash command token on every request.
@@ -53,12 +53,12 @@ The AcornOps backend API is now available locally, so the first integration shou
 
 Use a dedicated Mattermost bot account as the first prototype integration style.
 
-The bot account should be created locally as `csit`, use a bot access token stored outside committed files, and respond to direct messages or channel mentions. Slash commands can be revisited later as optional shortcuts, but they are no longer the first product path.
+The bot account should be created locally as `acorn-ops-bot`, use a bot access token stored outside committed files, and respond to direct messages or channel mentions. Slash commands can be revisited later as optional shortcuts, but they are no longer the first product path.
 
 Recommended first bot account:
 
 ```text
-@csit
+@acorn-ops-bot
 ```
 
 Initial message shape to prototype later:

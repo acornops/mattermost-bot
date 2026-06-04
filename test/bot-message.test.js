@@ -7,9 +7,9 @@ import {
 } from "../src/bot/message.js";
 
 test("normalizeBotText removes leading bot mention", () => {
-  assert.equal(normalizeBotText("@csit status", "csit"), "status");
-  assert.equal(normalizeBotText("@csit: clusters", "csit"), "clusters");
-  assert.equal(normalizeBotText("status", "csit"), "status");
+  assert.equal(normalizeBotText("@acorn-ops-bot status", "acorn-ops-bot"), "status");
+  assert.equal(normalizeBotText("@acorn-ops-bot: clusters", "acorn-ops-bot"), "clusters");
+  assert.equal(normalizeBotText("status", "acorn-ops-bot"), "status");
 });
 
 test("shouldRespondToPost ignores bot-authored posts", () => {
@@ -38,27 +38,27 @@ test("shouldRespondToPost accepts mentions in channel posts", () => {
   assert.equal(shouldRespondToPost({
     post: {
       user_id: "user-1",
-      message: "@csit status"
+      message: "@acorn-ops-bot status"
     },
     botUserId: "bot",
-    botUsername: "csit",
+    botUsername: "acorn-ops-bot",
     channelType: "O"
   }), true);
 });
 
 test("handleBotMessage returns identity-aware status placeholder", async () => {
   const response = await handleBotMessage({
-    text: "@csit status",
+    text: "@acorn-ops-bot status",
     userId: "user-1",
     userName: "alice"
   });
 
-  assert.match(response, /CSIT status:/);
+  assert.match(response, /AcornOps bot status:/);
   assert.match(response, /alice \(user-1\)/);
 });
 
 test("handleBotMessage returns help by default", async () => {
-  assert.match(await handleBotMessage({ text: "" }), /CSIT commands:/);
+  assert.match(await handleBotMessage({ text: "" }), /AcornOps bot commands:/);
 });
 
 test("handleBotMessage logs in through AcornOps dev login for direct messages", async () => {
@@ -74,7 +74,7 @@ test("handleBotMessage logs in through AcornOps dev login for direct messages", 
     acornOpsClient: {
       async devLogin(input) {
         assert.deepEqual(input, {
-          email: "mattermost-mattermost-user-1@csit.local",
+          email: "mattermost-mattermost-user-1@acorn-ops-bot.local",
           name: "alice"
         });
         return {
@@ -97,7 +97,7 @@ test("handleBotMessage logs in through AcornOps dev login for direct messages", 
 
 test("handleBotMessage keeps login direct-message only", async () => {
   const response = await handleBotMessage({
-    text: "@csit login",
+    text: "@acorn-ops-bot login",
     userId: "user-1",
     userName: "alice",
     channelType: "O",

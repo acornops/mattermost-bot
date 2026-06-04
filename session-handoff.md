@@ -17,7 +17,7 @@
 - First Mattermost integration style is selected: dedicated bot account, documented in `docs/bot-integrations.md`.
 - Bot implementation runtime is selected: Node.js ECMAScript modules with built-in runtime APIs.
 - `./scripts/verify-bot.sh` passes and is included in `./init.sh`.
-- Local Mattermost bot account `csit` exists and can respond to direct messages.
+- Local Mattermost bot account evidence currently exists for the older `csit` account; the official bot username is now `acorn-ops-bot` and should be reverified locally.
 - Direct-message `login` now calls local AcornOps control-plane `POST /api/v1/auth/dev-login` and stores the returned session cookie in memory by Mattermost user id.
 
 ## Changes This Session
@@ -36,7 +36,7 @@
 - Created local admin username `csit-admin`, team `csit-lab`, and channel `chatops-lab`.
 - Recorded L03 evidence in `PROGRESS.md`, `feature_list.json`, `DECISIONS.md`, and `docs/local-environment.md`.
 - Reviewed Mattermost slash commands, webhooks, bot accounts, REST API, plugins, and the deprecated Apps framework for `L04`.
-- Added `docs/bot-integrations.md`; later corrected the first integration decision to a dedicated `@csit` bot account.
+- Added `docs/bot-integrations.md`; later corrected the first integration decision to a dedicated bot account. The official username is now `@acorn-ops-bot`.
 - Selected Node.js built-in runtime APIs for `B01`.
 - Added `package.json`, `package-lock.json`, `src/bot`, `test`, `scripts/verify-bot.sh`, `scripts/lint-bot.sh`, `scripts/build-bot.sh`, and `docs/bot-runtime.md`.
 - Updated `./init.sh` to run bot verification after harness verification.
@@ -48,10 +48,12 @@
 - Added `B03` as the next not-started feature: define the backend authentication integration boundary without inventing unsupported backend API details.
 - Re-scoped and completed `B03` on 2026-06-04 after the AcornOps backend repo was provided. Added `src/bot/acornops-client.js`, `src/bot/auth-store.js`, and wired direct-message `login` to AcornOps `dev-login`.
 - Added tests for AcornOps request shape, session-cookie capture, direct-message login behavior, channel login guard, status after login, and runner-level login wiring.
+- Deleted the bad `Start OIDC Mattermost login link flow` commit after confirming AcornOps has no `/api/v1/auth/chat/mattermost/*` endpoints. Updated bot defaults, tests, and current docs to use `@acorn-ops-bot`.
 
 ## Still Broken Or Unverified
 
 - `login` uses AcornOps non-production `dev-login` as a local-only bridge; production login still needs an OIDC-backed Mattermost identity link.
+- The official bot username is `acorn-ops-bot`, but the old live Mattermost evidence used `csit`; reverify against an `acorn-ops-bot` bot account before marking any live username migration passing.
 - Cluster listing remains a placeholder until wired to authenticated AcornOps APIs.
 - Live AcornOps API smoke passed against `http://localhost:8081` on 2026-06-04 for `/health`, `AcornOpsClient.devLogin()`, and command-level `login` plus `status`.
 - The local Mattermost bot token was generated for development and must stay outside committed files.
@@ -59,7 +61,7 @@
 
 ## Next Best Action
 
-Start `B04`: replace the local AcornOps `dev-login` bridge with an OIDC-backed login/link flow that maps AcornOps users to Mattermost user ids.
+Start `B04`: replace the local AcornOps `dev-login` bridge with an OIDC-backed login/link flow that maps AcornOps users to Mattermost user ids, storing pending chat login state on the bot side for now.
 
 ## Commands
 
@@ -77,6 +79,6 @@ Start `B04`: replace the local AcornOps `dev-login` bridge with an OIDC-backed l
 - Bot lint: `npm run lint`
 - Bot build check: `npm run build`
 - Bot verification: `npm run verify:bot`
-- Bot local run: `CSIT_MATTERMOST_URL=http://localhost:8065 CSIT_MATTERMOST_TOKEN=replace-with-bot-token CSIT_MATTERMOST_BOT_USERNAME=csit CSIT_ACORNOPS_URL=http://localhost:8081 npm start`
+- Bot local run: `CSIT_MATTERMOST_URL=http://localhost:8065 CSIT_MATTERMOST_TOKEN=replace-with-bot-token CSIT_MATTERMOST_BOT_USERNAME=acorn-ops-bot CSIT_ACORNOPS_URL=http://localhost:8081 npm start`
 - AcornOps control-plane standalone start: from `/Users/ryangoh/Desktop/Development/acornops/control-plane`, run `docker compose up -d --build`
 - AcornOps control-plane health: `curl -fsS http://localhost:8081/health`
