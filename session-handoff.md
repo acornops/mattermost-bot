@@ -58,6 +58,8 @@
 - Updated `status` so it refreshes a pending backend chat-login transaction and stores the completed AcornOps identity plus opaque chat session token when AcornOps reports completion.
 - Reviewed current kagent chatbot docs and recorded the useful boundary: chat providers should be thin adapters while backend identity, sessions, authorization, and policy stay backend-owned.
 - `npm test` passed with 23 tests and `./init.sh` passed with 23 tests on 2026-06-05.
+- Added `docs/acornops-chat-login-contract.md` with complete instructions for AcornOps control-plane agents to implement the missing contract.
+- Updated README, project direction, harness notes, startup readiness, `init.sh`, `PROGRESS.md`, and `feature_list.json` so the next action points to the AcornOps contract brief.
 
 ## Still Broken Or Unverified
 
@@ -71,7 +73,7 @@
 
 ## Next Best Action
 
-Unblock `B04`: implement the AcornOps chat-login completion API described in `docs/acornops-api-inventory.md`, then rerun the local AcornOps smoke and Mattermost bot verification. After that, replace the local memory auth store with shared storage before running multiple bot replicas.
+Unblock `B04`: implement the AcornOps Mattermost chat-login transaction contract described in `docs/acornops-chat-login-contract.md`, then rerun the local AcornOps smoke and Mattermost bot verification. After that, replace the local memory auth store with shared storage before running multiple bot replicas.
 
 ## Commands
 

@@ -43,7 +43,7 @@
 
 ## Next Steps
 
-1. Implement the AcornOps chat-login completion API described in `docs/acornops-api-inventory.md` so `@acorn-ops-bot` can resolve a completed browser OIDC login to a Mattermost `user_id`.
+1. Implement the AcornOps Mattermost chat-login transaction contract described in `docs/acornops-chat-login-contract.md` so `@acorn-ops-bot` can resolve a completed browser OIDC login to a Mattermost `user_id`.
 2. Replace the local in-memory auth store with shared Redis/Postgres-backed storage before running multiple bot replicas.
 3. Wire `clusters` to authenticated AcornOps APIs after the login identity model is settled.
 
@@ -184,3 +184,12 @@ Session log entries are historical. Superseded risks and decisions are corrected
 - Evidence recorded: Tests cover service-token protected chat-login transaction creation, transaction status fetch, backend chat-login command path, graceful fallback when the chat-login endpoint is unavailable, and completing a backend chat-login transaction into stored session state.
 - Known risks: `B04` remains blocked for live completion because the AcornOps control plane does not yet expose the proposed `/api/v1/auth/chat/mattermost/*` endpoints. The CSIT bot stores only an opaque chat session token when completion is reported; AcornOps must define the token's scope, expiry, revocation, and authorization behavior.
 - Next best action: implement the AcornOps chat-login endpoints in `/Users/ryangoh/Desktop/Development/acornops/control-plane`, then rerun the local AcornOps smoke and Mattermost bot verification.
+
+### 2026-06-05 - AcornOps contract brief added
+
+- Goal: Check whether the CSIT harness is up to date and generate complete instructions for agents working in AcornOps to build the missing backend contract.
+- Completed: Audited `PROGRESS.md`, `feature_list.json`, `DECISIONS.md`, recent commits, startup docs, and handoff state. Added `docs/acornops-chat-login-contract.md`, a detailed AcornOps implementation brief covering the trust boundary, required endpoints, service-token config, Redis transaction state, OIDC callback changes, credential model, durable identity link, tests, verification, and done criteria. Updated README, project direction, harness notes, startup readiness, `init.sh`, feature evidence, and handoff pointers to reference the contract brief instead of vague chat-completion language.
+- Verification run: `./init.sh` passed after this documentation update with harness verification, lint, build, and 23 tests.
+- Evidence recorded: Harness state was current but improved for discoverability; the next action now points directly to `docs/acornops-chat-login-contract.md`.
+- Known risks: AcornOps endpoints are still not implemented; this session produced the implementation instructions, not the AcornOps code.
+- Next best action: start a focused AcornOps control-plane task using `docs/acornops-chat-login-contract.md`.

@@ -13,7 +13,7 @@ The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/con
 5. Bot runtime selection and bot-account conversation scaffolding.
 6. Local AcornOps login command.
 7. OIDC-backed Mattermost login link.
-8. Completed Mattermost identity linking after AcornOps exposes a chat completion API.
+8. Completed Mattermost identity linking after AcornOps implements the Mattermost chat-login transaction contract.
 
 ## Current Learning Path
 
@@ -34,7 +34,7 @@ The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/con
 
 - Use the selected Node.js runtime to run a Mattermost bot account that receives messages and responds.
 - The previous local AcornOps `dev-login` bridge was only a development step.
-- Use AcornOps OIDC browser login for `login`, with bot-side pending state until a chat completion API exists.
+- Use AcornOps OIDC browser login for `login`, with bot-side pending state until the AcornOps chat-login transaction contract exists.
 - Wire cluster-listing responses after the authenticated identity model is settled.
 
 ## Initial Stack
@@ -48,7 +48,7 @@ The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/con
 
 ## Open Decisions
 
-- AcornOps chat-login completion API shape for resolving a Mattermost `user_id` to an authenticated AcornOps user.
+- AcornOps implementation of the Mattermost chat-login transaction contract in `docs/acornops-chat-login-contract.md`.
 - Production shared storage implementation for bot pending-login state and long-lived identity links.
 - Local development topology: all Docker Compose, K3s-hosted services, or hybrid.
 - How much cluster-management behavior should be mocked before authenticated AcornOps cluster APIs are wired.
