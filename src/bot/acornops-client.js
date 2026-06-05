@@ -1,6 +1,7 @@
 export class AcornOpsClient {
-  constructor({ baseUrl, fetchImpl = globalThis.fetch }) {
+  constructor({ baseUrl, chatServiceToken = "", fetchImpl = globalThis.fetch }) {
     this.baseUrl = baseUrl?.replace(/\/$/, "");
+    this.chatServiceToken = chatServiceToken;
     this.fetchImpl = fetchImpl;
 
     if (!this.baseUrl) {
@@ -12,25 +13,60 @@ export class AcornOpsClient {
     }
   }
 
-  async devLogin({ email, name }) {
-    const response = await this.request("POST", "/api/v1/auth/dev-login", {
-      email,
-      name
-    });
-    const sessionCookie = extractCookie(response.headers, "acornops_cp_session");
+  oidcLoginUrl({ returnTo } = {}) {
+    const url = new URL(`${this.baseUrl}/api/v1/auth/oidc/login`);
+    if (returnTo) {
+      url.searchParams.set("return_to", returnTo);
+    }
 
-    return {
-      ...await response.json(),
-      sessionCookie
-    };
+    return url.toString();
   }
 
-  async request(method, path, body) {
+  canStartMattermostChatLogin() {
+    return Boolean(this.chatServiceToken);
+  }
+
+  async startMattermostChatLogin({ mattermostUserId, mattermostUserName = "", returnTo = "" }) {
+    if (!this.canStartMattermostChatLogin()) {
+      throw new Error("CSIT_ACORNOPS_CHAT_SERVICE_TOKEN is required for backend chat login.");
+    }
+
+    return this.requestJson("POST", "/api/v1/auth/chat/mattermost/login", {
+      mattermostUserId,
+      mattermostUserName,
+      returnTo
+    }, {
+      serviceAuth: true
+    });
+  }
+
+  async getMattermostChatLogin(loginId) {
+    if (!this.canStartMattermostChatLogin()) {
+      throw new Error("CSIT_ACORNOPS_CHAT_SERVICE_TOKEN is required for backend chat login.");
+    }
+
+    return this.requestJson("GET", `/api/v1/auth/chat/mattermost/login/${encodeURIComponent(loginId)}`, undefined, {
+      serviceAuth: true
+    });
+  }
+
+  async requestJson(method, path, body, options = {}) {
+    const response = await this.request(method, path, body, options);
+    return await response.json();
+  }
+
+  async request(method, path, body, options = {}) {
+    const headers = {
+      "content-type": "application/json"
+    };
+
+    if (options.serviceAuth) {
+      headers.authorization = `Bearer ${this.chatServiceToken}`;
+    }
+
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method,
-      headers: {
-        "content-type": "application/json"
-      },
+      headers,
       body: body ? JSON.stringify(body) : undefined
     });
 
@@ -41,28 +77,4 @@ export class AcornOpsClient {
 
     return response;
   }
-}
-
-export function mattermostDevLoginEmail(userId) {
-  return `mattermost-${sanitizeMattermostUserId(userId)}@acorn-ops-bot.local`;
-}
-
-function sanitizeMattermostUserId(userId) {
-  return String(userId || "unknown")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "unknown";
-}
-
-function extractCookie(headers, name) {
-  const cookieHeader = headers?.get?.("set-cookie");
-  if (!cookieHeader) {
-    return "";
-  }
-
-  return cookieHeader
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`)) ?? "";
 }

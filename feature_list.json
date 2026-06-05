@@ -197,7 +197,7 @@
       "area": "bot",
       "title": "Move login to OIDC-backed AcornOps identity linking",
       "user_visible_behavior": "A Mattermost user can request login from @acorn-ops-bot, receive an AcornOps browser login link, complete OIDC auth, and have the bot recognize the authenticated AcornOps identity.",
-      "status": "not_started",
+      "status": "blocked",
       "verification": {
         "command": "./init.sh plus local AcornOps login smoke",
         "steps": [
@@ -209,8 +209,8 @@
           "Run a local AcornOps smoke test when the stack is available."
         ]
       },
-      "evidence": "",
-      "notes": "Depends on B03. Normal AcornOps user auth is cookie-session based; do not use Bearer tokens for user login. AcornOps currently has no POST /api/v1/auth/chat/mattermost/login or GET /api/v1/auth/chat/mattermost/identity/:mattermostUserId endpoint, so the bot must own the temporary chat login/session mapping for now."
+      "evidence": "On 2026-06-04, reviewed the local AcornOps control-plane API under /Users/ryangoh/Desktop/Development/acornops/control-plane and recorded the route inventory in docs/acornops-api-inventory.md. Replaced the bot login command's dev-login path with an AcornOps OIDC browser login link generated from GET /api/v1/auth/oidc/login, added bot-side pending login state to src/bot/auth-store.js, and documented the session-storage decision in docs/bot-auth-sessions.md. Automated tests passed with npm test after the change. ./init.sh passed with 18 tests after artifact updates. Live AcornOps smoke against http://localhost:8081 passed after host-network approval: /health returned ok, auth config returned oidcEnabled=true with provider dex, OIDC login returned 302 Found to Dex, and command-level login/status smoke returned loginHasOidcLink=true and pendingStatus=true. On 2026-06-05, added CSIT-side support for a proposed AcornOps Mattermost chat-login transaction API: POST /api/v1/auth/chat/mattermost/login creates a pending backend transaction, GET /api/v1/auth/chat/mattermost/login/{id} refreshes completion, and status can complete a pending transaction into stored AcornOps user/session state. npm test passed with 23 tests and ./init.sh passed with 23 tests. Local AcornOps live smoke did not run on 2026-06-05 because http://localhost:8081/health was not listening. Full completion is still blocked because AcornOps does not expose the proposed Mattermost chat-login endpoints yet.",
+      "notes": "Depends on B03. Normal AcornOps user auth is cookie-session based; do not use Bearer tokens for browser user login. In-memory pending login storage is local-only; scalable deployment should use shared storage. CSIT can now use CSIT_ACORNOPS_CHAT_SERVICE_TOKEN for service-token protected chat-login transactions when AcornOps implements them. The bot must store only opaque AcornOps chat session tokens, not raw browser cookies. AcornOps currently has no POST /api/v1/auth/chat/mattermost/login or GET /api/v1/auth/chat/mattermost/login/{id} endpoint, so live Mattermost identity completion remains blocked after browser OIDC completes."
     }
   ]
 }

@@ -18,7 +18,8 @@
 - Bot implementation runtime is selected: Node.js ECMAScript modules with built-in runtime APIs.
 - `./scripts/verify-bot.sh` passes and is included in `./init.sh`.
 - Local Mattermost bot account evidence currently exists for the older `csit` account; the official bot username is now `acorn-ops-bot` and should be reverified locally.
-- Direct-message `login` now calls local AcornOps control-plane `POST /api/v1/auth/dev-login` and stores the returned session cookie in memory by Mattermost user id.
+- Direct-message `login` now generates an AcornOps OIDC browser login link and stores pending chat login state by Mattermost user id.
+- When `CSIT_ACORNOPS_CHAT_SERVICE_TOKEN` is configured and AcornOps exposes the proposed API, the bot can create a backend Mattermost chat-login transaction and complete it on `status`.
 
 ## Changes This Session
 
@@ -49,19 +50,28 @@
 - Re-scoped and completed `B03` on 2026-06-04 after the AcornOps backend repo was provided. Added `src/bot/acornops-client.js`, `src/bot/auth-store.js`, and wired direct-message `login` to AcornOps `dev-login`.
 - Added tests for AcornOps request shape, session-cookie capture, direct-message login behavior, channel login guard, status after login, and runner-level login wiring.
 - Deleted the bad `Start OIDC Mattermost login link flow` commit after confirming AcornOps has no `/api/v1/auth/chat/mattermost/*` endpoints. Updated bot defaults, tests, and current docs to use `@acorn-ops-bot`.
+- Continued `B04` on 2026-06-04 by reviewing the AcornOps control-plane API surface, adding `docs/acornops-api-inventory.md`, and replacing the bot command's `dev-login` path with an AcornOps OIDC login link plus pending chat state.
+- Added `docs/bot-auth-sessions.md` with the scalable storage decision: memory is local-only; production should use shared TTL storage for pending login state and durable storage for long-lived identity links.
+- `./init.sh` passed after the OIDC link and pending-state changes.
+- Continued `B04` on 2026-06-05 by adding CSIT-side support for proposed AcornOps Mattermost chat-login transaction endpoints: `POST /api/v1/auth/chat/mattermost/login` and `GET /api/v1/auth/chat/mattermost/login/{id}`.
+- Updated `src/bot/auth-store.js` so pending login records can use backend transaction ids and complete into stored AcornOps user/session state.
+- Updated `status` so it refreshes a pending backend chat-login transaction and stores the completed AcornOps identity plus opaque chat session token when AcornOps reports completion.
+- Reviewed current kagent chatbot docs and recorded the useful boundary: chat providers should be thin adapters while backend identity, sessions, authorization, and policy stay backend-owned.
+- `npm test` passed with 23 tests and `./init.sh` passed with 23 tests on 2026-06-05.
 
 ## Still Broken Or Unverified
 
-- `login` uses AcornOps non-production `dev-login` as a local-only bridge; production login still needs an OIDC-backed Mattermost identity link.
+- `B04` is blocked on AcornOps implementing the proposed chat-login completion API. The bot can start browser OIDC, track pending state, and consume a backend transaction result if available, but cannot mark a Mattermost user as linked against the live backend because the endpoints do not exist yet.
 - The official bot username is `acorn-ops-bot`, but the old live Mattermost evidence used `csit`; reverify against an `acorn-ops-bot` bot account before marking any live username migration passing.
 - Cluster listing remains a placeholder until wired to authenticated AcornOps APIs.
-- Live AcornOps API smoke passed against `http://localhost:8081` on 2026-06-04 for `/health`, `AcornOpsClient.devLogin()`, and command-level `login` plus `status`.
+- Live AcornOps API smoke passed on 2026-06-04 for the OIDC-link stage after host-network approval: `/health` returned `status=ok`, `/api/v1/auth/config` returned `oidcEnabled=true` and provider `dex`, OIDC login returned `302 Found` to Dex, and command-level `login` plus `status` smoke returned `loginHasOidcLink=true` and `pendingStatus=true`.
+- Live AcornOps API smoke did not run on 2026-06-05 because `curl -fsS http://localhost:8081/health` failed to connect; the control-plane service was not listening.
 - The local Mattermost bot token was generated for development and must stay outside committed files.
 - The Mattermost checkout and data currently live under `/private/tmp/mattermost-docker-csit`; move them to a durable location if this local server should survive temporary-directory cleanup.
 
 ## Next Best Action
 
-Start `B04`: replace the local AcornOps `dev-login` bridge with an OIDC-backed login/link flow that maps AcornOps users to Mattermost user ids, storing pending chat login state on the bot side for now.
+Unblock `B04`: implement the AcornOps chat-login completion API described in `docs/acornops-api-inventory.md`, then rerun the local AcornOps smoke and Mattermost bot verification. After that, replace the local memory auth store with shared storage before running multiple bot replicas.
 
 ## Commands
 
@@ -79,6 +89,7 @@ Start `B04`: replace the local AcornOps `dev-login` bridge with an OIDC-backed l
 - Bot lint: `npm run lint`
 - Bot build check: `npm run build`
 - Bot verification: `npm run verify:bot`
-- Bot local run: `CSIT_MATTERMOST_URL=http://localhost:8065 CSIT_MATTERMOST_TOKEN=replace-with-bot-token CSIT_MATTERMOST_BOT_USERNAME=acorn-ops-bot CSIT_ACORNOPS_URL=http://localhost:8081 npm start`
+- Bot local run: `CSIT_MATTERMOST_URL=http://localhost:8065 CSIT_MATTERMOST_TOKEN=replace-with-bot-token CSIT_MATTERMOST_BOT_USERNAME=acorn-ops-bot CSIT_ACORNOPS_URL=http://localhost:8081 CSIT_ACORNOPS_LOGIN_RETURN_TO=/api/v1/me npm start`
+- Bot local run with backend chat-login transaction API: add `CSIT_ACORNOPS_CHAT_SERVICE_TOKEN=replace-with-acornops-chat-token`
 - AcornOps control-plane standalone start: from `/Users/ryangoh/Desktop/Development/acornops/control-plane`, run `docker compose up -d --build`
 - AcornOps control-plane health: `curl -fsS http://localhost:8081/health`

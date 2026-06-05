@@ -6,7 +6,7 @@ This note records the `B01` bot runtime scaffold decision and the commands a fut
 
 Use Node.js with ECMAScript modules and built-in runtime APIs for the first Mattermost bot-account process.
 
-The first scaffold intentionally avoids Express, Fastify, TypeScript, databases, queues, or third-party Mattermost clients. The dependency-light bot validates Mattermost bot identity, message handling, local command lifecycle, and the first local AcornOps login call.
+The first scaffold intentionally avoids Express, Fastify, TypeScript, databases, queues, or third-party Mattermost clients. The dependency-light bot validates Mattermost bot identity, message handling, local command lifecycle, and the first AcornOps OIDC login link.
 
 ## Local Commands
 
@@ -47,6 +47,7 @@ CSIT_MATTERMOST_URL=http://localhost:8065 \
 CSIT_MATTERMOST_TOKEN=replace-with-bot-token \
 CSIT_MATTERMOST_BOT_USERNAME=acorn-ops-bot \
 CSIT_ACORNOPS_URL=http://localhost:8081 \
+CSIT_ACORNOPS_LOGIN_RETURN_TO=/api/v1/me \
 npm start
 ```
 
@@ -57,11 +58,13 @@ npm start
 - The bot responds to direct messages and channel posts that mention `@acorn-ops-bot`.
 - The bot posts responses as normal channel messages instead of threaded replies.
 - The bot ignores messages authored by itself.
-- `login` in a direct message calls AcornOps control-plane `POST /api/v1/auth/dev-login`, stores the returned session cookie in memory by Mattermost user id, and reports the AcornOps user identity.
+- `login` in a direct message generates an AcornOps control-plane `GET /api/v1/auth/oidc/login` browser link and records pending chat login state by Mattermost user id.
+- If `CSIT_ACORNOPS_CHAT_SERVICE_TOKEN` is set, `login` first asks AcornOps to create a Mattermost chat-login transaction and uses that backend-owned login link instead.
 - `login` in a shared channel does not call AcornOps; it asks the user to direct-message `@acorn-ops-bot`.
-- `status` shows the local chat identity and whether the in-memory AcornOps login session is connected.
+- `status` shows the local chat identity and whether an AcornOps login is pending or connected. With a backend chat-login transaction, `status` also refreshes the transaction and stores the completed AcornOps user/session if AcornOps reports completion.
 - `clusters` remains a placeholder until cluster listing is wired to the AcornOps API.
 - `CSIT_ACORNOPS_URL` defaults to `http://localhost:8081`, the standalone AcornOps control-plane URL.
+- `CSIT_ACORNOPS_LOGIN_RETURN_TO` defaults to `/api/v1/me`, so a completed browser login shows the AcornOps user JSON until the management console or a chat-completion callback is available.
 
 ## Message Flow
 
@@ -70,18 +73,21 @@ npm start
 3. `src/bot/runner.js` opens `/api/v4/websocket` and authenticates the WebSocket connection.
 4. Mattermost emits `posted` events for new messages the bot can see.
 5. `src/bot/message.js` ignores bot-authored posts, accepts direct messages, and accepts channel posts that mention `@acorn-ops-bot`.
-6. `login` direct messages call `src/bot/acornops-client.js`; other commands are formatted by `src/bot/message.js`.
+6. `login` direct messages call `src/bot/acornops-client.js` to create a backend Mattermost chat-login transaction when `CSIT_ACORNOPS_CHAT_SERVICE_TOKEN` is configured; otherwise they build a plain OIDC browser login URL.
 7. `src/bot/mattermost-client.js` posts the response with `POST /api/v4/posts` and no `root_id`, so Mattermost renders it in the main timeline instead of a thread.
 
-## Local AcornOps Login Stage
+## AcornOps Login Stage
 
-This first stage uses AcornOps `dev-login`, which exists only outside production. It creates or reuses a local AcornOps user with a deterministic email derived from the Mattermost `user_id`:
+The current `login` command starts AcornOps OIDC in the browser and keeps a short-lived pending login record on the bot side.
 
-```text
-mattermost-<mattermost-user-id>@acorn-ops-bot.local
-```
+AcornOps already owns browser OIDC and cookie-backed user sessions. The bot does not collect passwords, does not ask users to paste session cookies into Mattermost, and no longer calls the non-production `dev-login` endpoint for command login.
 
-This is intentionally a local development bridge. The product login flow should move to OIDC so users authenticate with AcornOps in the browser and the callback links the AcornOps user to the Mattermost identity.
+The bot now supports a proposed AcornOps completion contract:
+
+- `POST /api/v1/auth/chat/mattermost/login` creates a pending backend transaction and returns a login URL.
+- `GET /api/v1/auth/chat/mattermost/login/{id}` lets the bot refresh transaction state and store the completed AcornOps user plus opaque chat session token.
+
+The remaining integration gap is on the AcornOps side: those endpoints are not present yet, so local runs without `CSIT_ACORNOPS_CHAT_SERVICE_TOKEN` continue using the honest pending OIDC-link fallback. See `docs/acornops-api-inventory.md` and `docs/bot-auth-sessions.md`.
 
 ## Local Mattermost Account Target
 

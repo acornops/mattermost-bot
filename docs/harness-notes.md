@@ -33,4 +33,4 @@ The product goal, local learning stack, and first bot runtime are now selected. 
 4. Adding module-level docs near code as the architecture grows.
 5. Adding repeatable end-to-end checks for cross-component behavior when they can run without leaking local secrets.
 
-The immediate next product path is to move the local AcornOps `dev-login` bridge toward an OIDC-backed Mattermost identity link.
+The immediate next product path is to finish the AcornOps chat-login completion API boundary so the bot can resolve a completed browser OIDC login back to the Mattermost user.

@@ -6,7 +6,8 @@ export function createMattermostBotRunner({
   authStore = null,
   websocketFactory,
   logger = console,
-  botUsername = "acorn-ops-bot"
+  botUsername = "acorn-ops-bot",
+  acornOpsLoginReturnTo = "/api/v1/me"
 }) {
   return {
     async start() {
@@ -35,6 +36,7 @@ export function createMattermostBotRunner({
               event: message,
               botUser,
               botUsername,
+              acornOpsLoginReturnTo,
               logger
             });
           }
@@ -73,6 +75,7 @@ export async function handlePostedEvent({
   event,
   botUser,
   botUsername = "acorn-ops-bot",
+  acornOpsLoginReturnTo = "/api/v1/me",
   logger = console
 }) {
   const post = parsePostedPost(event);
@@ -97,7 +100,8 @@ export async function handlePostedEvent({
     channelType,
     botUsername,
     acornOpsClient,
-    authStore
+    authStore,
+    acornOpsLoginReturnTo
   });
 
   logger.log(`Responding to Mattermost post ${post.id} in channel ${post.channel_id}.`);

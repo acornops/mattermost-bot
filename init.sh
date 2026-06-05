@@ -15,5 +15,5 @@ cat <<'MSG'
 Initialization complete.
 
 Project direction: Mattermost ChatOps bot for authenticating users to AcornOps, a Kubernetes cluster-management backend.
-Next action: start B04 by moving login from local dev-login to an OIDC-backed identity link with bot-side pending login storage.
+Next action: unblock B04 by defining an AcornOps chat-login completion API so the bot can resolve completed browser OIDC login back to a Mattermost user.
 MSG

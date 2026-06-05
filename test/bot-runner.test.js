@@ -110,9 +110,9 @@ test("handlePostedEvent skips unmentioned channel posts", async () => {
   assert.equal(result, null);
 });
 
-test("handlePostedEvent logs in through AcornOps for direct message login posts", async () => {
+test("handlePostedEvent starts AcornOps OIDC login for direct message login posts", async () => {
   const posts = [];
-  const sessions = new Map();
+  const pendingLogins = new Map();
   const client = fakeClient({
     createPost: async (post) => {
       posts.push(post);
@@ -123,24 +123,22 @@ test("handlePostedEvent logs in through AcornOps for direct message login posts"
   const result = await handlePostedEvent({
     client,
     acornOpsClient: {
-      async devLogin(input) {
-        assert.deepEqual(input, {
-          email: "mattermost-user-1@acorn-ops-bot.local",
-          name: "alice"
-        });
-        return {
-          mode: "dev",
-          sessionCookie: "acornops_cp_session=session-1",
-          user: {
-            id: "acorn-user-1",
-            email: input.email,
-            displayName: "alice"
-          }
-        };
+      oidcLoginUrl(input) {
+        assert.deepEqual(input, { returnTo: "/api/v1/me" });
+        return "http://acornops/api/v1/auth/oidc/login?return_to=%2Fapi%2Fv1%2Fme";
       }
     },
     authStore: {
-      set: (userId, session) => sessions.set(userId, session)
+      createPendingLogin(input) {
+        const record = {
+          id: "pending-1",
+          ...input,
+          createdAt: "2026-06-04T00:00:00.000Z",
+          expiresAt: "2026-06-04T00:10:00.000Z"
+        };
+        pendingLogins.set(input.mattermostUserId, record);
+        return record;
+      }
     },
     botUser: {
       id: "bot",
@@ -163,8 +161,8 @@ test("handlePostedEvent logs in through AcornOps for direct message login posts"
   });
 
   assert.equal(result.id, "reply-1");
-  assert.match(posts[0].message, /AcornOps login complete\./);
-  assert.equal(sessions.get("user-1").user.id, "acorn-user-1");
+  assert.match(posts[0].message, /AcornOps browser login link:/);
+  assert.equal(pendingLogins.get("user-1").id, "pending-1");
 });
 
 function fakeClient(overrides = {}) {

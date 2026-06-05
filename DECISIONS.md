@@ -53,3 +53,15 @@
 - Decision: The first local `login` command uses AcornOps control-plane `POST /api/v1/auth/dev-login` in direct messages only.
 - Reason: It exercises the real local backend API and session-cookie response without asking users to type AcornOps passwords into Mattermost. Normal AcornOps user auth is cookie-session based; Bearer tokens are not the browser-user login model.
 - Consequence: `dev-login` is a development bridge, not the product login flow. The next auth feature should move `login` to an OIDC-backed link flow that maps the authenticated AcornOps user to the Mattermost `user_id`.
+
+## 2026-06-04: Use AcornOps OIDC links and shared storage for scalable chat auth
+
+- Decision: The bot `login` command should generate an AcornOps browser OIDC login link and store only bot-side pending login state until AcornOps exposes a chat-login completion API.
+- Reason: AcornOps already owns OIDC and cookie-backed browser sessions. The current control-plane API has no Mattermost callback, no pending-login lookup, and no safe way for the bot to learn the completed browser identity after callback.
+- Consequence: The local implementation uses an in-memory store only for development and tests. A scalable deployment should use shared storage: Redis or another TTL-native store for pending login state, and durable database storage for long-lived Mattermost-to-AcornOps identity links. Do not store AcornOps passwords or raw browser session cookies in Mattermost.
+
+## 2026-06-05: Keep chat providers as thin adapters over AcornOps-owned identity
+
+- Decision: The Mattermost bot should use an AcornOps-owned chat-login transaction API when available: create the transaction with a service token, let AcornOps complete it after browser OIDC, then poll the transaction and store only AcornOps user metadata plus an opaque chat session token.
+- Reason: Current kagent chatbot examples treat Slack/Discord integrations as thin chat adapters that invoke backend agents over A2A while backend runtimes own tools, sessions, observability, and policy. CSIT should follow the same boundary: Mattermost identity stays in the chat adapter; AcornOps identity, authorization, and session issuance stay in AcornOps.
+- Consequence: CSIT now supports `CSIT_ACORNOPS_CHAT_SERVICE_TOKEN` and proposed `/api/v1/auth/chat/mattermost/*` endpoints, but live completion remains blocked until AcornOps implements them. The bot must not receive raw browser cookies or become the source of truth for AcornOps authorization.
