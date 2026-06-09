@@ -1,13 +1,13 @@
 const helpText = [
   "AcornOps bot commands:",
   "- `help` shows this help.",
-  "- `login` starts AcornOps browser login with OIDC.",
-  "- `status` shows the local chat identity and backend auth state.",
+  "- `login` creates an AcornOps account-link URL.",
+  "- `status` checks whether this Mattermost account is linked to AcornOps.",
   "- `clusters` will list accessible clusters once the backend API exists."
 ].join("\n");
 
 function firstWord(text) {
-  return text.trim().split(/\s+/, 1)[0]?.toLowerCase() ?? "";
+  return text.trim().split(/\s+/, 1)[0]?.toLowerCase().replace(/^\/+/, "") ?? "";
 }
 
 export function normalizeBotText(text, botUsername = "acorn-ops-bot") {
@@ -41,8 +41,7 @@ export async function handleBotMessage({
   botUsername = "acorn-ops-bot",
   channelType = "",
   acornOpsClient = null,
-  authStore = null,
-  acornOpsLoginReturnTo = "/api/v1/me"
+  mattermostIdentity = null
 }) {
   const normalizedText = normalizeBotText(text, botUsername);
   const action = firstWord(normalizedText) || "help";
@@ -56,19 +55,11 @@ export async function handleBotMessage({
       return `For account login, send me a direct message with \`login\`.`;
     }
 
-    return handleLogin({ userId, userName, acornOpsClient, authStore, acornOpsLoginReturnTo });
+    return handleLogin({ userId, userName, acornOpsClient, mattermostIdentity });
   }
 
   if (action === "status") {
-    await refreshPendingLoginSession({ userId, acornOpsClient, authStore });
-    const session = authStore?.getSession?.(userId) ?? authStore?.get?.(userId);
-    const pendingLogin = authStore?.getPendingLogin?.(userId);
-    return [
-      "AcornOps bot status:",
-      `- Mattermost user: ${identityLabel({ userId, userName })}`,
-      `- Backend authentication: ${authStatusText({ session, pendingLogin })}`,
-      "- Cluster access: not loaded"
-    ].join("\n");
+    return handleStatus({ userId, userName, acornOpsClient, mattermostIdentity });
   }
 
   if (action === "clusters") {
@@ -78,122 +69,85 @@ export async function handleBotMessage({
   return `Unknown AcornOps bot command: ${action}\n\n${helpText}`;
 }
 
-async function handleLogin({ userId, userName, acornOpsClient, authStore, acornOpsLoginReturnTo }) {
+async function handleLogin({ userId, userName, acornOpsClient, mattermostIdentity }) {
   if (!acornOpsClient) {
-    return "AcornOps login is not configured. Set `CSIT_ACORNOPS_URL` and restart the bot.";
+    return "AcornOps login is not configured. Set `ACORNOPS_API_BASE_URL` and `MATTERMOST_CHAT_SERVICE_TOKEN`, then restart the bot.";
   }
 
-  let backendLogin = null;
-  let backendLoginError = "";
-  try {
-    backendLogin = await startBackendChatLogin({
-      userId,
-      userName,
-      acornOpsClient,
-      acornOpsLoginReturnTo
-    });
-  } catch (error) {
-    backendLoginError = error instanceof Error ? error.message : String(error);
+  const identity = normalizeMattermostIdentity({ mattermostIdentity, userId });
+  if (!identity) {
+    return missingIdentityText();
   }
-  const loginUrl = backendLogin?.loginUrl ?? acornOpsClient.oidcLoginUrl({ returnTo: acornOpsLoginReturnTo });
-  const pendingLoginInput = {
-    mattermostUserId: userId,
-    mattermostUserName: userName,
-    loginUrl,
-    returnTo: acornOpsLoginReturnTo
-  };
-  if (backendLogin?.id) {
-    pendingLoginInput.id = backendLogin.id;
-  }
-  if (backendLogin?.expiresAt) {
-    pendingLoginInput.expiresAt = backendLogin.expiresAt;
-  }
-  const pendingLogin = authStore?.createPendingLogin?.(pendingLoginInput);
 
+  const link = await acornOpsClient.createMattermostLink(identity);
   return [
-    backendLogin ? "AcornOps chat login link:" : "AcornOps browser login link:",
-    loginUrl,
+    "AcornOps account link:",
+    link.linkUrl,
     "",
     `Mattermost user: ${identityLabel({ userId, userName })}`,
-    "No AcornOps password should be typed into Mattermost.",
-    ...(backendLoginError ? [`Backend chat login API unavailable: ${backendLoginError}`] : []),
-    pendingLogin
-      ? `Chat login state: pending until ${pendingLogin.expiresAt}.`
-      : "Chat login state: pending storage is not configured.",
-    backendLogin
-      ? "After browser login completes, send `status` here and I will refresh the backend chat-login transaction."
-      : "After browser login completes, AcornOps owns the browser session. Bot-side identity completion still needs an AcornOps chat-completion API."
+    "This link expires in 10 minutes.",
+    "No AcornOps password should be typed into Mattermost."
   ].join("\n");
 }
 
-async function startBackendChatLogin({ userId, userName, acornOpsClient, acornOpsLoginReturnTo }) {
-  if (!acornOpsClient?.canStartMattermostChatLogin?.()) {
-    return null;
+async function handleStatus({ userId, userName, acornOpsClient, mattermostIdentity }) {
+  if (!acornOpsClient) {
+    return "AcornOps status is not configured. Set `ACORNOPS_API_BASE_URL` and `MATTERMOST_CHAT_SERVICE_TOKEN`, then restart the bot.";
   }
 
-  const response = await acornOpsClient.startMattermostChatLogin({
-    mattermostUserId: userId,
-    mattermostUserName: userName,
-    returnTo: acornOpsLoginReturnTo
-  });
+  const identity = normalizeMattermostIdentity({ mattermostIdentity, userId });
+  if (!identity) {
+    return missingIdentityText();
+  }
 
-  return {
-    id: response.id,
-    loginUrl: response.loginUrl,
-    expiresAt: response.expiresAt
+  const result = await acornOpsClient.resolveMattermostLink(identity);
+  if (result.status === "linked") {
+    const user = result.user ?? {};
+    const linkedUser = [user.displayName, user.email, user.id].filter(Boolean).join(" / ");
+    return [
+      "AcornOps bot status:",
+      `- Mattermost user: ${identityLabel({ userId, userName })}`,
+      `- Backend authentication: linked to AcornOps${linkedUser ? ` as ${linkedUser}` : ""}`,
+      "- Cluster access: not loaded"
+    ].join("\n");
+  }
+
+  if (result.status === "unlinked") {
+    return [
+      "AcornOps bot status:",
+      `- Mattermost user: ${identityLabel({ userId, userName })}`,
+      "- Backend authentication: not linked. Run `login` to connect AcornOps.",
+      "- Cluster access: not loaded"
+    ].join("\n");
+  }
+
+  return [
+    "AcornOps bot status:",
+    `- Mattermost user: ${identityLabel({ userId, userName })}`,
+    `- Backend authentication: unknown AcornOps status ${JSON.stringify(result.status)}`,
+    "- Cluster access: not loaded"
+  ].join("\n");
+}
+
+function missingIdentityText() {
+  return [
+    "AcornOps account linking is unavailable because Mattermost did not provide the required identity context.",
+    "Required identity fields: server id, team id, and user id."
+  ].join("\n");
+}
+
+function normalizeMattermostIdentity({ mattermostIdentity, userId }) {
+  const identity = {
+    mattermostServerId: mattermostIdentity?.mattermostServerId ?? "",
+    mattermostTeamId: mattermostIdentity?.mattermostTeamId ?? "",
+    mattermostUserId: mattermostIdentity?.mattermostUserId ?? userId
   };
-}
 
-async function refreshPendingLoginSession({ userId, acornOpsClient, authStore }) {
-  const pendingLogin = authStore?.getPendingLogin?.(userId);
-  if (!pendingLogin || !acornOpsClient?.canStartMattermostChatLogin?.()) {
+  if (!identity.mattermostServerId || !identity.mattermostTeamId || !identity.mattermostUserId) {
     return null;
   }
 
-  const status = await acornOpsClient.getMattermostChatLogin(pendingLogin.id);
-  if (status.status !== "completed") {
-    return null;
-  }
-
-  const session = chatLoginStatusToSession(status);
-  if (!session) {
-    return null;
-  }
-
-  if (typeof authStore.completePendingLogin === "function") {
-    return authStore.completePendingLogin(userId, session);
-  }
-
-  authStore.setSession?.(userId, session);
-  authStore.clearPendingLogin?.(userId);
-  return session;
-}
-
-function chatLoginStatusToSession(status) {
-  if (!status?.user) {
-    return null;
-  }
-
-  const token = status.session?.token ?? status.chatSessionToken ?? "";
-  return {
-    source: "mattermost-chat-oidc",
-    user: status.user,
-    token,
-    expiresAt: status.session?.expiresAt ?? status.expiresAt ?? null,
-    linkedAt: new Date().toISOString()
-  };
-}
-
-function authStatusText({ session, pendingLogin }) {
-  if (session) {
-    return `connected as ${session.user.displayName} (${session.user.id})`;
-  }
-
-  if (pendingLogin) {
-    return `OIDC login pending until ${pendingLogin.expiresAt}`;
-  }
-
-  return "not connected";
+  return identity;
 }
 
 function identityLabel({ userId, userName }) {

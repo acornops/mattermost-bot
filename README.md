@@ -9,7 +9,7 @@ The product direction is to build a bot that helps authenticate Mattermost users
 1. Keep the local K3s and Mattermost learning environment restartable.
 2. Keep the dedicated Mattermost `@acorn-ops-bot` bot account prototype verified.
 3. Wire local bot commands to the AcornOps control-plane API in small stages.
-4. Complete the OIDC-backed Mattermost identity link after AcornOps implements the Mattermost chat-login transaction contract.
+4. Use the AcornOps Mattermost account-link contract for `login` and `status`.
 
 ## Local Learning Stack
 
@@ -27,8 +27,8 @@ The product direction is to build a bot that helps authenticate Mattermost users
 - `docs/local-environment.md`: local K3s and Mattermost setup notes.
 - `docs/bot-integrations.md`: Mattermost bot integration options and first prototype decision.
 - `docs/bot-runtime.md`: bot runtime decision, bot process shape, and local commands.
-- `docs/acornops-api-inventory.md`: AcornOps control-plane API inventory and current chat-login gap.
-- `docs/acornops-chat-login-contract.md`: implementation brief for AcornOps agents building the missing contract.
-- `docs/bot-auth-sessions.md`: pending login and session storage decision.
+- `docs/acornops-api-inventory.md`: historical AcornOps control-plane API inventory.
+- `docs/acornops-chat-login-contract.md`: current Mattermost account-link contract used by the bot.
+- `docs/bot-auth-sessions.md`: bot auth-state ownership boundary.
 - `feature_list.json`: source of truth for current work items.
 - `PROGRESS.md`: current verified state and session log.

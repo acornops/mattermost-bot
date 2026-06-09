@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EventEmitter } from "node:events";
-import { createMattermostBotRunner, handlePostedEvent } from "../src/bot/runner.js";
+import {
+  createMattermostBotRunner,
+  extractMattermostIdentity,
+  handlePostedEvent
+} from "../src/bot/runner.js";
 
 test("runner authenticates websocket open with bot token", async () => {
   const socket = new FakeSocket();
@@ -53,6 +57,12 @@ test("handlePostedEvent responds to direct message posts in the main timeline", 
 
   const result = await handlePostedEvent({
     client,
+    acornOpsClient: {
+      async resolveMattermostLink(input) {
+        assert.deepEqual(input, mattermostIdentity("user-1"));
+        return { status: "unlinked" };
+      }
+    },
     botUser: {
       id: "bot",
       username: "acorn-ops-bot"
@@ -61,6 +71,8 @@ test("handlePostedEvent responds to direct message posts in the main timeline", 
       event: "posted",
       data: {
         channel_type: "D",
+        server_id: "mattermost-server-1",
+        team_id: "mattermost-team-1",
         sender_name: "alice",
         post: JSON.stringify({
           id: "post-1",
@@ -77,6 +89,7 @@ test("handlePostedEvent responds to direct message posts in the main timeline", 
   assert.equal(posts[0].channelId, "channel-1");
   assert.equal(posts[0].rootId, undefined);
   assert.match(posts[0].message, /alice \(user-1\)/);
+  assert.match(posts[0].message, /not linked/);
 });
 
 test("handlePostedEvent skips unmentioned channel posts", async () => {
@@ -110,9 +123,8 @@ test("handlePostedEvent skips unmentioned channel posts", async () => {
   assert.equal(result, null);
 });
 
-test("handlePostedEvent starts AcornOps OIDC login for direct message login posts", async () => {
+test("handlePostedEvent creates AcornOps account link for direct message login posts", async () => {
   const posts = [];
-  const pendingLogins = new Map();
   const client = fakeClient({
     createPost: async (post) => {
       posts.push(post);
@@ -123,21 +135,12 @@ test("handlePostedEvent starts AcornOps OIDC login for direct message login post
   const result = await handlePostedEvent({
     client,
     acornOpsClient: {
-      oidcLoginUrl(input) {
-        assert.deepEqual(input, { returnTo: "/api/v1/me" });
-        return "http://acornops/api/v1/auth/oidc/login?return_to=%2Fapi%2Fv1%2Fme";
-      }
-    },
-    authStore: {
-      createPendingLogin(input) {
-        const record = {
-          id: "pending-1",
-          ...input,
-          createdAt: "2026-06-04T00:00:00.000Z",
-          expiresAt: "2026-06-04T00:10:00.000Z"
+      async createMattermostLink(input) {
+        assert.deepEqual(input, mattermostIdentity("user-1"));
+        return {
+          linkUrl: "https://console.acornops.dev/integrations/mattermost/link?token=mmlink_123",
+          expiresAt: "2026-06-09T00:10:00.000Z"
         };
-        pendingLogins.set(input.mattermostUserId, record);
-        return record;
       }
     },
     botUser: {
@@ -148,6 +151,8 @@ test("handlePostedEvent starts AcornOps OIDC login for direct message login post
       event: "posted",
       data: {
         channel_type: "D",
+        server_id: "mattermost-server-1",
+        team_id: "mattermost-team-1",
         sender_name: "alice",
         post: JSON.stringify({
           id: "post-1",
@@ -161,8 +166,27 @@ test("handlePostedEvent starts AcornOps OIDC login for direct message login post
   });
 
   assert.equal(result.id, "reply-1");
-  assert.match(posts[0].message, /AcornOps browser login link:/);
-  assert.equal(pendingLogins.get("user-1").id, "pending-1");
+  assert.match(posts[0].message, /AcornOps account link:/);
+  assert.match(posts[0].message, /mmlink_123/);
+});
+
+test("extractMattermostIdentity reads only observed event context", () => {
+  assert.deepEqual(extractMattermostIdentity({
+    event: {
+      data: {
+        server_id: "mattermost-server-1"
+      },
+      broadcast: {
+        team_id: "mattermost-team-1"
+      }
+    },
+    post: {
+      user_id: "mattermost-user-1",
+      props: {
+        mattermostServerId: "user-supplied-server-id"
+      }
+    }
+  }), mattermostIdentity());
 });
 
 function fakeClient(overrides = {}) {
@@ -174,6 +198,14 @@ function fakeClient(overrides = {}) {
     })),
     websocketUrl: () => overrides.websocketUrl ?? "ws://mattermost/api/v4/websocket",
     createPost: overrides.createPost ?? (async (post) => post)
+  };
+}
+
+function mattermostIdentity(mattermostUserId = "mattermost-user-1") {
+  return {
+    mattermostServerId: "mattermost-server-1",
+    mattermostTeamId: "mattermost-team-1",
+    mattermostUserId
   };
 }
 

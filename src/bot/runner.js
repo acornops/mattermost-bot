@@ -3,11 +3,9 @@ import { handleBotMessage, shouldRespondToPost } from "./message.js";
 export function createMattermostBotRunner({
   client,
   acornOpsClient = null,
-  authStore = null,
   websocketFactory,
   logger = console,
-  botUsername = "acorn-ops-bot",
-  acornOpsLoginReturnTo = "/api/v1/me"
+  botUsername = "acorn-ops-bot"
 }) {
   return {
     async start() {
@@ -32,11 +30,9 @@ export function createMattermostBotRunner({
             await handlePostedEvent({
               client,
               acornOpsClient,
-              authStore,
               event: message,
               botUser,
               botUsername,
-              acornOpsLoginReturnTo,
               logger
             });
           }
@@ -71,11 +67,9 @@ function authenticateSocket(socket, token) {
 export async function handlePostedEvent({
   client,
   acornOpsClient = null,
-  authStore = null,
   event,
   botUser,
   botUsername = "acorn-ops-bot",
-  acornOpsLoginReturnTo = "/api/v1/me",
   logger = console
 }) {
   const post = parsePostedPost(event);
@@ -100,8 +94,7 @@ export async function handlePostedEvent({
     channelType,
     botUsername,
     acornOpsClient,
-    authStore,
-    acornOpsLoginReturnTo
+    mattermostIdentity: extractMattermostIdentity({ event, post })
   });
 
   logger.log(`Responding to Mattermost post ${post.id} in channel ${post.channel_id}.`);
@@ -109,6 +102,32 @@ export async function handlePostedEvent({
     channelId: post.channel_id,
     message: response
   });
+}
+
+export function extractMattermostIdentity({ event, post }) {
+  return {
+    mattermostServerId: firstNonEmpty(
+      event.data?.server_id,
+      event.data?.serverId,
+      event.data?.mattermost_server_id,
+      event.data?.mattermostServerId,
+      event.broadcast?.server_id,
+      event.broadcast?.serverId,
+      event.broadcast?.mattermost_server_id,
+      event.broadcast?.mattermostServerId
+    ),
+    mattermostTeamId: firstNonEmpty(
+      event.data?.team_id,
+      event.data?.teamId,
+      event.broadcast?.team_id,
+      event.broadcast?.teamId
+    ),
+    mattermostUserId: post.user_id ?? ""
+  };
+}
+
+function firstNonEmpty(...values) {
+  return values.find((value) => typeof value === "string" && value.length > 0) ?? "";
 }
 
 function parsePostedPost(event) {

@@ -65,3 +65,9 @@
 - Decision: The Mattermost bot should use an AcornOps-owned chat-login transaction API when available: create the transaction with a service token, let AcornOps complete it after browser OIDC, then poll the transaction and store only AcornOps user metadata plus an opaque chat session token.
 - Reason: Current kagent chatbot examples treat Slack/Discord integrations as thin chat adapters that invoke backend agents over A2A while backend runtimes own tools, sessions, observability, and policy. CSIT should follow the same boundary: Mattermost identity stays in the chat adapter; AcornOps identity, authorization, and session issuance stay in AcornOps.
 - Consequence: CSIT now supports `CSIT_ACORNOPS_CHAT_SERVICE_TOKEN` and proposed `/api/v1/auth/chat/mattermost/*` endpoints, but live completion remains blocked until AcornOps implements them. The bot must not receive raw browser cookies or become the source of truth for AcornOps authorization.
+
+## 2026-06-09: Use AcornOps durable Mattermost account-link endpoints
+
+- Decision: Replace the proposed chat-login transaction and polling flow with AcornOps `POST /api/v1/auth/chat/mattermost/link` for `login` and `POST /api/v1/auth/chat/mattermost/resolve` for `status`.
+- Reason: AcornOps now owns the short-lived Mattermost link token, browser handoff, OIDC/session work, and durable Mattermost-to-AcornOps user link.
+- Consequence: The bot no longer stores pending login state, AcornOps browser sessions, OIDC tokens, refresh tokens, raw Mattermost link tokens, or bot-side AcornOps user ids. The bot sends only Mattermost server, team, and user ids observed from Mattermost event context, authenticated with `MATTERMOST_CHAT_SERVICE_TOKEN`.

@@ -5,7 +5,7 @@ export class AcornOpsClient {
     this.fetchImpl = fetchImpl;
 
     if (!this.baseUrl) {
-      throw new Error("CSIT_ACORNOPS_URL is required.");
+      throw new Error("ACORNOPS_API_BASE_URL is required.");
     }
 
     if (typeof this.fetchImpl !== "function") {
@@ -13,39 +13,26 @@ export class AcornOpsClient {
     }
   }
 
-  oidcLoginUrl({ returnTo } = {}) {
-    const url = new URL(`${this.baseUrl}/api/v1/auth/oidc/login`);
-    if (returnTo) {
-      url.searchParams.set("return_to", returnTo);
-    }
-
-    return url.toString();
-  }
-
-  canStartMattermostChatLogin() {
+  canUseMattermostChatAuth() {
     return Boolean(this.chatServiceToken);
   }
 
-  async startMattermostChatLogin({ mattermostUserId, mattermostUserName = "", returnTo = "" }) {
-    if (!this.canStartMattermostChatLogin()) {
-      throw new Error("CSIT_ACORNOPS_CHAT_SERVICE_TOKEN is required for backend chat login.");
+  async createMattermostLink(identity) {
+    if (!this.canUseMattermostChatAuth()) {
+      throw new Error("MATTERMOST_CHAT_SERVICE_TOKEN is required for Mattermost chat auth.");
     }
 
-    return this.requestJson("POST", "/api/v1/auth/chat/mattermost/login", {
-      mattermostUserId,
-      mattermostUserName,
-      returnTo
-    }, {
+    return this.requestJson("POST", "/api/v1/auth/chat/mattermost/link", identity, {
       serviceAuth: true
     });
   }
 
-  async getMattermostChatLogin(loginId) {
-    if (!this.canStartMattermostChatLogin()) {
-      throw new Error("CSIT_ACORNOPS_CHAT_SERVICE_TOKEN is required for backend chat login.");
+  async resolveMattermostLink(identity) {
+    if (!this.canUseMattermostChatAuth()) {
+      throw new Error("MATTERMOST_CHAT_SERVICE_TOKEN is required for Mattermost chat auth.");
     }
 
-    return this.requestJson("GET", `/api/v1/auth/chat/mattermost/login/${encodeURIComponent(loginId)}`, undefined, {
+    return this.requestJson("POST", "/api/v1/auth/chat/mattermost/resolve", identity, {
       serviceAuth: true
     });
   }

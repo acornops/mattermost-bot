@@ -46,148 +46,52 @@ test("shouldRespondToPost accepts mentions in channel posts", () => {
   }), true);
 });
 
-test("handleBotMessage returns identity-aware status placeholder", async () => {
-  const response = await handleBotMessage({
-    text: "@acorn-ops-bot status",
-    userId: "user-1",
-    userName: "alice"
-  });
-
-  assert.match(response, /AcornOps bot status:/);
-  assert.match(response, /alice \(user-1\)/);
-});
-
 test("handleBotMessage returns help by default", async () => {
   assert.match(await handleBotMessage({ text: "" }), /AcornOps bot commands:/);
 });
 
-test("handleBotMessage starts AcornOps OIDC login for direct messages", async () => {
-  const pendingLogins = new Map();
+test("handleBotMessage creates an AcornOps account link for direct /login", async () => {
   const response = await handleBotMessage({
-    text: "login",
+    text: "/login",
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
-    acornOpsLoginReturnTo: "/api/v1/me",
-    authStore: {
-      createPendingLogin(input) {
-        assert.deepEqual(input, {
-          mattermostUserId: "mattermost-user-1",
-          mattermostUserName: "alice",
-          loginUrl: "http://acornops/api/v1/auth/oidc/login?return_to=%2Fapi%2Fv1%2Fme",
-          returnTo: "/api/v1/me"
-        });
-        const record = {
-          id: "pending-1",
-          ...input,
-          createdAt: "2026-06-04T00:00:00.000Z",
-          expiresAt: "2026-06-04T00:10:00.000Z"
-        };
-        pendingLogins.set(input.mattermostUserId, record);
-        return record;
-      }
-    },
+    mattermostIdentity: mattermostIdentity(),
     acornOpsClient: {
-      oidcLoginUrl(input) {
-        assert.deepEqual(input, { returnTo: "/api/v1/me" });
-        return "http://acornops/api/v1/auth/oidc/login?return_to=%2Fapi%2Fv1%2Fme";
+      async createMattermostLink(input) {
+        assert.deepEqual(input, mattermostIdentity());
+        return {
+          linkUrl: "https://console.acornops.dev/integrations/mattermost/link?token=mmlink_123",
+          expiresAt: "2026-06-09T00:10:00.000Z"
+        };
       }
     }
   });
 
-  assert.match(response, /AcornOps browser login link:/);
-  assert.match(response, /http:\/\/acornops\/api\/v1\/auth\/oidc\/login/);
+  assert.match(response, /AcornOps account link:/);
+  assert.match(response, /https:\/\/console\.acornops\.dev\/integrations\/mattermost\/link\?token=mmlink_123/);
+  assert.match(response, /This link expires in 10 minutes\./);
   assert.match(response, /No AcornOps password should be typed into Mattermost\./);
-  assert.equal(pendingLogins.get("mattermost-user-1").id, "pending-1");
 });
 
-test("handleBotMessage starts backend Mattermost chat login when configured", async () => {
-  const pendingLogins = new Map();
+test("handleBotMessage refuses login without complete Mattermost identity", async () => {
   const response = await handleBotMessage({
     text: "login",
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
-    acornOpsLoginReturnTo: "/api/v1/auth/chat/mattermost/complete",
-    authStore: {
-      createPendingLogin(input) {
-        assert.deepEqual(input, {
-          id: "chat-login-1",
-          mattermostUserId: "mattermost-user-1",
-          mattermostUserName: "alice",
-          loginUrl: "http://acornops/api/v1/auth/oidc/login?chat_login_id=chat-login-1",
-          returnTo: "/api/v1/auth/chat/mattermost/complete",
-          expiresAt: "2026-06-05T00:10:00.000Z"
-        });
-        const record = {
-          ...input,
-          createdAt: "2026-06-05T00:00:00.000Z"
-        };
-        pendingLogins.set(input.mattermostUserId, record);
-        return record;
-      }
+    mattermostIdentity: {
+      mattermostUserId: "mattermost-user-1"
     },
     acornOpsClient: {
-      canStartMattermostChatLogin() {
-        return true;
-      },
-      async startMattermostChatLogin(input) {
-        assert.deepEqual(input, {
-          mattermostUserId: "mattermost-user-1",
-          mattermostUserName: "alice",
-          returnTo: "/api/v1/auth/chat/mattermost/complete"
-        });
-        return {
-          id: "chat-login-1",
-          loginUrl: "http://acornops/api/v1/auth/oidc/login?chat_login_id=chat-login-1",
-          expiresAt: "2026-06-05T00:10:00.000Z"
-        };
-      },
-      oidcLoginUrl() {
-        throw new Error("oidcLoginUrl should not be called when chat login is configured");
+      async createMattermostLink() {
+        throw new Error("createMattermostLink should not be called");
       }
     }
   });
 
-  assert.match(response, /AcornOps chat login link:/);
-  assert.match(response, /send `status` here/);
-  assert.equal(pendingLogins.get("mattermost-user-1").id, "chat-login-1");
-});
-
-test("handleBotMessage falls back to plain OIDC when backend chat login is unavailable", async () => {
-  const response = await handleBotMessage({
-    text: "login",
-    userId: "mattermost-user-1",
-    userName: "alice",
-    channelType: "D",
-    acornOpsLoginReturnTo: "/api/v1/me",
-    authStore: {
-      createPendingLogin(input) {
-        return {
-          id: "pending-1",
-          ...input,
-          createdAt: "2026-06-05T00:00:00.000Z",
-          expiresAt: "2026-06-05T00:10:00.000Z"
-        };
-      }
-    },
-    acornOpsClient: {
-      canStartMattermostChatLogin() {
-        return true;
-      },
-      async startMattermostChatLogin() {
-        throw new Error("AcornOps API POST /api/v1/auth/chat/mattermost/login failed with 404: not found");
-      },
-      oidcLoginUrl(input) {
-        assert.deepEqual(input, { returnTo: "/api/v1/me" });
-        return "http://acornops/api/v1/auth/oidc/login?return_to=%2Fapi%2Fv1%2Fme";
-      }
-    }
-  });
-
-  assert.match(response, /AcornOps browser login link:/);
-  assert.match(response, /Backend chat login API unavailable:/);
-  assert.match(response, /chat\/mattermost\/login failed with 404/);
+  assert.match(response, /required identity context/);
+  assert.match(response, /server id, team id, and user id/);
 });
 
 test("handleBotMessage keeps login direct-message only", async () => {
@@ -196,9 +100,10 @@ test("handleBotMessage keeps login direct-message only", async () => {
     userId: "user-1",
     userName: "alice",
     channelType: "O",
+    mattermostIdentity: mattermostIdentity(),
     acornOpsClient: {
-      oidcLoginUrl() {
-        throw new Error("oidcLoginUrl should not be called");
+      async createMattermostLink() {
+        throw new Error("createMattermostLink should not be called");
       }
     }
   });
@@ -206,92 +111,59 @@ test("handleBotMessage keeps login direct-message only", async () => {
   assert.match(response, /direct message/);
 });
 
-test("handleBotMessage status reports pending OIDC login state", async () => {
+test("handleBotMessage status reports linked AcornOps identity", async () => {
   const response = await handleBotMessage({
-    text: "status",
+    text: "/status",
     userId: "mattermost-user-1",
     userName: "alice",
-    authStore: {
-      getSession() {
-        return null;
-      },
-      getPendingLogin(userId) {
-        assert.equal(userId, "mattermost-user-1");
-        return {
-          expiresAt: "2026-06-04T00:10:00.000Z"
-        };
-      }
-    }
-  });
-
-  assert.match(response, /Backend authentication: OIDC login pending until 2026-06-04T00:10:00.000Z/);
-});
-
-test("handleBotMessage status completes a backend Mattermost chat login", async () => {
-  const sessions = new Map();
-  const response = await handleBotMessage({
-    text: "status",
-    userId: "mattermost-user-1",
-    userName: "alice",
-    authStore: {
-      getSession(userId) {
-        return sessions.get(userId) ?? null;
-      },
-      getPendingLogin(userId) {
-        assert.equal(userId, "mattermost-user-1");
-        return {
-          id: "chat-login-1",
-          expiresAt: "2026-06-05T00:10:00.000Z"
-        };
-      },
-      completePendingLogin(userId, session) {
-        sessions.set(userId, session);
-        return session;
-      }
-    },
+    mattermostIdentity: mattermostIdentity(),
     acornOpsClient: {
-      canStartMattermostChatLogin() {
-        return true;
-      },
-      async getMattermostChatLogin(loginId) {
-        assert.equal(loginId, "chat-login-1");
+      async resolveMattermostLink(input) {
+        assert.deepEqual(input, mattermostIdentity());
         return {
-          id: "chat-login-1",
-          status: "completed",
+          status: "linked",
           user: {
             id: "acorn-user-1",
+            email: "alice@example.com",
             displayName: "Alice"
           },
-          session: {
-            token: "opaque-chat-session-token",
-            expiresAt: "2026-06-05T01:00:00.000Z"
+          link: {
+            linkedAt: "2026-06-09T00:00:00.000Z",
+            lastAuthenticatedAt: "2026-06-09T00:00:00.000Z",
+            expiresAt: "2026-07-09T00:00:00.000Z"
           }
         };
       }
     }
   });
 
-  assert.match(response, /Backend authentication: connected as Alice \(acorn-user-1\)/);
-  assert.equal(sessions.get("mattermost-user-1").token, "opaque-chat-session-token");
+  assert.match(response, /Backend authentication: linked to AcornOps as Alice \/ alice@example\.com \/ acorn-user-1/);
 });
 
-test("handleBotMessage status reports stored AcornOps session", async () => {
+test("handleBotMessage status tells unlinked users to run login", async () => {
   const response = await handleBotMessage({
     text: "status",
     userId: "mattermost-user-1",
     userName: "alice",
-    authStore: {
-      getSession(userId) {
-        assert.equal(userId, "mattermost-user-1");
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      async resolveMattermostLink(input) {
+        assert.deepEqual(input, mattermostIdentity());
         return {
-          user: {
-            id: "acorn-user-1",
-            displayName: "alice"
-          }
+          status: "unlinked"
         };
       }
     }
   });
 
-  assert.match(response, /Backend authentication: connected as alice \(acorn-user-1\)/);
+  assert.match(response, /Backend authentication: not linked/);
+  assert.match(response, /Run `login`/);
 });
+
+function mattermostIdentity() {
+  return {
+    mattermostServerId: "mattermost-server-1",
+    mattermostTeamId: "mattermost-team-1",
+    mattermostUserId: "mattermost-user-1"
+  };
+}

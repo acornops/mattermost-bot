@@ -33,7 +33,7 @@
 - [x] Application test command is documented and verified through `./init.sh`.
 - [x] Application lint/static check command is documented and verified through `./init.sh`.
 - [x] Application build/start command is documented and verified through `./init.sh`.
-- [x] Current AcornOps-side blocker is documented in `docs/acornops-chat-login-contract.md`.
+- [x] Current AcornOps account-link contract is documented in `docs/acornops-chat-login-contract.md`.
 
 ## Fresh Session Test
 

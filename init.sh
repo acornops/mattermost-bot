@@ -15,5 +15,5 @@ cat <<'MSG'
 Initialization complete.
 
 Project direction: Mattermost ChatOps bot for authenticating users to AcornOps, a Kubernetes cluster-management backend.
-Next action: implement the AcornOps Mattermost chat-login transaction contract in docs/acornops-chat-login-contract.md.
+Next action: live-smoke the AcornOps Mattermost account-link flow, then wire authenticated cluster commands.
 MSG

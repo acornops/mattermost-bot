@@ -2,6 +2,11 @@
 
 Checked on 2026-06-04 against `/Users/ryangoh/Desktop/Development/acornops/control-plane`.
 
+This is a historical route inventory from before AcornOps added the current Mattermost account-link endpoints. The current bot contract is recorded in `docs/acornops-chat-login-contract.md` and uses:
+
+- `POST /api/v1/auth/chat/mattermost/link`
+- `POST /api/v1/auth/chat/mattermost/resolve`
+
 ## Source Files
 
 - Runtime route mounting: `src/app.ts`

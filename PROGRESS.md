@@ -14,7 +14,7 @@
 - Mattermost readiness verification path: `./scripts/verify-mattermost.sh`
 - Bot verification path: `./scripts/verify-bot.sh`
 - Highest priority unfinished feature: `B04`
-- Current blocker: AcornOps has browser OIDC login and cookie-backed sessions, but no dedicated Mattermost chat-login completion API or identity lookup yet. The bot now supports a proposed service-token-protected chat-login transaction API, but cannot complete live identity linking until AcornOps ships those endpoints.
+- Current blocker: local AcornOps and Mattermost services are not listening, so live account-link smoke verification cannot run yet.
 
 ## Completed
 
@@ -30,11 +30,13 @@
 
 ## In Progress
 
-- `B04`: OIDC browser login link is wired in the bot; full identity recognition is blocked on an AcornOps chat-login completion API.
+- `B04`: AcornOps Mattermost account-link endpoints are wired in the bot; live end-to-end verification remains pending.
 
 ## Known Issues
 
-- `login` direct messages now generate an AcornOps OIDC browser login link and store pending bot-side login state. If `CSIT_ACORNOPS_CHAT_SERVICE_TOKEN` is configured and AcornOps exposes the proposed chat-login API, the bot can create a backend transaction and complete it on `status`. Full live recognition remains blocked until AcornOps ships that API.
+- `login` direct messages now call AcornOps `POST /api/v1/auth/chat/mattermost/link` using Mattermost identity values observed from event context.
+- `status` now calls AcornOps `POST /api/v1/auth/chat/mattermost/resolve` and reports `linked` or tells unlinked users to run `login`.
+- Live Mattermost event verification still needs to confirm that local direct-message events provide stable `mattermostServerId` and `mattermostTeamId` values. On 2026-06-09, AcornOps was not listening on `localhost:8081` and Mattermost was not listening on `localhost:8065`.
 - Official bot username is now `acorn-ops-bot`; older live Mattermost evidence used the previous local `csit` bot account and should be reverified after the local bot account is renamed or recreated.
 - Cluster listing is still a placeholder until authenticated AcornOps identity linking and cluster APIs are wired.
 - The K3s verification command did not pass during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections.
@@ -43,9 +45,9 @@
 
 ## Next Steps
 
-1. Implement the AcornOps Mattermost chat-login transaction contract described in `docs/acornops-chat-login-contract.md` so `@acorn-ops-bot` can resolve a completed browser OIDC login to a Mattermost `user_id`.
-2. Replace the local in-memory auth store with shared Redis/Postgres-backed storage before running multiple bot replicas.
-3. Wire `clusters` to authenticated AcornOps APIs after the login identity model is settled.
+1. Live-smoke `@acorn-ops-bot` `login` and `status` against local Mattermost plus AcornOps with `MATTERMOST_CHAT_SERVICE_TOKEN` configured.
+2. Confirm whether local Mattermost direct-message events expose the needed server and team ids; add a Mattermost context lookup only if live events lack them.
+3. Wire `clusters` to authenticated AcornOps APIs after the login identity model is verified.
 
 ## Session Log
 
@@ -193,3 +195,12 @@ Session log entries are historical. Superseded risks and decisions are corrected
 - Evidence recorded: Harness state was current but improved for discoverability; the next action now points directly to `docs/acornops-chat-login-contract.md`.
 - Known risks: AcornOps endpoints are still not implemented; this session produced the implementation instructions, not the AcornOps code.
 - Next best action: start a focused AcornOps control-plane task using `docs/acornops-chat-login-contract.md`.
+
+### 2026-06-09 - AcornOps account-link contract wired
+
+- Goal: Replace the placeholder and proposed transaction login/status flow with the AcornOps Mattermost account-link contract.
+- Completed: Replaced AcornOps client transaction methods with `createMattermostLink()` for `POST /api/v1/auth/chat/mattermost/link` and `resolveMattermostLink()` for `POST /api/v1/auth/chat/mattermost/resolve`. Updated `login` and `/login` to return AcornOps `linkUrl` exactly as provided and tell users the link expires in 10 minutes. Updated `status` and `/status` to ask AcornOps whether the Mattermost identity is durably linked. Removed the old in-memory `auth-store.js` pending/session store from runtime. Threaded Mattermost server, team, and user ids from WebSocket event context into bot commands and refused AcornOps calls when required identity fields are missing.
+- Verification run: `npm test` passed with 21 tests after the contract swap. `./init.sh` passed after artifact updates with harness verification, lint, build, and 21 tests. Live smoke did not run because `curl -fsS http://localhost:8081/health` failed to connect and `./scripts/verify-mattermost.sh` failed to connect to `http://localhost:8065/api/v4/system/ping`.
+- Evidence recorded: Tests cover service-token protected `link` and `resolve` request shape, exact returned account-link URL behavior, slash-style command aliases, direct-message-only login guard, linked and unlinked status handling, and ignoring user-supplied post props for Mattermost identity extraction.
+- Known risks: Live AcornOps/Mattermost smoke has not run yet because both local services were offline. Local Mattermost direct-message events may not expose the required server and team ids in the fields currently extracted by `src/bot/runner.js`.
+- Next best action: run `./init.sh`, then live-smoke the account-link flow with local Mattermost and AcornOps.
