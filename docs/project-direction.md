@@ -50,7 +50,6 @@ The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/con
 
 ## Open Decisions
 
-- Whether Mattermost direct-message events always provide a stable server and team id locally, or whether live verification needs an additional Mattermost context lookup.
 - Local development topology: all Docker Compose, K3s-hosted services, or hybrid.
 - How much cluster-management behavior should be mocked before authenticated AcornOps cluster APIs are wired.
 - Whether authentication-sensitive actions should be direct-message only, even if general status/help works in channel mentions.

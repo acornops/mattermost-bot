@@ -70,7 +70,7 @@ export async function handleBotMessage({
 }
 
 async function handleLogin({ userId, userName, acornOpsClient, mattermostIdentity }) {
-  if (!acornOpsClient) {
+  if (!isAcornOpsChatAuthConfigured(acornOpsClient)) {
     return "AcornOps login is not configured. Set `ACORNOPS_API_BASE_URL` and `MATTERMOST_CHAT_SERVICE_TOKEN`, then restart the bot.";
   }
 
@@ -91,7 +91,7 @@ async function handleLogin({ userId, userName, acornOpsClient, mattermostIdentit
 }
 
 async function handleStatus({ userId, userName, acornOpsClient, mattermostIdentity }) {
-  if (!acornOpsClient) {
+  if (!isAcornOpsChatAuthConfigured(acornOpsClient)) {
     return "AcornOps status is not configured. Set `ACORNOPS_API_BASE_URL` and `MATTERMOST_CHAT_SERVICE_TOKEN`, then restart the bot.";
   }
 
@@ -116,7 +116,7 @@ async function handleStatus({ userId, userName, acornOpsClient, mattermostIdenti
     return [
       "AcornOps bot status:",
       `- Mattermost user: ${identityLabel({ userId, userName })}`,
-      "- Backend authentication: not linked. Run `login` to connect AcornOps.",
+      "- Backend authentication: not linked. Run `/login` to connect AcornOps.",
       "- Cluster access: not loaded"
     ].join("\n");
   }
@@ -132,18 +132,16 @@ async function handleStatus({ userId, userName, acornOpsClient, mattermostIdenti
 function missingIdentityText() {
   return [
     "AcornOps account linking is unavailable because Mattermost did not provide the required identity context.",
-    "Required identity fields: server id, team id, and user id."
+    "Required identity field: user id."
   ].join("\n");
 }
 
 function normalizeMattermostIdentity({ mattermostIdentity, userId }) {
   const identity = {
-    mattermostServerId: mattermostIdentity?.mattermostServerId ?? "",
-    mattermostTeamId: mattermostIdentity?.mattermostTeamId ?? "",
     mattermostUserId: mattermostIdentity?.mattermostUserId ?? userId
   };
 
-  if (!identity.mattermostServerId || !identity.mattermostTeamId || !identity.mattermostUserId) {
+  if (!identity.mattermostUserId) {
     return null;
   }
 
@@ -156,6 +154,18 @@ function identityLabel({ userId, userName }) {
   }
 
   return userName || userId || "unknown";
+}
+
+function isAcornOpsChatAuthConfigured(acornOpsClient) {
+  if (!acornOpsClient) {
+    return false;
+  }
+
+  if (typeof acornOpsClient.canUseMattermostChatAuth !== "function") {
+    return true;
+  }
+
+  return acornOpsClient.canUseMattermostChatAuth();
 }
 
 function parseMentions(value) {

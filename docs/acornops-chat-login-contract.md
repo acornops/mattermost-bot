@@ -28,17 +28,21 @@ The token must match the AcornOps control-plane `MATTERMOST_CHAT_SERVICE_TOKEN`.
 
 ## Mattermost Identity
 
-The request identity must come from Mattermost event or WebSocket context:
+The request identity must come from the Mattermost event or WebSocket post author:
 
 ```json
 {
-  "mattermostServerId": "mattermost-server-id-from-event",
-  "mattermostTeamId": "mattermost-team-id-from-event",
   "mattermostUserId": "mattermost-user-id-from-event"
 }
 ```
 
-The bot must not accept Mattermost ids typed by users in chat. If Mattermost does not provide the required server, team, and user ids, the bot should not call AcornOps.
+The bot must not accept Mattermost ids typed by users in chat. Use the
+Mattermost user id observed from the event or websocket context. This contract
+is scoped to a single Mattermost server where Mattermost user ids are unique
+across teams.
+
+If the bot cannot determine the Mattermost user id without guessing, it should
+not call AcornOps.
 
 ## Login
 
@@ -105,7 +109,7 @@ Unlinked response:
 Bot behavior:
 
 - For `linked`, report that the Mattermost user is linked to AcornOps.
-- For `unlinked`, tell the user to run `login`.
+- For `unlinked`, tell the user to run `/login`.
 
 ## Removed Placeholder Flow
 
@@ -114,6 +118,6 @@ The bot no longer:
 - Calls `POST /api/v1/auth/chat/mattermost/login`.
 - Calls `GET /api/v1/auth/chat/mattermost/login/{id}`.
 - Builds plain AcornOps OIDC login links.
-- Stores bot-side pending login state or AcornOps sessions.
+- Stores bot-side login state or AcornOps sessions.
 - Mints or accepts bot-side AcornOps user ids.
 - Stores browser sessions, OIDC tokens, refresh tokens, or raw Mattermost link tokens.

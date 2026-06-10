@@ -94,7 +94,7 @@ export async function handlePostedEvent({
     channelType,
     botUsername,
     acornOpsClient,
-    mattermostIdentity: extractMattermostIdentity({ event, post })
+    mattermostIdentity: extractMattermostIdentity({ post })
   });
 
   logger.log(`Responding to Mattermost post ${post.id} in channel ${post.channel_id}.`);
@@ -104,30 +104,10 @@ export async function handlePostedEvent({
   });
 }
 
-export function extractMattermostIdentity({ event, post }) {
+export function extractMattermostIdentity({ post }) {
   return {
-    mattermostServerId: firstNonEmpty(
-      event.data?.server_id,
-      event.data?.serverId,
-      event.data?.mattermost_server_id,
-      event.data?.mattermostServerId,
-      event.broadcast?.server_id,
-      event.broadcast?.serverId,
-      event.broadcast?.mattermost_server_id,
-      event.broadcast?.mattermostServerId
-    ),
-    mattermostTeamId: firstNonEmpty(
-      event.data?.team_id,
-      event.data?.teamId,
-      event.broadcast?.team_id,
-      event.broadcast?.teamId
-    ),
     mattermostUserId: post.user_id ?? ""
   };
-}
-
-function firstNonEmpty(...values) {
-  return values.find((value) => typeof value === "string" && value.length > 0) ?? "";
 }
 
 function parsePostedPost(event) {

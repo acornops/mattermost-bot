@@ -71,8 +71,6 @@ test("handlePostedEvent responds to direct message posts in the main timeline", 
       event: "posted",
       data: {
         channel_type: "D",
-        server_id: "mattermost-server-1",
-        team_id: "mattermost-team-1",
         sender_name: "alice",
         post: JSON.stringify({
           id: "post-1",
@@ -90,6 +88,7 @@ test("handlePostedEvent responds to direct message posts in the main timeline", 
   assert.equal(posts[0].rootId, undefined);
   assert.match(posts[0].message, /alice \(user-1\)/);
   assert.match(posts[0].message, /not linked/);
+  assert.match(posts[0].message, /Run `\/login`/);
 });
 
 test("handlePostedEvent skips unmentioned channel posts", async () => {
@@ -151,8 +150,6 @@ test("handlePostedEvent creates AcornOps account link for direct message login p
       event: "posted",
       data: {
         channel_type: "D",
-        server_id: "mattermost-server-1",
-        team_id: "mattermost-team-1",
         sender_name: "alice",
         post: JSON.stringify({
           id: "post-1",
@@ -170,20 +167,12 @@ test("handlePostedEvent creates AcornOps account link for direct message login p
   assert.match(posts[0].message, /mmlink_123/);
 });
 
-test("extractMattermostIdentity reads only observed event context", () => {
+test("extractMattermostIdentity reads only observed post author id", () => {
   assert.deepEqual(extractMattermostIdentity({
-    event: {
-      data: {
-        server_id: "mattermost-server-1"
-      },
-      broadcast: {
-        team_id: "mattermost-team-1"
-      }
-    },
     post: {
       user_id: "mattermost-user-1",
       props: {
-        mattermostServerId: "user-supplied-server-id"
+        mattermostUserId: "user-supplied-user-id"
       }
     }
   }), mattermostIdentity());
@@ -203,8 +192,6 @@ function fakeClient(overrides = {}) {
 
 function mattermostIdentity(mattermostUserId = "mattermost-user-1") {
   return {
-    mattermostServerId: "mattermost-server-1",
-    mattermostTeamId: "mattermost-team-1",
     mattermostUserId
   };
 }

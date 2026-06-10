@@ -78,8 +78,6 @@ test("Mattermost chat auth requires the service token", async () => {
 
 function mattermostIdentity() {
   return {
-    mattermostServerId: "mattermost-server-1",
-    mattermostTeamId: "mattermost-team-1",
     mattermostUserId: "mattermost-user-1"
   };
 }

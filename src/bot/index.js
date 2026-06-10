@@ -1,6 +1,9 @@
 import { MattermostClient } from "./mattermost-client.js";
 import { AcornOpsClient } from "./acornops-client.js";
+import { loadLocalEnv } from "./env.js";
 import { createMattermostBotRunner } from "./runner.js";
+
+loadLocalEnv();
 
 const baseUrl = process.env.CSIT_MATTERMOST_URL || "http://localhost:8065";
 const token = process.env.CSIT_MATTERMOST_TOKEN || "";

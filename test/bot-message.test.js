@@ -77,12 +77,9 @@ test("handleBotMessage creates an AcornOps account link for direct /login", asyn
 test("handleBotMessage refuses login without complete Mattermost identity", async () => {
   const response = await handleBotMessage({
     text: "login",
-    userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
-    mattermostIdentity: {
-      mattermostUserId: "mattermost-user-1"
-    },
+    mattermostIdentity: {},
     acornOpsClient: {
       async createMattermostLink() {
         throw new Error("createMattermostLink should not be called");
@@ -91,7 +88,27 @@ test("handleBotMessage refuses login without complete Mattermost identity", asyn
   });
 
   assert.match(response, /required identity context/);
-  assert.match(response, /server id, team id, and user id/);
+  assert.match(response, /user id/);
+});
+
+test("handleBotMessage reports login configuration when service token is missing", async () => {
+  const response = await handleBotMessage({
+    text: "login",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      canUseMattermostChatAuth() {
+        return false;
+      },
+      async createMattermostLink() {
+        throw new Error("createMattermostLink should not be called");
+      }
+    }
+  });
+
+  assert.match(response, /AcornOps login is not configured/);
+  assert.match(response, /MATTERMOST_CHAT_SERVICE_TOKEN/);
 });
 
 test("handleBotMessage keeps login direct-message only", async () => {
@@ -157,13 +174,30 @@ test("handleBotMessage status tells unlinked users to run login", async () => {
   });
 
   assert.match(response, /Backend authentication: not linked/);
-  assert.match(response, /Run `login`/);
+  assert.match(response, /Run `\/login`/);
+});
+
+test("handleBotMessage reports status configuration when service token is missing", async () => {
+  const response = await handleBotMessage({
+    text: "status",
+    userId: "mattermost-user-1",
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      canUseMattermostChatAuth() {
+        return false;
+      },
+      async resolveMattermostLink() {
+        throw new Error("resolveMattermostLink should not be called");
+      }
+    }
+  });
+
+  assert.match(response, /AcornOps status is not configured/);
+  assert.match(response, /MATTERMOST_CHAT_SERVICE_TOKEN/);
 });
 
 function mattermostIdentity() {
   return {
-    mattermostServerId: "mattermost-server-1",
-    mattermostTeamId: "mattermost-team-1",
     mattermostUserId: "mattermost-user-1"
   };
 }

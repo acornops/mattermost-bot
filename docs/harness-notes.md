@@ -33,4 +33,4 @@ The product goal, local learning stack, and first bot runtime are now selected. 
 4. Adding module-level docs near code as the architecture grows.
 5. Adding repeatable end-to-end checks for cross-component behavior when they can run without leaking local secrets.
 
-The immediate next product path is to live-smoke the AcornOps Mattermost account-link contract with local Mattermost event identity values, then wire authenticated cluster commands.
+The immediate next product path is to wire authenticated cluster commands using the verified AcornOps Mattermost account-link flow.
