@@ -62,6 +62,7 @@ MATTERMOST_CHAT_SERVICE_TOKEN=replace-with-acornops-chat-token
 - The bot authenticates to Mattermost as a bot account using `CSIT_MATTERMOST_TOKEN`.
 - The bot opens Mattermost's WebSocket endpoint and authenticates after connecting.
 - The bot responds to direct messages and channel posts that mention `@acorn-ops-bot`.
+- The bot username defaults to `acorn-ops-bot`, and can be changed in one place at runtime with `CSIT_MATTERMOST_BOT_USERNAME`.
 - The bot posts responses as normal channel messages instead of threaded replies.
 - The bot ignores messages authored by itself.
 - `login` and `/login` in a direct message call AcornOps `POST /api/v1/auth/chat/mattermost/link` with the Mattermost user id read from the post author.
@@ -69,16 +70,16 @@ MATTERMOST_CHAT_SERVICE_TOKEN=replace-with-acornops-chat-token
 - `status` and `/status` call AcornOps `POST /api/v1/auth/chat/mattermost/resolve` with the same Mattermost user id.
 - The bot does not keep bot-side login state or AcornOps sessions.
 - `clusters` remains a placeholder until cluster listing is wired to the AcornOps API.
-- `ACORNOPS_API_BASE_URL` defaults to `http://localhost:8081`, the standalone AcornOps control-plane URL.
+- `CSIT_MATTERMOST_URL` defaults to `http://localhost:8065`, and `ACORNOPS_API_BASE_URL` defaults to `http://localhost:8081`, the standalone AcornOps control-plane URL.
 
 ## Message Flow
 
-1. `src/bot/index.js` loads `.env.local` and `.env`, then reads `CSIT_MATTERMOST_URL`, `CSIT_MATTERMOST_TOKEN`, `CSIT_MATTERMOST_BOT_USERNAME`, `ACORNOPS_API_BASE_URL`, and `MATTERMOST_CHAT_SERVICE_TOKEN`.
-2. `src/bot/mattermost-client.js` verifies the token with `GET /api/v4/users/me`.
+1. `src/bot/index.js` loads `.env`, then asks `src/bot/config.js` for `CSIT_MATTERMOST_URL`, `CSIT_MATTERMOST_TOKEN`, `CSIT_MATTERMOST_BOT_USERNAME`, `ACORNOPS_API_BASE_URL`, and `MATTERMOST_CHAT_SERVICE_TOKEN`.
+2. `src/bot/mattermost-client.js` uses the shared JSON request helper in `src/bot/http-client.js` and verifies the token with `GET /api/v4/users/me`.
 3. `src/bot/runner.js` opens `/api/v4/websocket` and authenticates the WebSocket connection.
 4. Mattermost emits `posted` events for new messages the bot can see.
 5. `src/bot/runner.js` extracts the Mattermost user id from the Mattermost post author.
-6. `src/bot/message.js` ignores bot-authored posts, accepts direct messages, and accepts channel posts that mention `@acorn-ops-bot`.
+6. `src/bot/message.js` uses helpers from `src/bot/message-utils.js` to ignore bot-authored posts, accept direct messages, and accept channel posts that mention the configured bot username.
 7. `login` direct messages ask AcornOps to create a short-lived account link and return the `linkUrl` exactly as AcornOps sent it.
 8. `status` asks AcornOps whether the Mattermost identity is durably linked.
 9. `src/bot/mattermost-client.js` posts the response with `POST /api/v4/posts` and no `root_id`, so Mattermost renders it in the main timeline instead of a thread.

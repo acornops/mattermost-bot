@@ -38,6 +38,7 @@
 - `login` direct messages now call AcornOps `POST /api/v1/auth/chat/mattermost/link` using only the Mattermost post author's `user_id`.
 - `status` now calls AcornOps `POST /api/v1/auth/chat/mattermost/resolve` and reports `linked` or tells unlinked users to run `/login`.
 - AcornOps updated the account-link contract on 2026-06-10 to require only `mattermostUserId`, scoped to a single Mattermost server where user ids are unique across teams. The bot no longer needs Mattermost server/team identity context for login/status.
+- Bot runtime defaults now live in `src/bot/config.js`; `CSIT_MATTERMOST_BOT_USERNAME` is the runtime source for changing the bot mention name, with `acorn-ops-bot` as the single code fallback.
 - The current AcornOps Mattermost account-link smoke passed after the user-id-only update.
 - Cluster listing is still a placeholder until authenticated AcornOps identity linking and cluster APIs are wired.
 - The K3s verification command did not pass during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections.
@@ -229,4 +230,12 @@ Session log entries are historical. Superseded risks and decisions are corrected
 - Completed: Recorded the live-smoke result, marked `B04` complete, updated current next actions away from account-link smoke, and replaced the historical proposed chat-login transaction section with the current link/resolve contract.
 - Verification run: User reported the updated Mattermost `login` and `status` flow works. `./init.sh` passed after the docs cleanup with harness verification, lint, build, and 24 tests.
 - Known risks: The exact Mattermost post ids and AcornOps response snippets from the live smoke were not captured in this repository. Cluster listing remains a placeholder.
+- Next best action: start `B05` for authenticated cluster commands.
+
+### 2026-06-12 - Pre-B05 bot refactor
+
+- Goal: Reduce bot technical debt before starting authenticated cluster command work.
+- Completed: Added `src/bot/http-client.js` so Mattermost and AcornOps clients share base URL trimming, JSON body serialization, raw-response support, and API error text. Added `src/bot/config.js` so runtime defaults and `CSIT_MATTERMOST_BOT_USERNAME` handling are centralized. Added `src/bot/message-utils.js` for command parsing, mention parsing, regex escaping, and user labels. Kept the current account-link behavior unchanged and kept `B05` not started.
+- Verification run: `npm test` passed with 31 tests. `npm run lint` passed. `./init.sh` passed with harness verification, lint, build, and 31 tests.
+- Known risks: No live Mattermost or AcornOps smoke was run for this refactor because it is internal code organization; the automated account-link and runner tests still cover request shapes and message behavior.
 - Next best action: start `B05` for authenticated cluster commands.

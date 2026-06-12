@@ -86,3 +86,9 @@
 - Decision: Remove server/team identity handling from the bot's AcornOps account-link requests and send only the Mattermost post author's `mattermostUserId`.
 - Reason: The updated AcornOps contract is scoped to a single Mattermost server where Mattermost user ids are unique across teams.
 - Consequence: The bot no longer needs Mattermost server/team config, Mattermost REST context lookups, or multi-team disambiguation for login/status. It still must never accept Mattermost ids typed by users in chat.
+
+## 2026-06-12: Centralize bot runtime defaults and request plumbing
+
+- Decision: Keep runtime defaults in `src/bot/config.js`, including the default Mattermost bot username, and route JSON HTTP behavior for Mattermost and AcornOps through `src/bot/http-client.js`.
+- Reason: The bot username and request/error handling were duplicated across small modules, which would make future command work harder to change safely.
+- Consequence: Renaming the bot should normally require only `CSIT_MATTERMOST_BOT_USERNAME` at runtime, with `DEFAULT_MATTERMOST_BOT_USERNAME` as the single code fallback. New service clients should reuse the shared JSON HTTP helper instead of rebuilding fetch, headers, body serialization, and error text.

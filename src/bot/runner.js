@@ -1,3 +1,4 @@
+import { DEFAULT_MATTERMOST_BOT_USERNAME } from "./config.js";
 import { handleBotMessage, shouldRespondToPost } from "./message.js";
 
 export function createMattermostBotRunner({
@@ -5,7 +6,7 @@ export function createMattermostBotRunner({
   acornOpsClient = null,
   websocketFactory,
   logger = console,
-  botUsername = "acorn-ops-bot"
+  botUsername = DEFAULT_MATTERMOST_BOT_USERNAME
 }) {
   return {
     async start() {
@@ -69,7 +70,7 @@ export async function handlePostedEvent({
   acornOpsClient = null,
   event,
   botUser,
-  botUsername = "acorn-ops-bot",
+  botUsername = DEFAULT_MATTERMOST_BOT_USERNAME,
   logger = console
 }) {
   const post = parsePostedPost(event);

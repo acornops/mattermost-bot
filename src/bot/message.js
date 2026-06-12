@@ -1,3 +1,12 @@
+import { DEFAULT_MATTERMOST_BOT_USERNAME } from "./config.js";
+import {
+  escapeRegExp,
+  firstCommandWord,
+  identityLabel,
+  normalizeBotText,
+  parseMentions
+} from "./message-utils.js";
+
 const helpText = [
   "AcornOps bot commands:",
   "- `help` shows this help.",
@@ -6,18 +15,14 @@ const helpText = [
   "- `clusters` will list accessible clusters once the backend API exists."
 ].join("\n");
 
-function firstWord(text) {
-  return text.trim().split(/\s+/, 1)[0]?.toLowerCase().replace(/^\/+/, "") ?? "";
-}
+export { normalizeBotText } from "./message-utils.js";
 
-export function normalizeBotText(text, botUsername = "acorn-ops-bot") {
-  const trimmed = text.trim();
-  const mentionPattern = new RegExp(`^@${escapeRegExp(botUsername)}\\b[:,]?\\s*`, "i");
-
-  return trimmed.replace(mentionPattern, "").trim();
-}
-
-export function shouldRespondToPost({ post, botUserId, botUsername = "acorn-ops-bot", channelType = "" }) {
+export function shouldRespondToPost({
+  post,
+  botUserId,
+  botUsername = DEFAULT_MATTERMOST_BOT_USERNAME,
+  channelType = ""
+}) {
   if (!post || post.user_id === botUserId) {
     return false;
   }
@@ -38,13 +43,13 @@ export async function handleBotMessage({
   text,
   userId = "",
   userName = "",
-  botUsername = "acorn-ops-bot",
+  botUsername = DEFAULT_MATTERMOST_BOT_USERNAME,
   channelType = "",
   acornOpsClient = null,
   mattermostIdentity = null
 }) {
   const normalizedText = normalizeBotText(text, botUsername);
-  const action = firstWord(normalizedText) || "help";
+  const action = firstCommandWord(normalizedText) || "help";
 
   if (action === "help") {
     return helpText;
@@ -148,14 +153,6 @@ function normalizeMattermostIdentity({ mattermostIdentity, userId }) {
   return identity;
 }
 
-function identityLabel({ userId, userName }) {
-  if (userName && userId) {
-    return `${userName} (${userId})`;
-  }
-
-  return userName || userId || "unknown";
-}
-
 function isAcornOpsChatAuthConfigured(acornOpsClient) {
   if (!acornOpsClient) {
     return false;
@@ -166,25 +163,4 @@ function isAcornOpsChatAuthConfigured(acornOpsClient) {
   }
 
   return acornOpsClient.canUseMattermostChatAuth();
-}
-
-function parseMentions(value) {
-  if (Array.isArray(value)) {
-    return value;
-  }
-
-  if (typeof value !== "string" || !value) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

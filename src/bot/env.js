@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 
-export function loadLocalEnv(paths = [".env.local", ".env"]) {
+export function loadLocalEnv(paths = [".env"]) {
   for (const path of paths) {
     if (!existsSync(path)) {
       continue;

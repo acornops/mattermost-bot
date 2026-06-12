@@ -2,8 +2,9 @@
 
 ## Currently Verified
 
-- `npm test` passed with 24 tests after the June 10 user-id-only contract update.
-- `./init.sh` passed with harness verification, lint, build, and 24 tests after the docs cleanup.
+- `npm test` passed with 31 tests after the June 12 pre-B05 refactor.
+- `npm run lint` passed after the June 12 pre-B05 refactor.
+- `./init.sh` passed with harness verification, lint, build, and 31 tests after the June 12 pre-B05 refactor.
 - `./scripts/verify-harness.sh` passes.
 - Product direction is selected: Mattermost ChatOps bot for authenticating users to AcornOps, a Kubernetes cluster-management backend.
 - Local Mattermost is documented through the official Docker Compose deployment without NGINX at `http://localhost:8065`.
@@ -15,19 +16,18 @@
 - The current AcornOps contract sends only `{ "mattermostUserId": "<post author user_id>" }`.
 - The user reported the updated live Mattermost `login` and `status` flow works after the user-id-only contract update.
 - The bot automatically loads `.env` before reading runtime variables.
+- Runtime defaults live in `src/bot/config.js`; change the bot mention name with `CSIT_MATTERMOST_BOT_USERNAME`.
+- Mattermost and AcornOps API clients share JSON fetch/error handling through `src/bot/http-client.js`.
 - The bot no longer uses `src/bot/auth-store.js`, bot-side login state, transaction polling, plain OIDC link construction, or AcornOps `dev-login` for command login.
 - `B04` is passing; `B05` authenticated cluster commands is the next not-started feature.
 
 ## Changes This Session
 
-- Updated the previous server/team account-link implementation to the June 10 AcornOps contract that requires only `mattermostUserId`.
-- Removed Mattermost server/team runtime config from code and docs.
-- Removed Mattermost REST context lookups for server id, channel team id, and user-team fallback.
-- Kept `.env` loading so local bot tokens and AcornOps service token can be filled without shell exports.
-- Updated tests and docs for the user-id-only request body.
-- Added friendly login/status configuration responses when `MATTERMOST_CHAT_SERVICE_TOKEN` is missing.
-- Removed deprecated harness pointers that still treated account-link smoke as pending.
-- Replaced the historical proposed chat-login transaction section in `docs/acornops-api-inventory.md` with the current link/resolve contract.
+- Added `src/bot/http-client.js` and refactored `src/bot/mattermost-client.js` plus `src/bot/acornops-client.js` to reuse JSON request, raw-response, header, and error handling.
+- Added `src/bot/config.js` and routed `src/bot/index.js`, `src/bot/message.js`, and `src/bot/runner.js` through the centralized default bot username.
+- Added `src/bot/message-utils.js` for command-word parsing, mention parsing, bot mention normalization, regex escaping, and identity labels.
+- Added tests for config defaults, custom bot username config, shared JSON request behavior, GET request bodies, and API failure text.
+- Kept `B05` untouched and not started.
 
 ## Still Broken Or Unverified
 

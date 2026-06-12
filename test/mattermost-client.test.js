@@ -12,6 +12,24 @@ test("websocketUrl maps http to ws endpoint", () => {
   assert.equal(client.websocketUrl(), "ws://localhost:8065/api/v4/websocket");
 });
 
+test("getMe calls Mattermost users API and parses JSON", async () => {
+  const calls = [];
+  const client = new MattermostClient({
+    baseUrl: "http://mattermost",
+    token: "bot-token",
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return okResponse({ id: "user-1", username: "bot" });
+    }
+  });
+
+  const me = await client.getMe();
+
+  assert.deepEqual(me, { id: "user-1", username: "bot" });
+  assert.equal(calls[0].url, "http://mattermost/api/v4/users/me");
+  assert.equal(calls[0].options.headers.authorization, "Bearer bot-token");
+});
+
 test("createPost calls Mattermost posts API with bot token", async () => {
   const calls = [];
   const client = new MattermostClient({
@@ -39,11 +57,34 @@ test("createPost calls Mattermost posts API with bot token", async () => {
   });
 });
 
+test("request returns the raw response for non-JSON handling", async () => {
+  const response = rawResponse({ status: 202, text: "accepted" });
+  const client = new MattermostClient({
+    baseUrl: "http://mattermost",
+    token: "bot-token",
+    fetchImpl: async () => response
+  });
+
+  const result = await client.request("DELETE", "/api/v4/posts/post-1");
+
+  assert.equal(result, response);
+});
+
 function okResponse(json) {
   return {
     ok: true,
     async json() {
       return json;
+    }
+  };
+}
+
+function rawResponse({ status, text }) {
+  return {
+    ok: true,
+    status,
+    async text() {
+      return text;
     }
   };
 }

@@ -1,30 +1,30 @@
 import { MattermostClient } from "./mattermost-client.js";
 import { AcornOpsClient } from "./acornops-client.js";
+import { readBotConfig } from "./config.js";
 import { loadLocalEnv } from "./env.js";
 import { createMattermostBotRunner } from "./runner.js";
 
 loadLocalEnv();
 
-const baseUrl = process.env.CSIT_MATTERMOST_URL || "http://localhost:8065";
-const token = process.env.CSIT_MATTERMOST_TOKEN || "";
-const botUsername = process.env.CSIT_MATTERMOST_BOT_USERNAME || "acorn-ops-bot";
-const acornOpsUrl = process.env.ACORNOPS_API_BASE_URL || "http://localhost:8081";
-const acornOpsChatServiceToken = process.env.MATTERMOST_CHAT_SERVICE_TOKEN || "";
+const config = readBotConfig();
 
 if (typeof globalThis.WebSocket !== "function") {
   throw new Error("This bot runner requires a Node.js runtime with global WebSocket support.");
 }
 
-const client = new MattermostClient({ baseUrl, token });
+const client = new MattermostClient({
+  baseUrl: config.mattermostUrl,
+  token: config.mattermostToken
+});
 const acornOpsClient = new AcornOpsClient({
-  baseUrl: acornOpsUrl,
-  chatServiceToken: acornOpsChatServiceToken
+  baseUrl: config.acornOpsUrl,
+  chatServiceToken: config.mattermostChatServiceToken
 });
 const runner = createMattermostBotRunner({
   client,
   acornOpsClient,
   websocketFactory: (url) => new WebSocket(url),
-  botUsername
+  botUsername: config.mattermostBotUsername
 });
 
 await runner.start();

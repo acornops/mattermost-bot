@@ -1,16 +1,14 @@
+import { JsonHttpClient } from "./http-client.js";
+
 export class AcornOpsClient {
   constructor({ baseUrl, chatServiceToken = "", fetchImpl = globalThis.fetch }) {
-    this.baseUrl = baseUrl?.replace(/\/$/, "");
+    this.http = new JsonHttpClient({
+      baseUrl,
+      fetchImpl,
+      serviceName: "AcornOps",
+      missingBaseUrlMessage: "ACORNOPS_API_BASE_URL is required."
+    });
     this.chatServiceToken = chatServiceToken;
-    this.fetchImpl = fetchImpl;
-
-    if (!this.baseUrl) {
-      throw new Error("ACORNOPS_API_BASE_URL is required.");
-    }
-
-    if (typeof this.fetchImpl !== "function") {
-      throw new Error("A fetch implementation is required.");
-    }
   }
 
   canUseMattermostChatAuth() {
@@ -38,30 +36,31 @@ export class AcornOpsClient {
   }
 
   async requestJson(method, path, body, options = {}) {
-    const response = await this.request(method, path, body, options);
-    return await response.json();
+    return await this.http.requestJson(method, path, body, {
+      ...options,
+      headers: this.headersFor(options)
+    });
   }
 
   async request(method, path, body, options = {}) {
+    return await this.http.request(method, path, body, {
+      ...options,
+      headers: this.headersFor(options)
+    });
+  }
+
+  headersFor(options = {}) {
     const headers = {
-      "content-type": "application/json"
+      ...options.headers
     };
 
-    if (options.serviceAuth) {
-      headers.authorization = `Bearer ${this.chatServiceToken}`;
+    if (!options.serviceAuth) {
+      return headers;
     }
 
-    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`AcornOps API ${method} ${path} failed with ${response.status}: ${text}`);
-    }
-
-    return response;
+    return {
+      ...headers,
+      authorization: `Bearer ${this.chatServiceToken}`
+    };
   }
 }
