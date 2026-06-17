@@ -36,9 +36,9 @@ Current auth endpoints:
 - `POST /api/v1/auth/password/change`
 - `POST /api/v1/auth/logout`
 - `POST /api/v1/auth/dev-login` in non-production only
-- `POST /api/v1/auth/chat/mattermost/link`
-- `GET /api/v1/auth/chat/mattermost/link/start?token=<mattermost-link-token>`
-- `POST /api/v1/auth/chat/mattermost/resolve`
+- `POST /api/v1/auth/chat/integration/link`
+- `GET /api/v1/auth/chat/integration/link/start?token=<mattermost-link-token>`
+- `POST /api/v1/auth/chat/integration/resolve`
 - `GET /api/v1/me`
 - `GET /api/v1/auth/methods`
 - `GET /api/v1/auth/jwks.json`
@@ -159,7 +159,7 @@ The older proposed Mattermost chat-login transaction flow has been superseded. T
 
 The CSIT bot exposes `login` and `/login` in Mattermost. Those commands call AcornOps to create a short-lived browser link:
 
-- `POST /api/v1/auth/chat/mattermost/link`
+- `POST /api/v1/auth/chat/integration/link`
   - Auth: `Authorization: Bearer {MATTERMOST_CHAT_SERVICE_TOKEN}`.
   - Content type: `application/json`.
   - Request: `{ "mattermostUserId": "mattermost-user-id-from-event" }`.
@@ -168,13 +168,13 @@ The CSIT bot exposes `login` and `/login` in Mattermost. Those commands call Aco
 
 The browser opens the returned management-console URL. The console forwards to the AcornOps handoff endpoint:
 
-- `GET /api/v1/auth/chat/mattermost/link/start?token=<mattermost-link-token>`
+- `GET /api/v1/auth/chat/integration/link/start?token=<mattermost-link-token>`
   - Auth: browser session or OIDC flow as needed.
   - Behavior: AcornOps validates the Mattermost link token, performs user authentication as needed, and upserts the durable Mattermost-to-AcornOps user link.
 
 The CSIT bot exposes `status` and `/status` in Mattermost. Those commands call AcornOps to resolve the durable link:
 
-- `POST /api/v1/auth/chat/mattermost/resolve`
+- `POST /api/v1/auth/chat/integration/resolve`
   - Auth: `Authorization: Bearer {MATTERMOST_CHAT_SERVICE_TOKEN}`.
   - Content type: `application/json`.
   - Request: `{ "mattermostUserId": "mattermost-user-id-from-event" }`.

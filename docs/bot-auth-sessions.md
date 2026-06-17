@@ -12,9 +12,9 @@ AcornOps owns:
 The bot owns only the chat interaction:
 
 1. Read the Mattermost user id from the Mattermost post or event author.
-2. Call AcornOps `POST /api/v1/auth/chat/mattermost/link` for `login`.
+2. Call AcornOps `POST /api/v1/auth/chat/integration/link` for `login`.
 3. Return the `linkUrl` exactly as AcornOps returned it.
-4. Call AcornOps `POST /api/v1/auth/chat/mattermost/resolve` for `status`.
+4. Call AcornOps `POST /api/v1/auth/chat/integration/resolve` for `status`.
 5. Report whether AcornOps says the identity is linked.
 
 The bot must not store browser cookies, OIDC access tokens, ID tokens, refresh tokens, raw Mattermost link tokens, or bot-side AcornOps user ids.

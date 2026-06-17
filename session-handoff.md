@@ -2,17 +2,16 @@
 
 ## Currently Verified
 
-- `npm test` passed with 31 tests after the June 12 pre-B05 refactor.
-- `npm run lint` passed after the June 12 pre-B05 refactor.
-- `./init.sh` passed with harness verification, lint, build, and 31 tests after the June 12 pre-B05 refactor.
+- `./init.sh` passed after the June 17 endpoint-prefix rename with harness verification, lint, build, and 31 tests.
+- `node --test test/acornops-client.test.js` passed with 3 tests after the endpoint-prefix rename.
 - `./scripts/verify-harness.sh` passes.
 - Product direction is selected: Mattermost ChatOps bot for authenticating users to AcornOps, a Kubernetes cluster-management backend.
 - Local Mattermost is documented through the official Docker Compose deployment without NGINX at `http://localhost:8065`.
 - First Mattermost integration style is selected: dedicated bot account `@acorn-ops-bot`.
 - Bot implementation runtime is Node.js ECMAScript modules with built-in runtime APIs.
 - The bot responds to Mattermost direct messages and channel mentions through REST plus WebSocket events.
-- `login` and `/login` in direct messages call AcornOps `POST /api/v1/auth/chat/mattermost/link`.
-- `status` and `/status` call AcornOps `POST /api/v1/auth/chat/mattermost/resolve`.
+- `login` and `/login` in direct messages call AcornOps `POST /api/v1/auth/chat/integration/link`.
+- `status` and `/status` call AcornOps `POST /api/v1/auth/chat/integration/resolve`.
 - The current AcornOps contract sends only `{ "mattermostUserId": "<post author user_id>" }`.
 - The user reported the updated live Mattermost `login` and `status` flow works after the user-id-only contract update.
 - The bot automatically loads `.env` before reading runtime variables.
@@ -23,10 +22,9 @@
 
 ## Changes This Session
 
-- Added `src/bot/http-client.js` and refactored `src/bot/mattermost-client.js` plus `src/bot/acornops-client.js` to reuse JSON request, raw-response, header, and error handling.
-- Added `src/bot/config.js` and routed `src/bot/index.js`, `src/bot/message.js`, and `src/bot/runner.js` through the centralized default bot username.
-- Added `src/bot/message-utils.js` for command-word parsing, mention parsing, bot mention normalization, regex escaping, and identity labels.
-- Added tests for config defaults, custom bot username config, shared JSON request behavior, GET request bodies, and API failure text.
+- Updated `src/bot/acornops-client.js` to use the AcornOps generic chat integration endpoint prefix for link and resolve.
+- Updated `test/acornops-client.test.js` so request-shape coverage asserts `/api/v1/auth/chat/integration/link` and `/api/v1/auth/chat/integration/resolve`.
+- Updated current docs, decisions, progress, and feature evidence to use the renamed endpoint prefix.
 - Kept `B05` untouched and not started.
 
 ## Still Broken Or Unverified

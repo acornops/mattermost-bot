@@ -35,8 +35,9 @@
 
 ## Known Issues
 
-- `login` direct messages now call AcornOps `POST /api/v1/auth/chat/mattermost/link` using only the Mattermost post author's `user_id`.
-- `status` now calls AcornOps `POST /api/v1/auth/chat/mattermost/resolve` and reports `linked` or tells unlinked users to run `/login`.
+- `login` direct messages now call AcornOps `POST /api/v1/auth/chat/integration/link` using only the Mattermost post author's `user_id`.
+- `status` now calls AcornOps `POST /api/v1/auth/chat/integration/resolve` and reports `linked` or tells unlinked users to run `/login`.
+- AcornOps renamed the chat auth endpoint prefix on 2026-06-17 to `/auth/chat/integration/`; bot tests now assert the new link and resolve URLs.
 - AcornOps updated the account-link contract on 2026-06-10 to require only `mattermostUserId`, scoped to a single Mattermost server where user ids are unique across teams. The bot no longer needs Mattermost server/team identity context for login/status.
 - Bot runtime defaults now live in `src/bot/config.js`; `CSIT_MATTERMOST_BOT_USERNAME` is the runtime source for changing the bot mention name, with `acorn-ops-bot` as the single code fallback.
 - The current AcornOps Mattermost account-link smoke passed after the user-id-only update.
@@ -183,10 +184,10 @@ Session log entries are historical. Superseded risks and decisions are corrected
 ### 2026-06-05 - Bot-side chat-login transaction adapter added
 
 - Goal: Explore whether `B04` can be unblocked from the CSIT side and implement the bot/backend identity tracking boundary that AcornOps can satisfy later.
-- Completed: Reviewed the AcornOps control-plane OIDC/session source and current kagent chatbot docs. Added optional AcornOps chat-login client support for `POST /api/v1/auth/chat/mattermost/login` and `GET /api/v1/auth/chat/mattermost/login/{id}` with `CSIT_ACORNOPS_CHAT_SERVICE_TOKEN`. Updated the memory auth store to accept backend transaction ids and complete a pending login into a stored AcornOps user/session. Updated `login` to use backend chat transactions when configured, fall back gracefully to the plain OIDC link when the API is unavailable, and updated `status` to refresh completed backend transactions. Documented the proposed AcornOps API contract and kagent-inspired thin-chat-adapter boundary.
+- Completed: Reviewed the AcornOps control-plane OIDC/session source and current kagent chatbot docs. Added optional AcornOps chat-login client support for `POST /api/v1/auth/chat/integration/login` and `GET /api/v1/auth/chat/integration/login/{id}` with `CSIT_ACORNOPS_CHAT_SERVICE_TOKEN`. Updated the memory auth store to accept backend transaction ids and complete a pending login into a stored AcornOps user/session. Updated `login` to use backend chat transactions when configured, fall back gracefully to the plain OIDC link when the API is unavailable, and updated `status` to refresh completed backend transactions. Documented the proposed AcornOps API contract and kagent-inspired thin-chat-adapter boundary.
 - Verification run: `npm test` passed with 23 tests. `./init.sh` passed with harness verification, lint, build, and 23 tests. Local AcornOps live smoke did not run because `curl -fsS http://localhost:8081/health` failed to connect; the control-plane service was not listening.
 - Evidence recorded: Tests cover service-token protected chat-login transaction creation, transaction status fetch, backend chat-login command path, graceful fallback when the chat-login endpoint is unavailable, and completing a backend chat-login transaction into stored session state.
-- Known risks: `B04` remains blocked for live completion because the AcornOps control plane does not yet expose the proposed `/api/v1/auth/chat/mattermost/*` endpoints. The CSIT bot stores only an opaque chat session token when completion is reported; AcornOps must define the token's scope, expiry, revocation, and authorization behavior.
+- Known risks: `B04` remains blocked for live completion because the AcornOps control plane does not yet expose the proposed `/api/v1/auth/chat/integration/*` endpoints. The CSIT bot stores only an opaque chat session token when completion is reported; AcornOps must define the token's scope, expiry, revocation, and authorization behavior.
 - Next best action: implement the AcornOps chat-login endpoints in `/Users/ryangoh/Desktop/Development/acornops/control-plane`, then rerun the local AcornOps smoke and Mattermost bot verification.
 
 ### 2026-06-05 - AcornOps contract brief added
@@ -201,7 +202,7 @@ Session log entries are historical. Superseded risks and decisions are corrected
 ### 2026-06-09 - AcornOps account-link contract wired
 
 - Goal: Replace the placeholder and proposed transaction login/status flow with the AcornOps Mattermost account-link contract.
-- Completed: Replaced AcornOps client transaction methods with `createMattermostLink()` for `POST /api/v1/auth/chat/mattermost/link` and `resolveMattermostLink()` for `POST /api/v1/auth/chat/mattermost/resolve`. Updated `login` and `/login` to return AcornOps `linkUrl` exactly as provided and tell users the link expires in 10 minutes. Updated `status` and `/status` to ask AcornOps whether the Mattermost identity is durably linked. Removed the old in-memory `auth-store.js` pending/session store from runtime. Threaded Mattermost server, team, and user ids from WebSocket event context into bot commands and refused AcornOps calls when required identity fields are missing.
+- Completed: Replaced AcornOps client transaction methods with `createMattermostLink()` for `POST /api/v1/auth/chat/integration/link` and `resolveMattermostLink()` for `POST /api/v1/auth/chat/integration/resolve`. Updated `login` and `/login` to return AcornOps `linkUrl` exactly as provided and tell users the link expires in 10 minutes. Updated `status` and `/status` to ask AcornOps whether the Mattermost identity is durably linked. Removed the old in-memory `auth-store.js` pending/session store from runtime. Threaded Mattermost server, team, and user ids from WebSocket event context into bot commands and refused AcornOps calls when required identity fields are missing.
 - Verification run: `npm test` passed with 21 tests after the contract swap. `./init.sh` passed after artifact updates with harness verification, lint, build, and 21 tests. Live smoke did not run because `curl -fsS http://localhost:8081/health` failed to connect and `./scripts/verify-mattermost.sh` failed to connect to `http://localhost:8065/api/v4/system/ping`.
 - Evidence recorded: Tests cover service-token protected `link` and `resolve` request shape, exact returned account-link URL behavior, slash-style command aliases, direct-message-only login guard, linked and unlinked status handling, and ignoring user-supplied post props for Mattermost identity extraction.
 - Known risks: Live AcornOps/Mattermost smoke has not run yet because both local services were offline. Local Mattermost direct-message events may not expose the required server and team ids in the fields currently extracted by `src/bot/runner.js`.
@@ -239,3 +240,11 @@ Session log entries are historical. Superseded risks and decisions are corrected
 - Verification run: `npm test` passed with 31 tests. `npm run lint` passed. `./init.sh` passed with harness verification, lint, build, and 31 tests.
 - Known risks: No live Mattermost or AcornOps smoke was run for this refactor because it is internal code organization; the automated account-link and runner tests still cover request shapes and message behavior.
 - Next best action: start `B05` for authenticated cluster commands.
+
+### 2026-06-17 - Chat auth endpoint prefix renamed
+
+- Goal: Align CSIT with the renamed AcornOps chat integration endpoints.
+- Completed: Updated the AcornOps bot client to call `POST /api/v1/auth/chat/integration/link` and `POST /api/v1/auth/chat/integration/resolve` instead of the old Mattermost-specific path prefix. Updated automated request-shape tests and current repo docs/handoff references.
+- Verification run: `node --test test/acornops-client.test.js` passed with 3 tests. `./init.sh` passed after the rename with harness verification, lint, build, and 31 tests.
+- Known risks: No live Mattermost or AcornOps smoke was run for the rename in this workspace; automated tests cover the request URLs.
+- Next best action: run `./init.sh`, then continue to `B05` once the local stack is ready.

@@ -20,7 +20,7 @@ export class AcornOpsClient {
       throw new Error("MATTERMOST_CHAT_SERVICE_TOKEN is required for Mattermost chat auth.");
     }
 
-    return this.requestJson("POST", "/api/v1/auth/chat/mattermost/link", identity, {
+    return this.requestJson("POST", "/api/v1/auth/chat/integration/link", identity, {
       serviceAuth: true
     });
   }
@@ -30,7 +30,7 @@ export class AcornOpsClient {
       throw new Error("MATTERMOST_CHAT_SERVICE_TOKEN is required for Mattermost chat auth.");
     }
 
-    return this.requestJson("POST", "/api/v1/auth/chat/mattermost/resolve", identity, {
+    return this.requestJson("POST", "/api/v1/auth/chat/integration/resolve", identity, {
       serviceAuth: true
     });
   }

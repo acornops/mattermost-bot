@@ -65,9 +65,9 @@ MATTERMOST_CHAT_SERVICE_TOKEN=replace-with-acornops-chat-token
 - The bot username defaults to `acorn-ops-bot`, and can be changed in one place at runtime with `CSIT_MATTERMOST_BOT_USERNAME`.
 - The bot posts responses as normal channel messages instead of threaded replies.
 - The bot ignores messages authored by itself.
-- `login` and `/login` in a direct message call AcornOps `POST /api/v1/auth/chat/mattermost/link` with the Mattermost user id read from the post author.
+- `login` and `/login` in a direct message call AcornOps `POST /api/v1/auth/chat/integration/link` with the Mattermost user id read from the post author.
 - `login` in a shared channel does not call AcornOps; it asks the user to direct-message `@acorn-ops-bot`.
-- `status` and `/status` call AcornOps `POST /api/v1/auth/chat/mattermost/resolve` with the same Mattermost user id.
+- `status` and `/status` call AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same Mattermost user id.
 - The bot does not keep bot-side login state or AcornOps sessions.
 - `clusters` remains a placeholder until cluster listing is wired to the AcornOps API.
 - `CSIT_MATTERMOST_URL` defaults to `http://localhost:8065`, and `ACORNOPS_API_BASE_URL` defaults to `http://localhost:8081`, the standalone AcornOps control-plane URL.

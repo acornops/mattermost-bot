@@ -25,7 +25,7 @@ test("createMattermostLink posts the AcornOps Mattermost identity contract", asy
     linkUrl: "https://console.acornops.dev/integrations/mattermost/link?token=mmlink_123",
     expiresAt: "2026-06-09T00:10:00.000Z"
   });
-  assert.equal(requests[0].url, "http://acornops/api/v1/auth/chat/mattermost/link");
+  assert.equal(requests[0].url, "http://acornops/api/v1/auth/chat/integration/link");
   assert.equal(requests[0].init.method, "POST");
   assert.equal(requests[0].init.headers.authorization, "Bearer chat-token");
   assert.deepEqual(JSON.parse(requests[0].init.body), mattermostIdentity());
@@ -56,7 +56,7 @@ test("resolveMattermostLink asks AcornOps for durable link state", async () => {
 
   assert.equal(response.status, "linked");
   assert.equal(response.user.id, "acorn-user-1");
-  assert.equal(requests[0].url, "http://acornops/api/v1/auth/chat/mattermost/resolve");
+  assert.equal(requests[0].url, "http://acornops/api/v1/auth/chat/integration/resolve");
   assert.equal(requests[0].init.method, "POST");
   assert.equal(requests[0].init.headers.authorization, "Bearer chat-token");
   assert.deepEqual(JSON.parse(requests[0].init.body), mattermostIdentity());

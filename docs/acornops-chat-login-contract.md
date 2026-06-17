@@ -6,12 +6,12 @@ This note records the current bot-facing AcornOps contract for Mattermost accoun
 
 The CSIT bot uses only these AcornOps endpoints for account linking:
 
-- `POST /api/v1/auth/chat/mattermost/link`
-- `POST /api/v1/auth/chat/mattermost/resolve`
+- `POST /api/v1/auth/chat/integration/link`
+- `POST /api/v1/auth/chat/integration/resolve`
 
 The browser handoff endpoint is owned by AcornOps:
 
-- `GET /api/v1/auth/chat/mattermost/link/start?token=<mattermost-link-token>`
+- `GET /api/v1/auth/chat/integration/link/start?token=<mattermost-link-token>`
 
 The bot must not call older transaction or polling endpoints.
 
@@ -49,7 +49,7 @@ not call AcornOps.
 When the user sends `login` or `/login` in a direct message, the bot calls:
 
 ```http
-POST {ACORNOPS_API_BASE_URL}/api/v1/auth/chat/mattermost/link
+POST {ACORNOPS_API_BASE_URL}/api/v1/auth/chat/integration/link
 Authorization: Bearer {MATTERMOST_CHAT_SERVICE_TOKEN}
 Content-Type: application/json
 ```
@@ -75,7 +75,7 @@ Bot behavior:
 When the user sends `status` or `/status`, the bot calls:
 
 ```http
-POST {ACORNOPS_API_BASE_URL}/api/v1/auth/chat/mattermost/resolve
+POST {ACORNOPS_API_BASE_URL}/api/v1/auth/chat/integration/resolve
 Authorization: Bearer {MATTERMOST_CHAT_SERVICE_TOKEN}
 Content-Type: application/json
 ```
@@ -115,8 +115,8 @@ Bot behavior:
 
 The bot no longer:
 
-- Calls `POST /api/v1/auth/chat/mattermost/login`.
-- Calls `GET /api/v1/auth/chat/mattermost/login/{id}`.
+- Calls `POST /api/v1/auth/chat/integration/login`.
+- Calls `GET /api/v1/auth/chat/integration/login/{id}`.
 - Builds plain AcornOps OIDC login links.
 - Stores bot-side login state or AcornOps sessions.
 - Mints or accepts bot-side AcornOps user ids.
