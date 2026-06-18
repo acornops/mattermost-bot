@@ -167,6 +167,61 @@ test("handlePostedEvent creates AcornOps account link for direct message login p
   assert.match(posts[0].message, /mmlink_123/);
 });
 
+test("handlePostedEvent lists workspaces for direct message posts", async () => {
+  const posts = [];
+  const client = fakeClient({
+    createPost: async (post) => {
+      posts.push(post);
+      return { id: "reply-1", ...post };
+    }
+  });
+
+  const result = await handlePostedEvent({
+    client,
+    acornOpsClient: {
+      async listWorkspaces(input) {
+        assert.deepEqual(input, mattermostIdentity("user-1"));
+        return {
+          items: [
+            {
+              id: "workspace-1",
+              name: "Platform",
+              plan: { name: "Team" },
+              quota: {
+                members: { used: 0, limit: 10 },
+                kubernetesClusters: { used: 0, limit: 3 },
+                virtualMachines: { used: 0, limit: 5 }
+              }
+            }
+          ]
+        };
+      }
+    },
+    botUser: {
+      id: "bot",
+      username: "acorn-ops-bot"
+    },
+    event: {
+      event: "posted",
+      data: {
+        channel_type: "D",
+        sender_name: "alice",
+        post: JSON.stringify({
+          id: "post-1",
+          channel_id: "channel-1",
+          user_id: "user-1",
+          message: "/workspaces"
+        })
+      }
+    },
+    logger: quietLogger()
+  });
+
+  assert.equal(result.id, "reply-1");
+  assert.match(posts[0].message, /AcornOps workspaces:/);
+  assert.match(posts[0].message, /Platform \(workspace-1\)/);
+});
+
 test("extractMattermostIdentity reads only observed post author id", () => {
   assert.deepEqual(extractMattermostIdentity({
     post: {

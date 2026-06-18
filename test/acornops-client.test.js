@@ -62,6 +62,48 @@ test("resolveMattermostLink asks AcornOps for durable link state", async () => {
   assert.deepEqual(JSON.parse(requests[0].init.body), mattermostIdentity());
 });
 
+test("listWorkspaces uses service auth and external user header", async () => {
+  const requests = [];
+  const client = new AcornOpsClient({
+    baseUrl: "http://acornops/",
+    chatServiceToken: "chat-token",
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({
+        items: [
+          {
+            id: "workspace-1",
+            name: "Platform",
+            plan: {
+              key: "team",
+              name: "Team"
+            },
+            quota: {
+              members: { used: 0, limit: 10 },
+              kubernetesClusters: { used: 0, limit: 3 },
+              virtualMachines: { used: 0, limit: 5 }
+            }
+          }
+        ],
+        nextCursor: "cursor-2"
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  });
+
+  const response = await client.listWorkspaces(mattermostIdentity());
+
+  assert.equal(response.items[0].id, "workspace-1");
+  assert.equal(response.nextCursor, "cursor-2");
+  assert.equal(requests[0].url, "http://acornops/api/v1/workspaces?limit=50");
+  assert.equal(requests[0].init.method, "GET");
+  assert.equal(requests[0].init.body, undefined);
+  assert.equal(requests[0].init.headers.authorization, "Bearer chat-token");
+  assert.equal(requests[0].init.headers["x-acornops-external-user-id"], "mattermost-user-1");
+});
+
 test("Mattermost chat auth requires the service token", async () => {
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",
@@ -72,6 +114,11 @@ test("Mattermost chat auth requires the service token", async () => {
 
   await assert.rejects(
     client.createMattermostLink(mattermostIdentity()),
+    /MATTERMOST_CHAT_SERVICE_TOKEN/
+  );
+
+  await assert.rejects(
+    client.listWorkspaces(mattermostIdentity()),
     /MATTERMOST_CHAT_SERVICE_TOKEN/
   );
 });

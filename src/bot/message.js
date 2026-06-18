@@ -12,6 +12,7 @@ const helpText = [
   "- `help` shows this help.",
   "- `login` creates an AcornOps account-link URL.",
   "- `status` checks whether this Mattermost account is linked to AcornOps.",
+  "- `workspaces` lists AcornOps workspaces available to your linked account.",
   "- `clusters` will list accessible clusters once the backend API exists."
 ].join("\n");
 
@@ -50,6 +51,7 @@ export async function handleBotMessage({
 }) {
   const normalizedText = normalizeBotText(text, botUsername);
   const action = firstCommandWord(normalizedText) || "help";
+  const commandArgs = commandArguments(normalizedText);
 
   if (action === "help") {
     return helpText;
@@ -65,6 +67,17 @@ export async function handleBotMessage({
 
   if (action === "status") {
     return handleStatus({ userId, userName, acornOpsClient, mattermostIdentity });
+  }
+
+  if (action === "workspaces") {
+    return handleWorkspaces({
+      commandArgs,
+      userId,
+      userName,
+      channelType,
+      acornOpsClient,
+      mattermostIdentity
+    });
   }
 
   if (action === "clusters") {
@@ -134,11 +147,144 @@ async function handleStatus({ userId, userName, acornOpsClient, mattermostIdenti
   ].join("\n");
 }
 
+async function handleWorkspaces({
+  commandArgs,
+  userId,
+  userName,
+  channelType,
+  acornOpsClient,
+  mattermostIdentity
+}) {
+  if (commandArgs.length > 0) {
+    return "`/workspaces` does not accept arguments yet. Send `/workspaces` by itself.";
+  }
+
+  if (channelType !== "D") {
+    return "For workspace listings, send me a direct message with `/workspaces`.";
+  }
+
+  if (!isAcornOpsChatAuthConfigured(acornOpsClient)) {
+    return "AcornOps workspaces are not configured. Set `ACORNOPS_API_BASE_URL` and `MATTERMOST_CHAT_SERVICE_TOKEN`, then restart the bot.";
+  }
+
+  const identity = normalizeMattermostIdentity({ mattermostIdentity, userId });
+  if (!identity) {
+    return missingIdentityText();
+  }
+
+  try {
+    const page = await acornOpsClient.listWorkspaces(identity);
+    return formatWorkspacePage({
+      page,
+      userId,
+      userName
+    });
+  } catch (error) {
+    return workspaceErrorText(error);
+  }
+}
+
+function formatWorkspacePage({ page, userId, userName }) {
+  const items = Array.isArray(page?.items) ? page.items : [];
+  if (items.length === 0) {
+    return [
+      "AcornOps workspaces:",
+      `- Mattermost user: ${identityLabel({ userId, userName })}`,
+      "- No workspaces are available for this linked account."
+    ].join("\n");
+  }
+
+  const lines = [
+    "AcornOps workspaces:",
+    `Mattermost user: ${identityLabel({ userId, userName })}`
+  ];
+
+  for (const workspace of items) {
+    lines.push(`- ${formatWorkspaceSummary(workspace)}`);
+  }
+
+  if (page.nextCursor) {
+    lines.push(`Next page cursor: ${page.nextCursor}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatWorkspaceSummary(workspace) {
+  const name = workspace.name ?? workspace.displayName ?? workspace.slug ?? workspace.id ?? "Unnamed workspace";
+  const id = workspace.id && workspace.id !== name ? ` (${workspace.id})` : "";
+  const plan = workspace.plan?.name ?? workspace.plan?.key ?? "";
+  const quota = formatWorkspaceQuota(workspace.quota);
+  const parts = [`${name}${id}`];
+
+  if (plan) {
+    parts.push(`plan: ${plan}`);
+  }
+  if (quota) {
+    parts.push(`quota: ${quota}`);
+  }
+
+  return parts.join(" | ");
+}
+
+function formatWorkspaceQuota(quota) {
+  if (!quota || typeof quota !== "object") {
+    return "";
+  }
+
+  return [
+    formatQuotaValue("members", quota.members),
+    formatQuotaValue("clusters", quota.kubernetesClusters),
+    formatQuotaValue("VMs", quota.virtualMachines)
+  ].filter(Boolean).join(", ");
+}
+
+function formatQuotaValue(label, quota) {
+  if (!quota || typeof quota !== "object") {
+    return "";
+  }
+
+  const used = quota.used ?? 0;
+  const limit = quota.limit ?? "unlimited";
+  return `${label} ${used}/${limit}`;
+}
+
+function workspaceErrorText(error) {
+  const status = httpStatusFromError(error);
+  if (status === 401) {
+    return [
+      "AcornOps workspaces could not be loaded because this Mattermost account is not linked or the bot credentials are invalid.",
+      "Run `/login` in a direct message, then try `/workspaces` again."
+    ].join("\n");
+  }
+
+  if (status) {
+    return `AcornOps workspaces could not be loaded (HTTP ${status}). Try again later or check the bot logs.`;
+  }
+
+  return "AcornOps workspaces could not be loaded. Try again later or check the bot logs.";
+}
+
+function httpStatusFromError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const match = /\bfailed with (\d{3})\b/.exec(message);
+  return match ? Number(match[1]) : null;
+}
+
 function missingIdentityText() {
   return [
     "AcornOps account linking is unavailable because Mattermost did not provide the required identity context.",
     "Required identity field: user id."
   ].join("\n");
+}
+
+function commandArguments(text) {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  return trimmed.split(/\s+/).slice(1);
 }
 
 function normalizeMattermostIdentity({ mattermostIdentity, userId }) {

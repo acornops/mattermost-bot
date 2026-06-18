@@ -217,6 +217,28 @@
       "id": "B05",
       "priority": 11,
       "area": "bot",
+      "title": "Wire authenticated workspace command",
+      "user_visible_behavior": "A linked Mattermost user can direct-message @acorn-ops-bot with /workspaces and receive workspace summaries backed by AcornOps authorization.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus local AcornOps workspace-command smoke",
+        "steps": [
+          "Call GET /api/v1/workspaces with the external integration service token.",
+          "Send x-acornops-external-user-id using the Mattermost post author's user id.",
+          "Keep authentication-sensitive flows direct-message first unless a channel-safe response is explicitly designed.",
+          "Return workspace names, plan, quota, empty-state, and pagination cursor details to the user.",
+          "Add automated tests for linked, unlinked, and backend-error responses.",
+          "Run ./init.sh.",
+          "Run a local AcornOps and Mattermost smoke test when the stack is available."
+        ]
+      },
+      "evidence": "On 2026-06-18, added AcornOpsClient.listWorkspaces() for GET /api/v1/workspaces?limit=50 with Authorization Bearer MATTERMOST_CHAT_SERVICE_TOKEN and x-acornops-external-user-id set from the observed Mattermost post author. Added /workspaces direct-message command handling, no-argument validation, workspace summary formatting, empty-state output, direct-message channel guard, 401 login guidance, and backend-error handling that does not echo response bodies. Targeted tests passed: node --test test/acornops-client.test.js with 4 tests, node --test test/bot-message.test.js with 19 tests, and node --test test/bot-runner.test.js with 7 tests. Final ./init.sh passed with harness verification, lint, build, and 40 tests. Live smoke did not run because Mattermost was not listening on localhost:8065 and AcornOps was not listening on localhost:8081.",
+      "notes": "Depends on B04. The command intentionally remains direct-message-only until a channel-safe workspace disclosure policy is designed."
+    },
+    {
+      "id": "B06",
+      "priority": 12,
+      "area": "bot",
       "title": "Wire authenticated cluster commands",
       "user_visible_behavior": "A linked Mattermost user can ask @acorn-ops-bot for cluster information backed by AcornOps authorization instead of receiving a placeholder.",
       "status": "not_started",
@@ -224,7 +246,7 @@
         "command": "./init.sh plus local AcornOps cluster-command smoke",
         "steps": [
           "Identify the AcornOps cluster API shape that should back the first chat command.",
-          "Use the verified Mattermost account link to resolve the AcornOps user before cluster access.",
+          "Use the verified Mattermost account link or external integration identity to authorize cluster access.",
           "Keep authentication-sensitive flows direct-message first unless a channel-safe response is explicitly designed.",
           "Replace the current clusters placeholder with a backend-backed response.",
           "Add automated tests for linked, unlinked, and backend-error responses.",
@@ -233,7 +255,7 @@
         ]
       },
       "evidence": "",
-      "notes": "Depends on B04. Scope this to one narrow cluster-information command before expanding broader cluster-management behavior."
+      "notes": "Depends on B05. Scope this to one narrow cluster-information command before expanding broader cluster-management behavior."
     }
   ]
 }

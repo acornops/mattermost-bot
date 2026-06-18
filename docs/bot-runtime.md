@@ -68,6 +68,8 @@ MATTERMOST_CHAT_SERVICE_TOKEN=replace-with-acornops-chat-token
 - `login` and `/login` in a direct message call AcornOps `POST /api/v1/auth/chat/integration/link` with the Mattermost user id read from the post author.
 - `login` in a shared channel does not call AcornOps; it asks the user to direct-message `@acorn-ops-bot`.
 - `status` and `/status` call AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same Mattermost user id.
+- `workspaces` and `/workspaces` in a direct message call AcornOps `GET /api/v1/workspaces?limit=50` with the external integration service token and `x-acornops-external-user-id` set to the observed Mattermost post author id.
+- `workspaces` in a shared channel does not call AcornOps; it asks the user to direct-message `@acorn-ops-bot`.
 - The bot does not keep bot-side login state or AcornOps sessions.
 - `clusters` remains a placeholder until cluster listing is wired to the AcornOps API.
 - `CSIT_MATTERMOST_URL` defaults to `http://localhost:8065`, and `ACORNOPS_API_BASE_URL` defaults to `http://localhost:8081`, the standalone AcornOps control-plane URL.
@@ -82,7 +84,8 @@ MATTERMOST_CHAT_SERVICE_TOKEN=replace-with-acornops-chat-token
 6. `src/bot/message.js` uses helpers from `src/bot/message-utils.js` to ignore bot-authored posts, accept direct messages, and accept channel posts that mention the configured bot username.
 7. `login` direct messages ask AcornOps to create a short-lived account link and return the `linkUrl` exactly as AcornOps sent it.
 8. `status` asks AcornOps whether the Mattermost identity is durably linked.
-9. `src/bot/mattermost-client.js` posts the response with `POST /api/v4/posts` and no `root_id`, so Mattermost renders it in the main timeline instead of a thread.
+9. `workspaces` direct messages ask AcornOps for the current user's workspace page, then formats workspace name, plan, quota, empty-state, and next-cursor details.
+10. `src/bot/mattermost-client.js` posts the response with `POST /api/v4/posts` and no `root_id`, so Mattermost renders it in the main timeline instead of a thread.
 
 ## AcornOps Account-Link Stage
 

@@ -13,8 +13,8 @@
 - K3s readiness verification path: `./scripts/verify-k3s.sh`
 - Mattermost readiness verification path: `./scripts/verify-mattermost.sh`
 - Bot verification path: `./scripts/verify-bot.sh`
-- Highest priority unfinished feature: `B05`
-- Current blocker: none for the verified account-link flow.
+- Highest priority unfinished feature: `B06`
+- Current blocker: none for the verified workspace command implementation.
 
 ## Completed
 
@@ -28,6 +28,7 @@
 - `B02`: Wire local Mattermost bot account conversation.
 - `B03`: Wire first local AcornOps login command.
 - `B04`: Move login to AcornOps Mattermost account linking.
+- `B05`: Wire authenticated workspace command.
 
 ## In Progress
 
@@ -37,20 +38,21 @@
 
 - `login` direct messages now call AcornOps `POST /api/v1/auth/chat/integration/link` using only the Mattermost post author's `user_id`.
 - `status` now calls AcornOps `POST /api/v1/auth/chat/integration/resolve` and reports `linked` or tells unlinked users to run `/login`.
+- `/workspaces` direct messages now call AcornOps `GET /api/v1/workspaces?limit=50` with the external integration service token and `x-acornops-external-user-id` set to the observed Mattermost post author id.
 - AcornOps renamed the chat auth endpoint prefix on 2026-06-17 to `/auth/chat/integration/`; bot tests now assert the new link and resolve URLs.
 - AcornOps updated the account-link contract on 2026-06-10 to require only `mattermostUserId`, scoped to a single Mattermost server where user ids are unique across teams. The bot no longer needs Mattermost server/team identity context for login/status.
 - Bot runtime defaults now live in `src/bot/config.js`; `CSIT_MATTERMOST_BOT_USERNAME` is the runtime source for changing the bot mention name, with `acorn-ops-bot` as the single code fallback.
 - The current AcornOps Mattermost account-link smoke passed after the user-id-only update.
-- Cluster listing is still a placeholder until authenticated AcornOps identity linking and cluster APIs are wired.
+- Cluster listing is still a placeholder until authenticated AcornOps cluster APIs are wired.
 - The K3s verification command did not pass during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections.
 - Mattermost is running locally through the official Docker Compose deployment without NGINX.
 - Mattermost and K3s remain explicit local services; `./init.sh` verifies repo and bot code but does not start Docker Compose or k3d.
 
 ## Next Steps
 
-1. Add `B05` implementation details for authenticated cluster commands.
-2. Wire `clusters` to authenticated AcornOps APIs using the verified Mattermost account link.
-3. Add repeatable live-smoke notes for `login` and `status` if local service command output becomes available.
+1. Run live Mattermost/AcornOps smoke for `/workspaces` when the local stack is available.
+2. Start `B06` by identifying the first authenticated AcornOps cluster API response to expose through `clusters`.
+3. Add repeatable live-smoke notes for `login`, `status`, and `workspaces` if local service command output becomes available.
 
 ## Session Log
 
@@ -248,3 +250,11 @@ Session log entries are historical. Superseded risks and decisions are corrected
 - Verification run: `node --test test/acornops-client.test.js` passed with 3 tests. `./init.sh` passed after the rename with harness verification, lint, build, and 31 tests.
 - Known risks: No live Mattermost or AcornOps smoke was run for the rename in this workspace; automated tests cover the request URLs.
 - Next best action: run `./init.sh`, then continue to `B05` once the local stack is ready.
+
+### 2026-06-18 - Authenticated workspace command wired
+
+- Goal: Start authenticated backend commands by wiring `/workspaces` to the provided AcornOps `GET /api/v1/workspaces` endpoint.
+- Completed: Created branch `feat/add-authenticated-commands`. Added `AcornOpsClient.listWorkspaces()` using the external integration service token and `x-acornops-external-user-id` set from the observed Mattermost post author. Added direct-message-only `/workspaces` command handling with no-argument validation, workspace name/plan/quota formatting, empty-state handling, next-cursor display, unlinked 401 guidance, and backend-error handling that avoids echoing response bodies. Updated feature tracking so `B05` is the workspace command and cluster command work remains tracked as `B06`.
+- Verification run: Baseline `./init.sh` passed before work with 31 tests. Targeted tests passed after implementation: `node --test test/acornops-client.test.js` with 4 tests, `node --test test/bot-message.test.js` with 19 tests, and `node --test test/bot-runner.test.js` with 7 tests. Final `./init.sh` passed with harness verification, lint, build, and 40 tests.
+- Known risks: Live Mattermost/AcornOps smoke did not run because Mattermost was not listening on `localhost:8065` and AcornOps was not listening on `localhost:8081`. `/workspaces` is intentionally direct-message-only until a channel-safe workspace disclosure policy exists.
+- Next best action: live-smoke `/workspaces` against the local stack when available, then start `B06`.

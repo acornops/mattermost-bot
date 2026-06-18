@@ -35,6 +35,33 @@ export class AcornOpsClient {
     });
   }
 
+  async listWorkspaces(identity, { limit = 50, cursor = "", q = "" } = {}) {
+    if (!this.canUseMattermostChatAuth()) {
+      throw new Error("MATTERMOST_CHAT_SERVICE_TOKEN is required for Mattermost chat auth.");
+    }
+
+    const params = new URLSearchParams();
+    params.set("limit", String(limit));
+    if (cursor) {
+      params.set("cursor", cursor);
+    }
+    if (q) {
+      params.set("q", q);
+    }
+
+    return this.requestJson(
+      "GET",
+      `/api/v1/workspaces?${params.toString()}`,
+      undefined,
+      {
+        serviceAuth: true,
+        headers: {
+          "x-acornops-external-user-id": identity.mattermostUserId
+        }
+      }
+    );
+  }
+
   async requestJson(method, path, body, options = {}) {
     return await this.http.requestJson(method, path, body, {
       ...options,

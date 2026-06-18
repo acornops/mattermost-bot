@@ -2,8 +2,9 @@
 
 ## Currently Verified
 
-- `./init.sh` passed after the June 17 endpoint-prefix rename with harness verification, lint, build, and 31 tests.
-- `node --test test/acornops-client.test.js` passed with 3 tests after the endpoint-prefix rename.
+- Final `./init.sh` passed after the June 18 workspace-command work with harness verification, lint, build, and 40 tests.
+- Baseline `./init.sh` passed before the June 18 workspace-command work with harness verification, lint, build, and 31 tests.
+- Targeted workspace-command tests passed after implementation: `node --test test/acornops-client.test.js` with 4 tests, `node --test test/bot-message.test.js` with 19 tests, and `node --test test/bot-runner.test.js` with 7 tests.
 - `./scripts/verify-harness.sh` passes.
 - Product direction is selected: Mattermost ChatOps bot for authenticating users to AcornOps, a Kubernetes cluster-management backend.
 - Local Mattermost is documented through the official Docker Compose deployment without NGINX at `http://localhost:8065`.
@@ -12,30 +13,33 @@
 - The bot responds to Mattermost direct messages and channel mentions through REST plus WebSocket events.
 - `login` and `/login` in direct messages call AcornOps `POST /api/v1/auth/chat/integration/link`.
 - `status` and `/status` call AcornOps `POST /api/v1/auth/chat/integration/resolve`.
+- `workspaces` and `/workspaces` in direct messages call AcornOps `GET /api/v1/workspaces?limit=50` using `MATTERMOST_CHAT_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
+- `/workspaces` rejects extra arguments and shared-channel use for now.
 - The current AcornOps contract sends only `{ "mattermostUserId": "<post author user_id>" }`.
 - The user reported the updated live Mattermost `login` and `status` flow works after the user-id-only contract update.
 - The bot automatically loads `.env` before reading runtime variables.
 - Runtime defaults live in `src/bot/config.js`; change the bot mention name with `CSIT_MATTERMOST_BOT_USERNAME`.
 - Mattermost and AcornOps API clients share JSON fetch/error handling through `src/bot/http-client.js`.
 - The bot no longer uses `src/bot/auth-store.js`, bot-side login state, transaction polling, plain OIDC link construction, or AcornOps `dev-login` for command login.
-- `B04` is passing; `B05` authenticated cluster commands is the next not-started feature.
+- `B05` authenticated workspace command is implemented and `./init.sh` passes; `B06` authenticated cluster commands is the next not-started feature.
 
 ## Changes This Session
 
-- Updated `src/bot/acornops-client.js` to use the AcornOps generic chat integration endpoint prefix for link and resolve.
-- Updated `test/acornops-client.test.js` so request-shape coverage asserts `/api/v1/auth/chat/integration/link` and `/api/v1/auth/chat/integration/resolve`.
-- Updated current docs, decisions, progress, and feature evidence to use the renamed endpoint prefix.
-- Kept `B05` untouched and not started.
+- Created branch `feat/add-authenticated-commands`.
+- Added `AcornOpsClient.listWorkspaces()` for the provided `GET /api/v1/workspaces` endpoint.
+- Added `/workspaces` direct-message command handling, workspace response formatting, empty-state output, next-cursor display, 401 login guidance, and backend-error handling that avoids echoing response bodies.
+- Updated `feature_list.json`, `PROGRESS.md`, `DECISIONS.md`, and `docs/bot-runtime.md` for the workspace-command behavior and the new `B06` cluster follow-up.
 
 ## Still Broken Or Unverified
 
 - The exact Mattermost post ids and AcornOps response snippets from the passing live account-link smoke are not recorded in this repository.
+- Live Mattermost/AcornOps `/workspaces` smoke did not run because Mattermost was not listening on `localhost:8065` and AcornOps was not listening on `localhost:8081`.
 - Cluster listing remains a placeholder until wired to authenticated AcornOps APIs.
 - The local Mattermost bot token must stay outside committed files.
 
 ## Next Best Action
 
-Start `B05` by identifying the first AcornOps cluster API response to expose through the `clusters` command.
+Live-smoke `/workspaces` against local Mattermost and AcornOps when the stack is available. After that, start `B06` by identifying the first AcornOps cluster API response to expose through the `clusters` command.
 
 ## Commands
 

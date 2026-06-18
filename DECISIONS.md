@@ -98,3 +98,9 @@
 - Decision: The bot calls AcornOps chat auth through `POST /api/v1/auth/chat/integration/link` and `POST /api/v1/auth/chat/integration/resolve`.
 - Reason: AcornOps renamed the endpoint prefix to use a provider-neutral chat integration path while the CSIT adapter still handles Mattermost-specific identity extraction.
 - Consequence: Request-shape tests assert the new URLs. The bot still sends only `mattermostUserId` and still must not accept user-typed Mattermost ids from chat.
+
+## 2026-06-18: Keep authenticated data-listing commands direct-message-first
+
+- Decision: The first authenticated data command, `/workspaces`, only returns results in direct messages. Channel mentions ask the user to direct-message the bot instead.
+- Reason: Workspace names, quotas, and later cluster details can reveal account or infrastructure information. The project does not yet have a channel-safe disclosure policy.
+- Consequence: Future authenticated commands should default to direct-message-only unless their response is explicitly designed and reviewed as safe for shared channels. The bot uses the observed Mattermost post author id as `x-acornops-external-user-id` for external integration service-token requests.
