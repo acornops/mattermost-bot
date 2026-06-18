@@ -67,13 +67,13 @@
 - Status: superseded by `POST /api/v1/auth/chat/integration/link` and `POST /api/v1/auth/chat/integration/resolve`.
 - Decision: The Mattermost bot should use an AcornOps-owned chat-login transaction API when available: create the transaction with a service token, let AcornOps complete it after browser OIDC, then poll the transaction and store only AcornOps user metadata plus an opaque chat session token.
 - Reason: Current kagent chatbot examples treat Slack/Discord integrations as thin chat adapters that invoke backend agents over A2A while backend runtimes own tools, sessions, observability, and policy. CSIT should follow the same boundary: Mattermost identity stays in the chat adapter; AcornOps identity, authorization, and session issuance stay in AcornOps.
-- Consequence: Superseded by the current AcornOps durable account-link contract. The bot uses `MATTERMOST_CHAT_SERVICE_TOKEN`, calls only `link` and `resolve`, and must not receive raw browser cookies or become the source of truth for AcornOps authorization.
+- Consequence: Superseded by the current AcornOps durable account-link contract. The bot uses `EXTERNAL_INTEGRATION_SERVICE_TOKEN`, calls only `link` and `resolve`, and must not receive raw browser cookies or become the source of truth for AcornOps authorization.
 
 ## 2026-06-09: Use AcornOps durable Mattermost account-link endpoints
 
 - Decision: Replace the proposed chat-login transaction and polling flow with AcornOps `POST /api/v1/auth/chat/integration/link` for `login` and `POST /api/v1/auth/chat/integration/resolve` for `status`.
 - Reason: AcornOps now owns the short-lived Mattermost link token, browser handoff, OIDC/session work, and durable Mattermost-to-AcornOps user link.
-- Consequence: The bot no longer stores pending login state, AcornOps browser sessions, OIDC tokens, refresh tokens, raw Mattermost link tokens, or bot-side AcornOps user ids. The bot authenticates to AcornOps with `MATTERMOST_CHAT_SERVICE_TOKEN`.
+- Consequence: The bot no longer stores pending login state, AcornOps browser sessions, OIDC tokens, refresh tokens, raw external chat link tokens, or bot-side AcornOps user ids. The bot authenticates to AcornOps with `EXTERNAL_INTEGRATION_SERVICE_TOKEN`.
 
 ## 2026-06-09: Enrich sparse Mattermost direct-message identity through trusted context
 
@@ -97,7 +97,13 @@
 
 - Decision: The bot calls AcornOps chat auth through `POST /api/v1/auth/chat/integration/link` and `POST /api/v1/auth/chat/integration/resolve`.
 - Reason: AcornOps renamed the endpoint prefix to use a provider-neutral chat integration path while the CSIT adapter still handles Mattermost-specific identity extraction.
-- Consequence: Request-shape tests assert the new URLs. The bot still sends only `mattermostUserId` and still must not accept user-typed Mattermost ids from chat.
+- Consequence: Request-shape tests assert the new URLs. The bot must not accept user-typed Mattermost ids from chat.
+
+## 2026-06-18: Use external integration identity names for linking
+
+- Decision: The bot sends the observed Mattermost post author id as `externalUserId` to AcornOps `link` and `resolve`, and uses `EXTERNAL_INTEGRATION_SERVICE_TOKEN` for service authentication.
+- Reason: AcornOps now exposes provider-neutral external integration account-link endpoints. The integration client supplies only the external user id; AcornOps owns browser handoff, approval, durable linking, and token security.
+- Consequence: The Mattermost adapter remains the source of the external user id, but the AcornOps request body is no longer Mattermost-specific. The legacy `MATTERMOST_CHAT_SERVICE_TOKEN` env name is accepted only as a local backward-compatible fallback.
 
 ## 2026-06-18: Keep authenticated data-listing commands direct-message-first
 

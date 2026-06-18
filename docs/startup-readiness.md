@@ -9,7 +9,7 @@
 - Application code present: yes
 - Application tests present: yes
 - Mattermost local readiness: verified on 2026-05-28 with `./scripts/verify-mattermost.sh`
-- AcornOps Mattermost account-link smoke: user reported `login` and `status` working on 2026-06-10 after the user-id-only contract update
+- AcornOps account-link smoke: user reported `login` and `status` working on 2026-06-10 after the user-id-only contract update; the 2026-06-18 externalUserId contract rename is covered by automated tests and still needs live smoke
 - K3s local readiness: previously verified, but not reachable during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections
 
 ## Start Commands

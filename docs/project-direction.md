@@ -13,7 +13,7 @@ The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/con
 5. Bot runtime selection and bot-account conversation scaffolding.
 6. Local AcornOps login command.
 7. OIDC-backed Mattermost login link.
-8. AcornOps-backed Mattermost account linking with `link` and `resolve`.
+8. AcornOps-backed external integration account linking with `link` and `resolve`.
 
 ## Current Learning Path
 

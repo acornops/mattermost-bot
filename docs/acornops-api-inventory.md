@@ -2,7 +2,7 @@
 
 Initially checked on 2026-06-04 against `/Users/ryangoh/Desktop/Development/acornops/control-plane`.
 
-This inventory is a maintained reference for CSIT bot work. The Mattermost account-link section was updated on 2026-06-10 from the current AcornOps bot contract.
+This inventory is a maintained reference for CSIT bot work. The account-link section was updated on 2026-06-18 from the current AcornOps external integration contract.
 
 Do not implement bot behavior from the superseded proposal that used chat-login transactions or bot-side pending login state. The current bot contract is recorded in `docs/acornops-chat-login-contract.md`.
 
@@ -153,35 +153,35 @@ Admin endpoints exist under `/admin/v1` when `CONTROL_PLANE_ADMIN_API_ENABLED=tr
 
 Internal execution endpoints exist under `/internal/v1` when internal transport TLS is not enabled. They are service-token or gateway-run-token protected and are not a Mattermost user login surface.
 
-## Mattermost Account Linking
+## External Integration Account Linking
 
 The older proposed Mattermost chat-login transaction flow has been superseded. The bot no longer creates AcornOps OIDC URLs, stores pending login state, polls transaction ids, or receives AcornOps session tokens.
 
-The CSIT bot exposes `login` and `/login` in Mattermost. Those commands call AcornOps to create a short-lived browser link:
+The CSIT bot exposes `login` and `/login` in Mattermost. Those commands call AcornOps to create a short-lived external chat browser link:
 
 - `POST /api/v1/auth/chat/integration/link`
-  - Auth: `Authorization: Bearer {MATTERMOST_CHAT_SERVICE_TOKEN}`.
+  - Auth: `Authorization: Bearer {EXTERNAL_INTEGRATION_SERVICE_TOKEN}`.
   - Content type: `application/json`.
-  - Request: `{ "mattermostUserId": "mattermost-user-id-from-event" }`.
+  - Request: `{ "externalUserId": "external-user-id-from-event" }`.
   - Response: `{ "linkUrl": "...", "expiresAt": "..." }`.
   - Bot behavior: return `linkUrl` exactly as AcornOps sends it, tell the user it expires in 10 minutes, and do not log the raw link or token.
 
-The browser opens the returned management-console URL. The console forwards to the AcornOps handoff endpoint:
+The browser opens the returned management-console URL:
 
-- `GET /api/v1/auth/chat/integration/link/start?token=<mattermost-link-token>`
+- `/integrations/external-chat/link?token=<external-chat-link-token>`
   - Auth: browser session or OIDC flow as needed.
-  - Behavior: AcornOps validates the Mattermost link token, performs user authentication as needed, and upserts the durable Mattermost-to-AcornOps user link.
+  - Behavior: the console preserves the token through sign-in and completes linking only after the signed-in user approves the account link.
 
 The CSIT bot exposes `status` and `/status` in Mattermost. Those commands call AcornOps to resolve the durable link:
 
 - `POST /api/v1/auth/chat/integration/resolve`
-  - Auth: `Authorization: Bearer {MATTERMOST_CHAT_SERVICE_TOKEN}`.
+  - Auth: `Authorization: Bearer {EXTERNAL_INTEGRATION_SERVICE_TOKEN}`.
   - Content type: `application/json`.
-  - Request: `{ "mattermostUserId": "mattermost-user-id-from-event" }`.
+  - Request: `{ "externalUserId": "external-user-id-from-event" }`.
   - Response: `{ "status": "linked", ... }` or `{ "status": "unlinked" }`.
   - Linked response includes AcornOps user metadata and link timestamps.
   - Bot behavior: report linked AcornOps identity for `linked`; tell the user to run `/login` for `unlinked`.
 
-The Mattermost request body intentionally includes only `mattermostUserId`. The bot must read that value from the Mattermost event or WebSocket post author, never from user-supplied chat text. This contract is scoped to a single Mattermost server where user ids are unique across teams.
+The request body intentionally includes only `externalUserId`. The Mattermost adapter must set that value from the Mattermost event or WebSocket post author, never from user-supplied chat text.
 
-AcornOps owns browser handoff, OIDC/session authentication, link token validation, link expiry, refresh/revocation policy, audit behavior, and the durable Mattermost-to-AcornOps user link.
+AcornOps owns browser handoff, OIDC/session authentication, link token validation, link expiry, refresh/revocation policy, audit behavior, and the durable external-chat-to-AcornOps user link.

@@ -62,7 +62,7 @@ test("handleBotMessage creates an AcornOps account link for direct /login", asyn
       async createMattermostLink(input) {
         assert.deepEqual(input, mattermostIdentity());
         return {
-          linkUrl: "https://console.acornops.dev/integrations/mattermost/link?token=mmlink_123",
+          linkUrl: "https://console.acornops.dev/integrations/external-chat/link?token=intlink_123",
           expiresAt: "2026-06-09T00:10:00.000Z"
         };
       }
@@ -70,7 +70,7 @@ test("handleBotMessage creates an AcornOps account link for direct /login", asyn
   });
 
   assert.match(response, /AcornOps account link:/);
-  assert.match(response, /https:\/\/console\.acornops\.dev\/integrations\/mattermost\/link\?token=mmlink_123/);
+  assert.match(response, /https:\/\/console\.acornops\.dev\/integrations\/external-chat\/link\?token=intlink_123/);
   assert.match(response, /This link expires in 10 minutes\./);
   assert.match(response, /No AcornOps password should be typed into Mattermost\./);
 });
@@ -109,7 +109,7 @@ test("handleBotMessage reports login configuration when service token is missing
   });
 
   assert.match(response, /AcornOps login is not configured/);
-  assert.match(response, /MATTERMOST_CHAT_SERVICE_TOKEN/);
+  assert.match(response, /EXTERNAL_INTEGRATION_SERVICE_TOKEN/);
 });
 
 test("handleBotMessage keeps login direct-message only", async () => {
@@ -194,7 +194,7 @@ test("handleBotMessage reports status configuration when service token is missin
   });
 
   assert.match(response, /AcornOps status is not configured/);
-  assert.match(response, /MATTERMOST_CHAT_SERVICE_TOKEN/);
+  assert.match(response, /EXTERNAL_INTEGRATION_SERVICE_TOKEN/);
 });
 
 test("handleBotMessage lists workspaces for a linked direct-message user", async () => {
@@ -311,7 +311,7 @@ test("handleBotMessage reports workspaces configuration when service token is mi
   });
 
   assert.match(response, /AcornOps workspaces are not configured/);
-  assert.match(response, /MATTERMOST_CHAT_SERVICE_TOKEN/);
+  assert.match(response, /EXTERNAL_INTEGRATION_SERVICE_TOKEN/);
 });
 
 test("handleBotMessage tells unlinked users to login before workspaces", async () => {
@@ -350,6 +350,6 @@ test("handleBotMessage reports backend workspace errors without leaking response
 
 function mattermostIdentity() {
   return {
-    mattermostUserId: "mattermost-user-1"
+    externalUserId: "mattermost-user-1"
   };
 }

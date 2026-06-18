@@ -2,7 +2,7 @@
 
 ## Currently Verified
 
-- Final `./init.sh` passed after the June 18 workspace-command work with harness verification, lint, build, and 40 tests.
+- Final `./init.sh` passed after the June 18 external integration contract update with harness verification, lint, build, and 41 tests.
 - Baseline `./init.sh` passed before the June 18 workspace-command work with harness verification, lint, build, and 31 tests.
 - Targeted workspace-command tests passed after implementation: `node --test test/acornops-client.test.js` with 4 tests, `node --test test/bot-message.test.js` with 19 tests, and `node --test test/bot-runner.test.js` with 7 tests.
 - `./scripts/verify-harness.sh` passes.
@@ -11,11 +11,11 @@
 - First Mattermost integration style is selected: dedicated bot account `@acorn-ops-bot`.
 - Bot implementation runtime is Node.js ECMAScript modules with built-in runtime APIs.
 - The bot responds to Mattermost direct messages and channel mentions through REST plus WebSocket events.
-- `login` and `/login` in direct messages call AcornOps `POST /api/v1/auth/chat/integration/link`.
-- `status` and `/status` call AcornOps `POST /api/v1/auth/chat/integration/resolve`.
-- `workspaces` and `/workspaces` in direct messages call AcornOps `GET /api/v1/workspaces?limit=50` using `MATTERMOST_CHAT_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
+- `login` and `/login` in direct messages call AcornOps `POST /api/v1/auth/chat/integration/link` with `{ "externalUserId": "<post author user_id>" }`.
+- `status` and `/status` call AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same external user id.
+- `workspaces` and `/workspaces` in direct messages call AcornOps `GET /api/v1/workspaces?limit=50` using `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
 - `/workspaces` rejects extra arguments and shared-channel use for now.
-- The current AcornOps contract sends only `{ "mattermostUserId": "<post author user_id>" }`.
+- The current AcornOps link and resolve contract sends only `{ "externalUserId": "<post author user_id>" }`.
 - The user reported the updated live Mattermost `login` and `status` flow works after the user-id-only contract update.
 - The bot automatically loads `.env` before reading runtime variables.
 - Runtime defaults live in `src/bot/config.js`; change the bot mention name with `CSIT_MATTERMOST_BOT_USERNAME`.
@@ -25,6 +25,9 @@
 
 ## Changes This Session
 
+- Updated the account-link and resolve contract to use provider-neutral `externalUserId`.
+- Switched runtime setup text to `EXTERNAL_INTEGRATION_SERVICE_TOKEN`, with `MATTERMOST_CHAT_SERVICE_TOKEN` retained as a backward-compatible env fallback.
+- Fixed the startup failure caused by the partial identity rename from `mattermostUserId` to `externalUserId`.
 - Created branch `feat/add-authenticated-commands`.
 - Added `AcornOpsClient.listWorkspaces()` for the provided `GET /api/v1/workspaces` endpoint.
 - Added `/workspaces` direct-message command handling, workspace response formatting, empty-state output, next-cursor display, 401 login guidance, and backend-error handling that avoids echoing response bodies.

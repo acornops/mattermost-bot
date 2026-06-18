@@ -137,7 +137,7 @@ test("handlePostedEvent creates AcornOps account link for direct message login p
       async createMattermostLink(input) {
         assert.deepEqual(input, mattermostIdentity("user-1"));
         return {
-          linkUrl: "https://console.acornops.dev/integrations/mattermost/link?token=mmlink_123",
+          linkUrl: "https://console.acornops.dev/integrations/external-chat/link?token=intlink_123",
           expiresAt: "2026-06-09T00:10:00.000Z"
         };
       }
@@ -164,7 +164,7 @@ test("handlePostedEvent creates AcornOps account link for direct message login p
 
   assert.equal(result.id, "reply-1");
   assert.match(posts[0].message, /AcornOps account link:/);
-  assert.match(posts[0].message, /mmlink_123/);
+  assert.match(posts[0].message, /intlink_123/);
 });
 
 test("handlePostedEvent lists workspaces for direct message posts", async () => {
@@ -227,7 +227,8 @@ test("extractMattermostIdentity reads only observed post author id", () => {
     post: {
       user_id: "mattermost-user-1",
       props: {
-        mattermostUserId: "user-supplied-user-id"
+        externalUserId: "user-supplied-user-id",
+        mattermostUserId: "legacy-user-supplied-user-id"
       }
     }
   }), mattermostIdentity());
@@ -245,9 +246,9 @@ function fakeClient(overrides = {}) {
   };
 }
 
-function mattermostIdentity(mattermostUserId = "mattermost-user-1") {
+function mattermostIdentity(externalUserId = "mattermost-user-1") {
   return {
-    mattermostUserId
+    externalUserId
   };
 }
 

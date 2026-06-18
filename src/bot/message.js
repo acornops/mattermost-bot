@@ -11,7 +11,7 @@ const helpText = [
   "AcornOps bot commands:",
   "- `help` shows this help.",
   "- `login` creates an AcornOps account-link URL.",
-  "- `status` checks whether this Mattermost account is linked to AcornOps.",
+  "- `status` checks whether this external chat account is linked to AcornOps.",
   "- `workspaces` lists AcornOps workspaces available to your linked account.",
   "- `clusters` will list accessible clusters once the backend API exists."
 ].join("\n");
@@ -89,7 +89,7 @@ export async function handleBotMessage({
 
 async function handleLogin({ userId, userName, acornOpsClient, mattermostIdentity }) {
   if (!isAcornOpsChatAuthConfigured(acornOpsClient)) {
-    return "AcornOps login is not configured. Set `ACORNOPS_API_BASE_URL` and `MATTERMOST_CHAT_SERVICE_TOKEN`, then restart the bot.";
+    return "AcornOps login is not configured. Set `ACORNOPS_API_BASE_URL` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN`, then restart the bot.";
   }
 
   const identity = normalizeMattermostIdentity({ mattermostIdentity, userId });
@@ -110,7 +110,7 @@ async function handleLogin({ userId, userName, acornOpsClient, mattermostIdentit
 
 async function handleStatus({ userId, userName, acornOpsClient, mattermostIdentity }) {
   if (!isAcornOpsChatAuthConfigured(acornOpsClient)) {
-    return "AcornOps status is not configured. Set `ACORNOPS_API_BASE_URL` and `MATTERMOST_CHAT_SERVICE_TOKEN`, then restart the bot.";
+    return "AcornOps status is not configured. Set `ACORNOPS_API_BASE_URL` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN`, then restart the bot.";
   }
 
   const identity = normalizeMattermostIdentity({ mattermostIdentity, userId });
@@ -164,7 +164,7 @@ async function handleWorkspaces({
   }
 
   if (!isAcornOpsChatAuthConfigured(acornOpsClient)) {
-    return "AcornOps workspaces are not configured. Set `ACORNOPS_API_BASE_URL` and `MATTERMOST_CHAT_SERVICE_TOKEN`, then restart the bot.";
+    return "AcornOps workspaces are not configured. Set `ACORNOPS_API_BASE_URL` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN`, then restart the bot.";
   }
 
   const identity = normalizeMattermostIdentity({ mattermostIdentity, userId });
@@ -253,7 +253,7 @@ function workspaceErrorText(error) {
   const status = httpStatusFromError(error);
   if (status === 401) {
     return [
-      "AcornOps workspaces could not be loaded because this Mattermost account is not linked or the bot credentials are invalid.",
+      "AcornOps workspaces could not be loaded because this external chat account is not linked or the bot credentials are invalid.",
       "Run `/login` in a direct message, then try `/workspaces` again."
     ].join("\n");
   }
@@ -289,10 +289,10 @@ function commandArguments(text) {
 
 function normalizeMattermostIdentity({ mattermostIdentity, userId }) {
   const identity = {
-    mattermostUserId: mattermostIdentity?.mattermostUserId ?? userId
+    externalUserId: mattermostIdentity?.externalUserId ?? userId
   };
 
-  if (!identity.mattermostUserId) {
+  if (!identity.externalUserId) {
     return null;
   }
 

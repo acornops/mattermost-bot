@@ -17,7 +17,7 @@ export class AcornOpsClient {
 
   async createMattermostLink(identity) {
     if (!this.canUseMattermostChatAuth()) {
-      throw new Error("MATTERMOST_CHAT_SERVICE_TOKEN is required for Mattermost chat auth.");
+      throw new Error("EXTERNAL_INTEGRATION_SERVICE_TOKEN is required for external integration chat auth.");
     }
 
     return this.requestJson("POST", "/api/v1/auth/chat/integration/link", identity, {
@@ -27,7 +27,7 @@ export class AcornOpsClient {
 
   async resolveMattermostLink(identity) {
     if (!this.canUseMattermostChatAuth()) {
-      throw new Error("MATTERMOST_CHAT_SERVICE_TOKEN is required for Mattermost chat auth.");
+      throw new Error("EXTERNAL_INTEGRATION_SERVICE_TOKEN is required for external integration chat auth.");
     }
 
     return this.requestJson("POST", "/api/v1/auth/chat/integration/resolve", identity, {
@@ -37,7 +37,7 @@ export class AcornOpsClient {
 
   async listWorkspaces(identity, { limit = 50, cursor = "", q = "" } = {}) {
     if (!this.canUseMattermostChatAuth()) {
-      throw new Error("MATTERMOST_CHAT_SERVICE_TOKEN is required for Mattermost chat auth.");
+      throw new Error("EXTERNAL_INTEGRATION_SERVICE_TOKEN is required for external integration chat auth.");
     }
 
     const params = new URLSearchParams();
@@ -56,7 +56,7 @@ export class AcornOpsClient {
       {
         serviceAuth: true,
         headers: {
-          "x-acornops-external-user-id": identity.mattermostUserId
+          "x-acornops-external-user-id": identity.externalUserId
         }
       }
     );

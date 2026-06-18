@@ -1,6 +1,6 @@
-# AcornOps Mattermost Account-Link Contract
+# AcornOps External Integration Account-Link Contract
 
-This note records the current bot-facing AcornOps contract for Mattermost account linking.
+This note records the current bot-facing AcornOps contract for external chat account linking.
 
 ## Current Endpoints
 
@@ -8,10 +8,6 @@ The CSIT bot uses only these AcornOps endpoints for account linking:
 
 - `POST /api/v1/auth/chat/integration/link`
 - `POST /api/v1/auth/chat/integration/resolve`
-
-The browser handoff endpoint is owned by AcornOps:
-
-- `GET /api/v1/auth/chat/integration/link/start?token=<mattermost-link-token>`
 
 The bot must not call older transaction or polling endpoints.
 
@@ -21,27 +17,26 @@ The bot needs:
 
 ```env
 ACORNOPS_API_BASE_URL=http://localhost:8081
-MATTERMOST_CHAT_SERVICE_TOKEN=replace-with-strong-secret
+EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-strong-secret
 ```
 
-The token must match the AcornOps control-plane `MATTERMOST_CHAT_SERVICE_TOKEN`.
+The token must match the AcornOps control-plane `EXTERNAL_INTEGRATION_SERVICE_TOKEN`.
 
 ## Mattermost Identity
 
-The request identity must come from the Mattermost event or WebSocket post author:
+The request identity must come from the external chat event or WebSocket post author:
 
 ```json
 {
-  "mattermostUserId": "mattermost-user-id-from-event"
+  "externalUserId": "external-user-id-from-event"
 }
 ```
 
-The bot must not accept Mattermost ids typed by users in chat. Use the
-Mattermost user id observed from the event or websocket context. This contract
-is scoped to a single Mattermost server where Mattermost user ids are unique
-across teams.
+The bot must not accept external user ids typed by users in chat. For the
+Mattermost adapter, use the Mattermost user id observed from the event or
+websocket context as `externalUserId`.
 
-If the bot cannot determine the Mattermost user id without guessing, it should
+If the bot cannot determine the external user id without guessing, it should
 not call AcornOps.
 
 ## Login
@@ -50,15 +45,23 @@ When the user sends `login` or `/login` in a direct message, the bot calls:
 
 ```http
 POST {ACORNOPS_API_BASE_URL}/api/v1/auth/chat/integration/link
-Authorization: Bearer {MATTERMOST_CHAT_SERVICE_TOKEN}
+Authorization: Bearer {EXTERNAL_INTEGRATION_SERVICE_TOKEN}
 Content-Type: application/json
+```
+
+Body:
+
+```json
+{
+  "externalUserId": "external-user-id"
+}
 ```
 
 Successful response:
 
 ```json
 {
-  "linkUrl": "https://console.acornops.dev/integrations/mattermost/link?token=mmlink_...",
+  "linkUrl": "https://console.acornops.dev/integrations/external-chat/link?token=intlink_...",
   "expiresAt": "2026-06-09T00:00:00.000Z"
 }
 ```
@@ -76,8 +79,16 @@ When the user sends `status` or `/status`, the bot calls:
 
 ```http
 POST {ACORNOPS_API_BASE_URL}/api/v1/auth/chat/integration/resolve
-Authorization: Bearer {MATTERMOST_CHAT_SERVICE_TOKEN}
+Authorization: Bearer {EXTERNAL_INTEGRATION_SERVICE_TOKEN}
 Content-Type: application/json
+```
+
+Body:
+
+```json
+{
+  "externalUserId": "external-user-id"
+}
 ```
 
 Linked response:
@@ -108,7 +119,7 @@ Unlinked response:
 
 Bot behavior:
 
-- For `linked`, report that the Mattermost user is linked to AcornOps.
+- For `linked`, report that the external chat user is linked to AcornOps.
 - For `unlinked`, tell the user to run `/login`.
 
 ## Removed Placeholder Flow
@@ -120,4 +131,4 @@ The bot no longer:
 - Builds plain AcornOps OIDC login links.
 - Stores bot-side login state or AcornOps sessions.
 - Mints or accepts bot-side AcornOps user ids.
-- Stores browser sessions, OIDC tokens, refresh tokens, or raw Mattermost link tokens.
+- Stores browser sessions, OIDC tokens, refresh tokens, or raw external chat link tokens.

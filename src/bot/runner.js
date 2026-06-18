@@ -107,7 +107,7 @@ export async function handlePostedEvent({
 
 export function extractMattermostIdentity({ post }) {
   return {
-    mattermostUserId: post.user_id ?? ""
+    externalUserId: post.user_id ?? ""
   };
 }
 

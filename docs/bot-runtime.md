@@ -6,7 +6,7 @@ This note records the bot runtime scaffold decision and the commands a future se
 
 Use Node.js with ECMAScript modules and built-in runtime APIs for the first Mattermost bot-account process.
 
-The first scaffold intentionally avoids Express, Fastify, TypeScript, databases, queues, or third-party Mattermost clients. The dependency-light bot validates Mattermost bot identity, message handling, local command lifecycle, and the AcornOps Mattermost account-link contract.
+The first scaffold intentionally avoids Express, Fastify, TypeScript, databases, queues, or third-party Mattermost clients. The dependency-light bot validates Mattermost bot identity, message handling, local command lifecycle, and the AcornOps external integration account-link contract.
 
 ## Local Commands
 
@@ -54,7 +54,7 @@ CSIT_MATTERMOST_TOKEN=replace-with-bot-token
 CSIT_MATTERMOST_BOT_USERNAME=acorn-ops-bot
 
 ACORNOPS_API_BASE_URL=http://localhost:8081
-MATTERMOST_CHAT_SERVICE_TOKEN=replace-with-acornops-chat-token
+EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-acornops-chat-token
 ```
 
 ## Current Behavior
@@ -65,9 +65,9 @@ MATTERMOST_CHAT_SERVICE_TOKEN=replace-with-acornops-chat-token
 - The bot username defaults to `acorn-ops-bot`, and can be changed in one place at runtime with `CSIT_MATTERMOST_BOT_USERNAME`.
 - The bot posts responses as normal channel messages instead of threaded replies.
 - The bot ignores messages authored by itself.
-- `login` and `/login` in a direct message call AcornOps `POST /api/v1/auth/chat/integration/link` with the Mattermost user id read from the post author.
+- `login` and `/login` in a direct message call AcornOps `POST /api/v1/auth/chat/integration/link` with `externalUserId` set to the Mattermost user id read from the post author.
 - `login` in a shared channel does not call AcornOps; it asks the user to direct-message `@acorn-ops-bot`.
-- `status` and `/status` call AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same Mattermost user id.
+- `status` and `/status` call AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same external user id.
 - `workspaces` and `/workspaces` in a direct message call AcornOps `GET /api/v1/workspaces?limit=50` with the external integration service token and `x-acornops-external-user-id` set to the observed Mattermost post author id.
 - `workspaces` in a shared channel does not call AcornOps; it asks the user to direct-message `@acorn-ops-bot`.
 - The bot does not keep bot-side login state or AcornOps sessions.
@@ -76,7 +76,7 @@ MATTERMOST_CHAT_SERVICE_TOKEN=replace-with-acornops-chat-token
 
 ## Message Flow
 
-1. `src/bot/index.js` loads `.env`, then asks `src/bot/config.js` for `CSIT_MATTERMOST_URL`, `CSIT_MATTERMOST_TOKEN`, `CSIT_MATTERMOST_BOT_USERNAME`, `ACORNOPS_API_BASE_URL`, and `MATTERMOST_CHAT_SERVICE_TOKEN`.
+1. `src/bot/index.js` loads `.env`, then asks `src/bot/config.js` for `CSIT_MATTERMOST_URL`, `CSIT_MATTERMOST_TOKEN`, `CSIT_MATTERMOST_BOT_USERNAME`, `ACORNOPS_API_BASE_URL`, and `EXTERNAL_INTEGRATION_SERVICE_TOKEN`.
 2. `src/bot/mattermost-client.js` uses the shared JSON request helper in `src/bot/http-client.js` and verifies the token with `GET /api/v4/users/me`.
 3. `src/bot/runner.js` opens `/api/v4/websocket` and authenticates the WebSocket connection.
 4. Mattermost emits `posted` events for new messages the bot can see.

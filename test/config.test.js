@@ -24,3 +24,12 @@ test("readBotConfig uses the configured Mattermost bot username", () => {
 
   assert.equal(config.mattermostBotUsername, "renamed-bot");
 });
+
+test("readBotConfig prefers the external integration service token", () => {
+  const config = readBotConfig({
+    EXTERNAL_INTEGRATION_SERVICE_TOKEN: "external-token",
+    MATTERMOST_CHAT_SERVICE_TOKEN: "legacy-token"
+  });
+
+  assert.equal(config.mattermostChatServiceToken, "external-token");
+});

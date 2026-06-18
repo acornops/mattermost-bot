@@ -27,7 +27,7 @@
 - `B01`: Choose and scaffold bot implementation runtime.
 - `B02`: Wire local Mattermost bot account conversation.
 - `B03`: Wire first local AcornOps login command.
-- `B04`: Move login to AcornOps Mattermost account linking.
+- `B04`: Move login to AcornOps external integration account linking.
 - `B05`: Wire authenticated workspace command.
 
 ## In Progress
@@ -36,13 +36,13 @@
 
 ## Known Issues
 
-- `login` direct messages now call AcornOps `POST /api/v1/auth/chat/integration/link` using only the Mattermost post author's `user_id`.
+- `login` direct messages now call AcornOps `POST /api/v1/auth/chat/integration/link` with `externalUserId` set to the Mattermost post author's `user_id`.
 - `status` now calls AcornOps `POST /api/v1/auth/chat/integration/resolve` and reports `linked` or tells unlinked users to run `/login`.
-- `/workspaces` direct messages now call AcornOps `GET /api/v1/workspaces?limit=50` with the external integration service token and `x-acornops-external-user-id` set to the observed Mattermost post author id.
+- `/workspaces` direct messages now call AcornOps `GET /api/v1/workspaces?limit=50` with `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
 - AcornOps renamed the chat auth endpoint prefix on 2026-06-17 to `/auth/chat/integration/`; bot tests now assert the new link and resolve URLs.
-- AcornOps updated the account-link contract on 2026-06-10 to require only `mattermostUserId`, scoped to a single Mattermost server where user ids are unique across teams. The bot no longer needs Mattermost server/team identity context for login/status.
+- AcornOps updated the account-link contract on 2026-06-18 to require `externalUserId`; the Mattermost adapter supplies the observed post author's Mattermost user id as that external id.
 - Bot runtime defaults now live in `src/bot/config.js`; `CSIT_MATTERMOST_BOT_USERNAME` is the runtime source for changing the bot mention name, with `acorn-ops-bot` as the single code fallback.
-- The current AcornOps Mattermost account-link smoke passed after the user-id-only update.
+- The most recent live account-link smoke passed after the earlier user-id-only update; the 2026-06-18 externalUserId rename is covered by automated tests but still needs live smoke.
 - Cluster listing is still a placeholder until authenticated AcornOps cluster APIs are wired.
 - The K3s verification command did not pass during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections.
 - Mattermost is running locally through the official Docker Compose deployment without NGINX.
@@ -257,4 +257,12 @@ Session log entries are historical. Superseded risks and decisions are corrected
 - Completed: Created branch `feat/add-authenticated-commands`. Added `AcornOpsClient.listWorkspaces()` using the external integration service token and `x-acornops-external-user-id` set from the observed Mattermost post author. Added direct-message-only `/workspaces` command handling with no-argument validation, workspace name/plan/quota formatting, empty-state handling, next-cursor display, unlinked 401 guidance, and backend-error handling that avoids echoing response bodies. Updated feature tracking so `B05` is the workspace command and cluster command work remains tracked as `B06`.
 - Verification run: Baseline `./init.sh` passed before work with 31 tests. Targeted tests passed after implementation: `node --test test/acornops-client.test.js` with 4 tests, `node --test test/bot-message.test.js` with 19 tests, and `node --test test/bot-runner.test.js` with 7 tests. Final `./init.sh` passed with harness verification, lint, build, and 40 tests.
 - Known risks: Live Mattermost/AcornOps smoke did not run because Mattermost was not listening on `localhost:8065` and AcornOps was not listening on `localhost:8081`. `/workspaces` is intentionally direct-message-only until a channel-safe workspace disclosure policy exists.
+- Next best action: live-smoke `/workspaces` against the local stack when available, then start `B06`.
+
+### 2026-06-18 - External integration link contract names adopted
+
+- Goal: Update the bot to the AcornOps external integration account-link contract.
+- Completed: Changed link and resolve request bodies from Mattermost-specific `mattermostUserId` to provider-neutral `externalUserId`, sourced only from the observed Mattermost post author id. Updated the workspace external-user header to use the same normalized id. Switched runtime configuration and user-facing setup text to `EXTERNAL_INTEGRATION_SERVICE_TOKEN`, while retaining `MATTERMOST_CHAT_SERVICE_TOKEN` as a backward-compatible local fallback. Updated tests, contract docs, API inventory, decisions, runtime notes, and handoff state.
+- Verification run: Baseline `./init.sh` initially failed with 10 tests because `normalizeMattermostIdentity()` built `externalUserId` but still validated `mattermostUserId`. Targeted verification passed after the fix: `node --test test/acornops-client.test.js test/bot-message.test.js test/bot-runner.test.js test/config.test.js` passed with 33 tests. Final `./init.sh` passed with harness verification, lint, build, and 41 tests.
+- Known risks: Live Mattermost/AcornOps smoke was not run in this workspace; automated tests cover the request body, token env selection, and trusted post-author extraction.
 - Next best action: live-smoke `/workspaces` against the local stack when available, then start `B06`.

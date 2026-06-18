@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AcornOpsClient } from "../src/bot/acornops-client.js";
 
-test("createMattermostLink posts the AcornOps Mattermost identity contract", async () => {
+test("createMattermostLink posts the AcornOps external integration identity contract", async () => {
   const requests = [];
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",
@@ -10,7 +10,7 @@ test("createMattermostLink posts the AcornOps Mattermost identity contract", asy
     fetchImpl: async (url, init) => {
       requests.push({ url, init });
       return new Response(JSON.stringify({
-        linkUrl: "https://console.acornops.dev/integrations/mattermost/link?token=mmlink_123",
+        linkUrl: "https://console.acornops.dev/integrations/external-chat/link?token=intlink_123",
         expiresAt: "2026-06-09T00:10:00.000Z"
       }), {
         status: 200,
@@ -22,7 +22,7 @@ test("createMattermostLink posts the AcornOps Mattermost identity contract", asy
   const response = await client.createMattermostLink(mattermostIdentity());
 
   assert.deepEqual(response, {
-    linkUrl: "https://console.acornops.dev/integrations/mattermost/link?token=mmlink_123",
+    linkUrl: "https://console.acornops.dev/integrations/external-chat/link?token=intlink_123",
     expiresAt: "2026-06-09T00:10:00.000Z"
   });
   assert.equal(requests[0].url, "http://acornops/api/v1/auth/chat/integration/link");
@@ -104,7 +104,7 @@ test("listWorkspaces uses service auth and external user header", async () => {
   assert.equal(requests[0].init.headers["x-acornops-external-user-id"], "mattermost-user-1");
 });
 
-test("Mattermost chat auth requires the service token", async () => {
+test("external integration chat auth requires the service token", async () => {
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",
     fetchImpl: async () => {
@@ -114,17 +114,17 @@ test("Mattermost chat auth requires the service token", async () => {
 
   await assert.rejects(
     client.createMattermostLink(mattermostIdentity()),
-    /MATTERMOST_CHAT_SERVICE_TOKEN/
+    /EXTERNAL_INTEGRATION_SERVICE_TOKEN/
   );
 
   await assert.rejects(
     client.listWorkspaces(mattermostIdentity()),
-    /MATTERMOST_CHAT_SERVICE_TOKEN/
+    /EXTERNAL_INTEGRATION_SERVICE_TOKEN/
   );
 });
 
 function mattermostIdentity() {
   return {
-    mattermostUserId: "mattermost-user-1"
+    externalUserId: "mattermost-user-1"
   };
 }
