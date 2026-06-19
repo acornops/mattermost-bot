@@ -170,6 +170,105 @@ test("listKubernetesClusters uses workspace path query and external user header"
   assert.equal(requests[0].init.headers["x-acornops-external-user-id"], "mattermost-user-1");
 });
 
+test("allowed external bot read endpoints use service auth and external user header", async () => {
+  const requests = [];
+  const client = new AcornOpsClient({
+    baseUrl: "http://acornops/",
+    chatServiceToken: "chat-token",
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  });
+
+  await client.getKubernetesCluster(mattermostIdentity(), "workspace-1", "cluster-1");
+  await client.listKubernetesClusterResources(mattermostIdentity(), "workspace-1", "cluster-1", {
+    namespace: "default"
+  });
+  await client.listKubernetesClusterFindings(mattermostIdentity(), "workspace-1", "cluster-1", {
+    severity: "warning"
+  });
+  await client.listWorkspaceInvestigations(mattermostIdentity(), "workspace-1", {
+    clusterId: "cluster-1"
+  });
+  await client.listVirtualMachines(mattermostIdentity(), "workspace-1", {
+    status: "online"
+  });
+  await client.getVirtualMachine(mattermostIdentity(), "workspace-1", "vm-1");
+  await client.listVirtualMachineResources(mattermostIdentity(), "workspace-1", "vm-1");
+  await client.listVirtualMachineFindings(mattermostIdentity(), "workspace-1", "vm-1");
+
+  assert.deepEqual(requests.map((request) => request.url), [
+    "http://acornops/api/v1/workspaces/workspace-1/kubernetes-clusters/cluster-1",
+    "http://acornops/api/v1/workspaces/workspace-1/kubernetes-clusters/cluster-1/resources?limit=100&namespace=default",
+    "http://acornops/api/v1/workspaces/workspace-1/kubernetes-clusters/cluster-1/findings?limit=50&severity=warning",
+    "http://acornops/api/v1/workspaces/workspace-1/investigations?limit=50&clusterId=cluster-1",
+    "http://acornops/api/v1/workspaces/workspace-1/virtual-machines?limit=50&status=online",
+    "http://acornops/api/v1/workspaces/workspace-1/virtual-machines/vm-1",
+    "http://acornops/api/v1/workspaces/workspace-1/virtual-machines/vm-1/resources",
+    "http://acornops/api/v1/workspaces/workspace-1/virtual-machines/vm-1/findings"
+  ]);
+  for (const request of requests) {
+    assert.equal(request.init.headers.authorization, "Bearer chat-token");
+    assert.equal(request.init.headers["x-acornops-external-user-id"], "mattermost-user-1");
+  }
+});
+
+test("assistant session endpoints always post read-only runs", async () => {
+  const requests = [];
+  const client = new AcornOpsClient({
+    baseUrl: "http://acornops/",
+    chatServiceToken: "chat-token",
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({
+        id: "session-1",
+        message_id: "message-1",
+        run_id: "run-1",
+        items: []
+      }), {
+        status: init.method === "POST" ? 201 : 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  });
+
+  await client.createKubernetesClusterSession(mattermostIdentity(), "workspace-1", "cluster-1", {
+    title: "Investigate Prod"
+  });
+  await client.createTargetSession(mattermostIdentity(), "workspace-1", "vm-1", {
+    title: "Investigate VM"
+  });
+  await client.listKubernetesClusterSessions(mattermostIdentity(), "workspace-1", "cluster-1");
+  await client.listTargetSessions(mattermostIdentity(), "workspace-1", "vm-1");
+  await client.getSession(mattermostIdentity(), "session-1");
+  await client.listSessionMessages(mattermostIdentity(), "session-1");
+  await client.postSessionMessage(mattermostIdentity(), "session-1", {
+    content: "Check health",
+    clientMessageId: "message-key"
+  });
+  await client.getRun(mattermostIdentity(), "run-1");
+
+  assert.deepEqual(requests.map((request) => request.url), [
+    "http://acornops/api/v1/workspaces/workspace-1/kubernetes-clusters/cluster-1/sessions",
+    "http://acornops/api/v1/workspaces/workspace-1/targets/vm-1/sessions",
+    "http://acornops/api/v1/workspaces/workspace-1/kubernetes-clusters/cluster-1/sessions?limit=20",
+    "http://acornops/api/v1/workspaces/workspace-1/targets/vm-1/sessions?limit=20",
+    "http://acornops/api/v1/sessions/session-1",
+    "http://acornops/api/v1/sessions/session-1/messages?limit=100",
+    "http://acornops/api/v1/sessions/session-1/messages",
+    "http://acornops/api/v1/runs/run-1"
+  ]);
+  assert.deepEqual(JSON.parse(requests[6].init.body), {
+    content: "Check health",
+    toolAccessMode: "read_only",
+    clientMessageId: "message-key"
+  });
+});
+
 test("external integration chat auth requires the service token", async () => {
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",

@@ -65,17 +65,23 @@ EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-acornops-chat-token
 - The bot username defaults to `acorn-ops-bot`, and can be changed in one place at runtime with `CSIT_MATTERMOST_BOT_USERNAME`.
 - The bot posts responses as normal channel messages instead of threaded replies.
 - The bot ignores messages authored by itself.
-- `login` and `/login` in a direct message call AcornOps `POST /api/v1/auth/chat/integration/link` with `externalUserId` set to the Mattermost user id read from the post author.
+- Commands are accepted without a leading slash only, for example `clusters`. Slash-prefixed commands return guidance to retry without `/`.
+- `login` in a direct message calls AcornOps `POST /api/v1/auth/chat/integration/link` with `externalUserId` set to the Mattermost user id read from the post author.
 - `login` in a shared channel does not call AcornOps; it asks the user to direct-message `@acorn-ops-bot`.
-- `status` and `/status` call AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same external user id.
-- `workspaces` and `/workspaces` in a direct message call AcornOps `GET /api/v1/workspaces?limit=50` with the external integration service token and `x-acornops-external-user-id` set to the observed Mattermost post author id.
+- `status` calls AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same external user id.
+- `workspaces` calls AcornOps `GET /api/v1/workspaces?limit=50` with the external integration service token and `x-acornops-external-user-id` set to the observed Mattermost post author id.
 - Workspace results are numbered. `workspaces 1` calls AcornOps `GET /api/v1/workspaces/{workspaceId}` for the remembered workspace id and shows details without changing the user's current workspace.
 - `workspace 1` calls AcornOps `GET /api/v1/workspaces/{workspaceId}` for the remembered workspace id, shows details, and updates the user's current workspace.
 - `workspace` shows details for the user's current workspace selection.
-- `clusters` and `/clusters` call AcornOps `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace.
-- `clusters 1` lists clusters for a workspace number from the most recent workspace list and makes it current.
-- `workspaces` in a shared channel does not call AcornOps; it asks the user to direct-message `@acorn-ops-bot`.
-- The bot does not keep bot-side login state or AcornOps sessions. It keeps only process-local command context containing lightweight workspace ids and names.
+- `clusters` calls AcornOps `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace.
+- `clusters 1` calls AcornOps `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters/{clusterId}` for a remembered cluster and shows details without changing the current cluster.
+- `cluster 1` fetches cluster detail and updates the current cluster. Selecting a cluster clears the current VM and current session.
+- `resources` and `findings` list resources or findings for the currently selected cluster or VM.
+- `investigations` lists snapshot-derived investigations for the current workspace.
+- `vms` lists VMs in the current workspace. `vms 1` shows VM detail without selecting it, and `vm 1` selects the current VM. Selecting a VM clears the current cluster and current session.
+- `sessions` lists sessions for the selected cluster or VM. `session new` creates a read-only troubleshooting session for the selected target. `session 1` selects a session. `messages` lists current-session messages. `ask <question>` posts a read-only assistant message and returns the AcornOps message and run ids.
+- Only `login` is direct-message-only. Authenticated read and read-only assistant commands can run in direct messages or channel mentions.
+- The bot does not keep bot-side login state or AcornOps browser sessions. It keeps only process-local command context containing lightweight ids and names for command convenience.
 - `CSIT_MATTERMOST_URL` defaults to `http://localhost:8065`, and `ACORNOPS_API_BASE_URL` defaults to `http://localhost:8081`, the standalone AcornOps control-plane URL.
 
 ## Message Flow
@@ -86,22 +92,29 @@ EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-acornops-chat-token
 4. Mattermost emits `posted` events for new messages the bot can see.
 5. `src/bot/runner.js` extracts the Mattermost user id from the Mattermost post author.
 6. `src/bot/message.js` uses helpers from `src/bot/message-utils.js` to ignore bot-authored posts, accept direct messages, and accept channel posts that mention the configured bot username.
-7. `login` direct messages ask AcornOps to create a short-lived account link and return the `linkUrl` exactly as AcornOps sent it.
-8. `status` asks AcornOps whether the Mattermost identity is durably linked.
-9. `workspaces` direct messages ask AcornOps for the current user's workspace page, format numbered workspace rows, and store the lightweight workspace references in `src/bot/command-context.js`.
-10. `workspaces 1` resolves the number from the remembered list and fetches workspace detail without changing current workspace.
-11. `workspace 1` resolves the number from the remembered list, fetches workspace detail, and stores that workspace as current. `workspace` fetches and shows details for the current workspace.
-12. `clusters` resolves the current workspace, while `clusters 1` resolves a workspace number, then asks AcornOps for the cluster page in that workspace.
-13. `src/bot/mattermost-client.js` posts the response with `POST /api/v4/posts` and no `root_id`, so Mattermost renders it in the main timeline instead of a thread.
+7. Slash-prefixed commands are rejected before dispatch.
+8. `login` direct messages ask AcornOps to create a short-lived account link and return the `linkUrl` exactly as AcornOps sent it.
+9. `status` asks AcornOps whether the Mattermost identity is durably linked.
+10. `workspaces` asks AcornOps for the current user's workspace page, formats numbered workspace rows, and stores lightweight workspace references in `src/bot/command-context.js`.
+11. `workspace 1` selects current workspace and clears current cluster, VM, and session.
+12. `clusters`, `vms`, and related detail commands use the current workspace and update numbered target references.
+13. `cluster 1` and `vm 1` select exactly one current target and clear the previous target plus current session.
+14. `session new` creates a read-only troubleshooting session for the selected target, while `ask <question>` posts a session message with `toolAccessMode: "read_only"`.
+15. `src/bot/mattermost-client.js` posts the response with `POST /api/v4/posts` and no `root_id`, so Mattermost renders it in the main timeline instead of a thread.
 
 ## Command Context
 
-Current workspace state is a Mattermost chat convenience, not an AcornOps concept.
+Current workspace, target, and session state are Mattermost chat conveniences, not AcornOps concepts.
 
 The first implementation uses an in-memory store keyed by external user id. It stores only:
 
 - the most recent workspace list as `{ id, name }` references for numbered commands;
-- the current workspace as `{ id, name }`.
+- the current workspace as `{ id, name }`;
+- the most recent cluster list and current cluster as `{ id, name }`;
+- the most recent VM list and current VM as `{ id, name }`;
+- the most recent session list and current session as `{ id, name }`.
+
+Only one target can be selected at a time. Selecting a workspace clears the current cluster, VM, and session. Selecting a cluster clears the current VM and session. Selecting a VM clears the current cluster and session.
 
 This state resets when the bot process restarts. If the bot becomes multi-replica or restart-resilient, replace `src/bot/command-context.js` with shared TTL storage while keeping the command interface stable.
 

@@ -53,9 +53,17 @@ test("handleBotMessage returns help by default", async () => {
   assert.match(await handleBotMessage({ text: "" }), /clusters/);
 });
 
-test("handleBotMessage creates an AcornOps account link for direct /login", async () => {
+test("handleBotMessage rejects slash-prefixed commands", async () => {
   const response = await handleBotMessage({
-    text: "/login",
+    text: "/status"
+  });
+
+  assert.match(response, /without the slash/);
+});
+
+test("handleBotMessage creates an AcornOps account link for direct login", async () => {
+  const response = await handleBotMessage({
+    text: "login",
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
@@ -133,7 +141,7 @@ test("handleBotMessage keeps login direct-message only", async () => {
 
 test("handleBotMessage status reports linked AcornOps identity", async () => {
   const response = await handleBotMessage({
-    text: "/status",
+    text: "status",
     userId: "mattermost-user-1",
     userName: "alice",
     mattermostIdentity: mattermostIdentity(),
@@ -177,7 +185,7 @@ test("handleBotMessage status tells unlinked users to run login", async () => {
   });
 
   assert.match(response, /Backend authentication: not linked/);
-  assert.match(response, /Run `\/login`/);
+  assert.match(response, /Run `login`/);
 });
 
 test("handleBotMessage reports status configuration when service token is missing", async () => {
@@ -202,7 +210,7 @@ test("handleBotMessage reports status configuration when service token is missin
 test("handleBotMessage lists workspaces for a linked direct-message user", async () => {
   const commandContextStore = createInMemoryCommandContextStore();
   const response = await handleBotMessage({
-    text: "/workspaces",
+    text: "workspaces",
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
@@ -269,7 +277,7 @@ test("handleBotMessage reports no available workspaces", async () => {
   assert.match(response, /No workspaces are available/);
 });
 
-test("handleBotMessage keeps workspaces direct-message only", async () => {
+test("handleBotMessage allows workspace commands from channel mentions", async () => {
   const response = await handleBotMessage({
     text: "@acorn-ops-bot workspaces",
     userId: "user-1",
@@ -277,18 +285,19 @@ test("handleBotMessage keeps workspaces direct-message only", async () => {
     channelType: "O",
     mattermostIdentity: mattermostIdentity(),
     acornOpsClient: {
-      async listWorkspaces() {
-        throw new Error("listWorkspaces should not be called");
+      async listWorkspaces(input) {
+        assert.deepEqual(input, mattermostIdentity());
+        return { items: [] };
       }
     }
   });
 
-  assert.match(response, /direct message/);
+  assert.match(response, /No workspaces are available/);
 });
 
 test("handleBotMessage requires bare workspaces command", async () => {
   const response = await handleBotMessage({
-    text: "/workspaces 1 extra",
+    text: "workspaces 1 extra",
     userId: "mattermost-user-1",
     channelType: "D",
     mattermostIdentity: mattermostIdentity(),
@@ -336,7 +345,7 @@ test("handleBotMessage tells unlinked users to login before workspaces", async (
   });
 
   assert.match(response, /not linked or the bot credentials are invalid/);
-  assert.match(response, /Run `\/login`/);
+  assert.match(response, /Run `login`/);
 });
 
 test("handleBotMessage reports backend workspace errors without leaking response body", async () => {
@@ -398,7 +407,7 @@ test("handleBotMessage shows workspace detail by remembered index without select
   assert.match(response, /Permissions: read_workspace_data/);
   assert.match(response, /Counts: kubernetesClusters 2/);
   assert.doesNotMatch(response, /Current workspace updated/);
-  assert.match(response, /Use `\/workspace 1` to make this the current workspace/);
+  assert.match(response, /Use `workspace 1` to make this the current workspace/);
   assert.equal(commandContextStore.get("mattermost-user-1").currentWorkspace, null);
 });
 
@@ -468,7 +477,7 @@ test("handleBotMessage shows details for current workspace", async () => {
   assert.match(response, /Name: Platform/);
   assert.match(response, /Plan: Team/);
   assert.match(response, /Quota: clusters 2\/3/);
-  assert.match(response, /Use `\/clusters`/);
+  assert.match(response, /Use `clusters`/);
 });
 
 test("handleBotMessage asks for a workspace before clusters", async () => {
@@ -520,17 +529,21 @@ test("handleBotMessage lists clusters in the current workspace", async () => {
     }
   });
 
-  assert.match(response, /AcornOps clusters in Platform \(workspace-1\):/);
+  assert.match(response, /Workspace: Platform \(workspace-1\)/);
+  assert.match(response, /AcornOps clusters:/);
   assert.match(response, /1\. Prod \(cluster-1\) - status: ready, agent: connected, version: v1\.33\.0/);
   assert.match(response, /Next page cursor: cluster-cursor-2/);
 });
 
-test("handleBotMessage lists clusters for a remembered workspace index and selects it", async () => {
+test("handleBotMessage shows cluster detail by remembered index without selecting it", async () => {
   const commandContextStore = createInMemoryCommandContextStore();
-  commandContextStore.rememberWorkspaces("mattermost-user-1", [
-    { id: "workspace-1", name: "Platform" }
+  commandContextStore.selectWorkspace("mattermost-user-1", {
+    id: "workspace-1",
+    name: "Platform"
+  });
+  commandContextStore.rememberClusters("mattermost-user-1", [
+    { id: "cluster-1", name: "Prod" }
   ]);
-
   const response = await handleBotMessage({
     text: "clusters 1",
     userId: "mattermost-user-1",
@@ -538,20 +551,303 @@ test("handleBotMessage lists clusters for a remembered workspace index and selec
     commandContextStore,
     mattermostIdentity: mattermostIdentity(),
     acornOpsClient: {
-      async listKubernetesClusters(input, workspaceId) {
+      async getKubernetesCluster(input, workspaceId, clusterId) {
         assert.deepEqual(input, mattermostIdentity());
         assert.equal(workspaceId, "workspace-1");
-        return { items: [] };
+        assert.equal(clusterId, "cluster-1");
+        return {
+          id: "cluster-1",
+          name: "Prod",
+          status: "online",
+          summary: {
+            resourceCount: 12,
+            findingCount: 1
+          }
+        };
       }
     }
   });
 
-  assert.match(response, /No clusters are available/);
-  assert.deepEqual(commandContextStore.get("mattermost-user-1").currentWorkspace, {
+  assert.match(response, /AcornOps cluster:/);
+  assert.match(response, /Name: Prod/);
+  assert.match(response, /Use `cluster 1`/);
+  assert.equal(commandContextStore.get("mattermost-user-1").currentCluster, null);
+});
+
+test("handleBotMessage selects a cluster and clears VM and session context", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.selectWorkspace("mattermost-user-1", {
     id: "workspace-1",
     name: "Platform"
   });
+  commandContextStore.rememberClusters("mattermost-user-1", [
+    { id: "cluster-1", name: "Prod" }
+  ]);
+  commandContextStore.selectVirtualMachine("mattermost-user-1", {
+    id: "vm-1",
+    name: "App VM"
+  });
+  commandContextStore.selectSession("mattermost-user-1", {
+    id: "session-1",
+    title: "Old session"
+  });
+
+  const response = await handleBotMessage({
+    text: "cluster 1",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      async getKubernetesCluster(input, workspaceId, clusterId) {
+        assert.deepEqual(input, mattermostIdentity());
+        assert.equal(workspaceId, "workspace-1");
+        assert.equal(clusterId, "cluster-1");
+        return {
+          id: "cluster-1",
+          name: "Prod",
+          status: "online"
+        };
+      }
+    }
+  });
+
+  const context = commandContextStore.get("mattermost-user-1");
+  assert.match(response, /Current cluster updated/);
+  assert.deepEqual(context.currentCluster, { id: "cluster-1", name: "Prod" });
+  assert.equal(context.currentVm, null);
+  assert.equal(context.currentSession, null);
 });
+
+test("handleBotMessage lists resources for the selected cluster", async () => {
+  const commandContextStore = selectedClusterContext();
+  const response = await handleBotMessage({
+    text: "resources",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "O",
+    commandContextStore,
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      async listKubernetesClusterResources(input, workspaceId, clusterId) {
+        assert.deepEqual(input, mattermostIdentity());
+        assert.equal(workspaceId, "workspace-1");
+        assert.equal(clusterId, "cluster-1");
+        return {
+          items: [
+            {
+              id: "resource-1",
+              kind: "Pod",
+              name: "payments-api",
+              namespace: "payments",
+              status: "Running"
+            }
+          ]
+        };
+      }
+    }
+  });
+
+  assert.match(response, /Workspace: Platform \(workspace-1\)/);
+  assert.match(response, /Cluster: Prod \(cluster-1\)/);
+  assert.match(response, /AcornOps cluster resources:/);
+  assert.match(response, /payments-api - Pod, namespace: payments, status: Running/);
+});
+
+test("handleBotMessage lists findings for the selected VM", async () => {
+  const commandContextStore = selectedVmContext();
+  const response = await handleBotMessage({
+    text: "findings",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      async listVirtualMachineFindings(input, workspaceId, vmId) {
+        assert.deepEqual(input, mattermostIdentity());
+        assert.equal(workspaceId, "workspace-1");
+        assert.equal(vmId, "vm-1");
+        return [
+          {
+            findingId: "finding-1",
+            severity: "warning",
+            title: "Service attention needed",
+            objectKind: "systemd_service",
+            objectName: "sshd"
+          }
+        ];
+      }
+    }
+  });
+
+  assert.match(response, /VM: App VM \(vm-1\)/);
+  assert.match(response, /AcornOps VM findings:/);
+  assert.match(response, /Service attention needed - severity: warning/);
+});
+
+test("handleBotMessage lists workspace investigations", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.selectWorkspace("mattermost-user-1", {
+    id: "workspace-1",
+    name: "Platform"
+  });
+  const response = await handleBotMessage({
+    text: "investigations",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      async listWorkspaceInvestigations(input, workspaceId) {
+        assert.deepEqual(input, mattermostIdentity());
+        assert.equal(workspaceId, "workspace-1");
+        return {
+          items: [
+            {
+              id: "finding-1",
+              severity: "critical",
+              title: "Pod unhealthy",
+              clusterName: "Prod",
+              namespace: "payments"
+            }
+          ]
+        };
+      }
+    }
+  });
+
+  assert.match(response, /AcornOps investigations:/);
+  assert.match(response, /Pod unhealthy - severity: critical, Prod\/payments/);
+});
+
+test("handleBotMessage lists VMs and selects one", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.selectWorkspace("mattermost-user-1", {
+    id: "workspace-1",
+    name: "Platform"
+  });
+
+  const listResponse = await handleBotMessage({
+    text: "vms",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      async listVirtualMachines(input, workspaceId) {
+        assert.deepEqual(input, mattermostIdentity());
+        assert.equal(workspaceId, "workspace-1");
+        return {
+          items: [
+            {
+              id: "vm-1",
+              name: "App VM",
+              status: "online",
+              hostname: "app.internal"
+            }
+          ]
+        };
+      }
+    }
+  });
+
+  assert.match(listResponse, /AcornOps VMs:/);
+  assert.match(listResponse, /1\. App VM \(vm-1\)/);
+
+  const selectResponse = await handleBotMessage({
+    text: "vm 1",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      async getVirtualMachine(input, workspaceId, vmId) {
+        assert.deepEqual(input, mattermostIdentity());
+        assert.equal(workspaceId, "workspace-1");
+        assert.equal(vmId, "vm-1");
+        return {
+          id: "vm-1",
+          name: "App VM",
+          status: "online"
+        };
+      }
+    }
+  });
+
+  assert.match(selectResponse, /Current VM updated/);
+  assert.deepEqual(commandContextStore.get("mattermost-user-1").currentVm, {
+    id: "vm-1",
+    name: "App VM"
+  });
+  assert.equal(commandContextStore.get("mattermost-user-1").currentCluster, null);
+});
+
+test("handleBotMessage creates session and posts read-only assistant question", async () => {
+  const commandContextStore = selectedClusterContext();
+  const response = await handleBotMessage({
+    text: "ask why is the pod unhealthy?",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      async createKubernetesClusterSession(input, workspaceId, clusterId, body) {
+        assert.deepEqual(input, mattermostIdentity());
+        assert.equal(workspaceId, "workspace-1");
+        assert.equal(clusterId, "cluster-1");
+        assert.match(body.title, /Prod/);
+        return {
+          id: "session-1",
+          title: "Investigate Prod",
+          status: "open",
+          targetType: "kubernetes"
+        };
+      },
+      async postSessionMessage(input, sessionId, body) {
+        assert.deepEqual(input, mattermostIdentity());
+        assert.equal(sessionId, "session-1");
+        assert.equal(body.content, "why is the pod unhealthy?");
+        return {
+          message_id: "message-1",
+          run_id: "run-1"
+        };
+      }
+    }
+  });
+
+  assert.match(response, /AcornOps assistant run:/);
+  assert.match(response, /Run id: run-1/);
+  assert.deepEqual(commandContextStore.get("mattermost-user-1").currentSession, {
+    id: "session-1",
+    name: "Investigate Prod"
+  });
+});
+
+function selectedClusterContext() {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.selectWorkspace("mattermost-user-1", {
+    id: "workspace-1",
+    name: "Platform"
+  });
+  commandContextStore.selectCluster("mattermost-user-1", {
+    id: "cluster-1",
+    name: "Prod"
+  });
+  return commandContextStore;
+}
+
+function selectedVmContext() {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.selectWorkspace("mattermost-user-1", {
+    id: "workspace-1",
+    name: "Platform"
+  });
+  commandContextStore.selectVirtualMachine("mattermost-user-1", {
+    id: "vm-1",
+    name: "App VM"
+  });
+  return commandContextStore;
+}
 
 function mattermostIdentity() {
   return {

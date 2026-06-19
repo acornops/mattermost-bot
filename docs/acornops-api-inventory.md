@@ -157,7 +157,7 @@ Internal execution endpoints exist under `/internal/v1` when internal transport 
 
 The older proposed Mattermost chat-login transaction flow has been superseded. The bot no longer creates AcornOps OIDC URLs, stores pending login state, polls transaction ids, or receives AcornOps session tokens.
 
-The CSIT bot exposes `login` and `/login` in Mattermost. Those commands call AcornOps to create a short-lived external chat browser link:
+The CSIT bot exposes `login` in Mattermost. That command calls AcornOps to create a short-lived external chat browser link:
 
 - `POST /api/v1/auth/chat/integration/link`
   - Auth: `Authorization: Bearer {EXTERNAL_INTEGRATION_SERVICE_TOKEN}`.
@@ -172,7 +172,7 @@ The browser opens the returned management-console URL:
   - Auth: browser session or OIDC flow as needed.
   - Behavior: the console preserves the token through sign-in and completes linking only after the signed-in user approves the account link.
 
-The CSIT bot exposes `status` and `/status` in Mattermost. Those commands call AcornOps to resolve the durable link:
+The CSIT bot exposes `status` in Mattermost. That command calls AcornOps to resolve the durable link:
 
 - `POST /api/v1/auth/chat/integration/resolve`
   - Auth: `Authorization: Bearer {EXTERNAL_INTEGRATION_SERVICE_TOKEN}`.
@@ -180,7 +180,7 @@ The CSIT bot exposes `status` and `/status` in Mattermost. Those commands call A
   - Request: `{ "externalUserId": "external-user-id-from-event" }`.
   - Response: `{ "status": "linked", ... }` or `{ "status": "unlinked" }`.
   - Linked response includes AcornOps user metadata and link timestamps.
-  - Bot behavior: report linked AcornOps identity for `linked`; tell the user to run `/login` for `unlinked`.
+  - Bot behavior: report linked AcornOps identity for `linked`; tell the user to run `login` in a direct message for `unlinked`.
 
 The request body intentionally includes only `externalUserId`. The Mattermost adapter must set that value from the Mattermost event or WebSocket post author, never from user-supplied chat text.
 

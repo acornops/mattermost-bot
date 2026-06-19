@@ -14,7 +14,7 @@
 - Mattermost readiness verification path: `./scripts/verify-mattermost.sh`
 - Bot verification path: `./scripts/verify-bot.sh`
 - Highest priority unfinished feature: none recorded.
-- Current blocker: live Mattermost/AcornOps smoke for authenticated workspace and cluster commands still requires local services.
+- Current blocker: live Mattermost/AcornOps smoke for the expanded external integration command surface still requires local services.
 
 ## Completed
 
@@ -30,6 +30,7 @@
 - `B04`: Move login to AcornOps external integration account linking.
 - `B05`: Wire authenticated workspace command.
 - `B06`: Wire authenticated workspace detail and cluster commands.
+- `B07`: Wire expanded external integration read and assistant commands.
 
 ## In Progress
 
@@ -38,25 +39,29 @@
 ## Known Issues
 
 - `login` direct messages now call AcornOps `POST /api/v1/auth/chat/integration/link` with `externalUserId` set to the Mattermost post author's `user_id`.
-- `status` now calls AcornOps `POST /api/v1/auth/chat/integration/resolve` and reports `linked` or tells unlinked users to run `/login`.
-- `/workspaces` direct messages now call AcornOps `GET /api/v1/workspaces?limit=50` with `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
-- `/workspaces` returns numbered workspace rows. `/workspaces 1` calls `GET /api/v1/workspaces/{workspaceId}` and shows detail without changing the current workspace.
-- `/workspace 1` calls `GET /api/v1/workspaces/{workspaceId}`, shows detail, and makes that workspace current for the user.
-- `/workspace` shows full details for the current process-local workspace selection.
-- `/clusters` calls `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace, while `/clusters 1` uses a workspace number from the last `/workspaces` result.
+- `status` now calls AcornOps `POST /api/v1/auth/chat/integration/resolve` and reports `linked` or tells unlinked users to run `login`.
+- The bot accepts commands without a leading slash only. Slash-prefixed commands return guidance to retry without `/`.
+- Only `login` is direct-message-only. Authenticated read and read-only assistant commands can run in direct messages or channel mentions.
+- `workspaces` calls AcornOps `GET /api/v1/workspaces?limit=50` with `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
+- `workspaces` returns numbered workspace rows. `workspaces 1` calls `GET /api/v1/workspaces/{workspaceId}` and shows detail without changing the current workspace.
+- `workspace 1` calls `GET /api/v1/workspaces/{workspaceId}`, shows detail, and makes that workspace current for the user.
+- `workspace` shows full details for the current process-local workspace selection.
+- `clusters` calls `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace. `clusters 1` shows cluster detail without selecting it, and `cluster 1` selects the current cluster.
+- `resources` and `findings` use the currently selected cluster or VM. `investigations` uses the current workspace. `vms` lists VMs, `vms 1` shows VM detail, and `vm 1` selects the current VM.
+- `sessions`, `session new`, `session 1`, `messages`, and `ask <question>` use read-only assistant-session endpoints for the selected cluster or VM.
 - AcornOps renamed the chat auth endpoint prefix on 2026-06-17 to `/auth/chat/integration/`; bot tests now assert the new link and resolve URLs.
 - AcornOps updated the account-link contract on 2026-06-18 to require `externalUserId`; the Mattermost adapter supplies the observed post author's Mattermost user id as that external id.
 - Bot runtime defaults now live in `src/bot/config.js`; `CSIT_MATTERMOST_BOT_USERNAME` is the runtime source for changing the bot mention name, with `acorn-ops-bot` as the single code fallback.
 - The most recent live account-link smoke passed after the earlier user-id-only update; the 2026-06-18 externalUserId rename is covered by automated tests but still needs live smoke.
-- The bot remembers only lightweight workspace command context in memory; it does not store AcornOps sessions, cookies, or tokens per user. The context resets when the bot process restarts.
+- The bot remembers only lightweight command context in memory: numbered workspaces, clusters, VMs, sessions, current workspace, one selected target, and current session. It does not store AcornOps browser sessions, cookies, tokens, or link URLs. The context resets when the bot process restarts.
 - The K3s verification command did not pass during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections.
 - Mattermost is running locally through the official Docker Compose deployment without NGINX.
 - Mattermost and K3s remain explicit local services; `./init.sh` verifies repo and bot code but does not start Docker Compose or k3d.
 
 ## Next Steps
 
-1. Run live Mattermost/AcornOps smoke for `/workspaces`, `/workspaces 1`, `/workspace`, and `/clusters` when the local stack is available.
-2. Add repeatable live-smoke notes for `login`, `status`, `workspaces`, workspace detail, and clusters if local service command output becomes available.
+1. Run live Mattermost/AcornOps smoke for `workspaces`, `workspace 1`, `clusters`, `cluster 1`, `resources`, `findings`, `vms`, `vm 1`, `sessions`, `session new`, `messages`, and `ask <question>` when the local stack is available.
+2. Add repeatable live-smoke notes for `login`, `status`, workspace, target, and session commands if local service command output becomes available.
 3. Decide whether process-local command context is enough or whether shared TTL storage is needed before any multi-replica bot deployment.
 
 ## Session Log
@@ -287,3 +292,11 @@ Session log entries are historical. Superseded risks and decisions are corrected
 - Verification run: Baseline `./init.sh` passed before work with 52 tests. Targeted tests passed after the behavior change: `node --test test/bot-message.test.js` passed with 25 tests and `node --test test/bot-runner.test.js` passed with 8 tests. Final `./init.sh` passed with harness verification, lint, build, and 53 tests.
 - Known risks: Live Mattermost/AcornOps smoke still has not run in this workspace because the local services are not available here.
 - Next best action: live-smoke `/workspaces`, `/workspaces 1`, `/workspace 1`, `/workspace`, and `/clusters` when the local stack is available.
+
+### 2026-06-19 - Expanded external integration command surface wired
+
+- Goal: Implement the updated bot command plan from the external integration endpoint contract.
+- Completed: Changed command parsing so only commands without a leading slash are accepted. Kept `login` direct-message-only and allowed other authenticated read/read-only assistant commands from direct messages or channel mentions. Added AcornOps client support for cluster detail, cluster resources, cluster findings, workspace investigations, VMs, VM resources/findings, target sessions, session metadata/messages, read-only assistant message posting, and run lookup. Expanded process-local command context to track numbered clusters, VMs, and sessions; current workspace; exactly one selected target; and current session. Selecting a workspace clears target/session context, and selecting a cluster or VM clears the other target plus session. Added `cluster`, `resources`, `findings`, `investigations`, `vms`, `vm`, `sessions`, `session new`, `session`, `messages`, and `ask`.
+- Verification run: Focused verification passed with `node --test test/acornops-client.test.js test/command-context.test.js test/bot-message.test.js` reporting 45 passing tests. Final `./init.sh` passed with harness verification, lint, build, and 64 tests.
+- Known risks: Live Mattermost/AcornOps smoke still has not run in this workspace because the local services are not available here. Assistant run observation beyond returning the run id is not yet user-facing.
+- Next best action: live-smoke the plain command surface against local Mattermost and AcornOps when the stack is available.

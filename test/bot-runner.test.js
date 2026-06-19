@@ -89,7 +89,7 @@ test("handlePostedEvent responds to direct message posts in the main timeline", 
   assert.equal(posts[0].rootId, undefined);
   assert.match(posts[0].message, /alice \(user-1\)/);
   assert.match(posts[0].message, /not linked/);
-  assert.match(posts[0].message, /Run `\/login`/);
+  assert.match(posts[0].message, /Run `login`/);
 });
 
 test("handlePostedEvent skips unmentioned channel posts", async () => {
@@ -211,7 +211,7 @@ test("handlePostedEvent lists workspaces for direct message posts", async () => 
           id: "post-1",
           channel_id: "channel-1",
           user_id: "user-1",
-          message: "/workspaces"
+          message: "workspaces"
         })
       }
     },
@@ -275,7 +275,7 @@ test("handlePostedEvent reuses workspace context across direct message posts", a
       id: "bot",
       username: "acorn-ops-bot"
     },
-    event: postedEvent("user-1", "/workspaces"),
+    event: postedEvent("user-1", "workspaces"),
     logger: quietLogger()
   });
   await handlePostedEvent({
@@ -286,7 +286,7 @@ test("handlePostedEvent reuses workspace context across direct message posts", a
       id: "bot",
       username: "acorn-ops-bot"
     },
-    event: postedEvent("user-1", "/workspace 1"),
+    event: postedEvent("user-1", "workspace 1"),
     logger: quietLogger()
   });
   const result = await handlePostedEvent({
@@ -297,13 +297,13 @@ test("handlePostedEvent reuses workspace context across direct message posts", a
       id: "bot",
       username: "acorn-ops-bot"
     },
-    event: postedEvent("user-1", "/clusters"),
+    event: postedEvent("user-1", "clusters"),
     logger: quietLogger()
   });
 
   assert.equal(result.id, "reply-3");
   assert.match(posts[1].message, /Current workspace updated/);
-  assert.match(posts[2].message, /AcornOps clusters in Platform \(workspace-1\):/);
+  assert.match(posts[2].message, /AcornOps clusters:/);
   assert.match(posts[2].message, /Prod \(cluster-1\)/);
 });
 

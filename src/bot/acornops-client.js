@@ -72,6 +72,18 @@ export class AcornOpsClient {
     );
   }
 
+  async listWorkspaceInvestigations(
+    identity,
+    workspaceId,
+    { limit = 50, cursor = "", q = "", severity = "", clusterId = "", namespace = "" } = {}
+  ) {
+    return this.getExternalPage(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/investigations`,
+      { limit, cursor, q, severity, clusterId, namespace }
+    );
+  }
+
   async listKubernetesClusters(
     identity,
     workspaceId,
@@ -103,6 +115,182 @@ export class AcornOpsClient {
         headers: this.externalUserHeaders(identity)
       }
     );
+  }
+
+  async getKubernetesCluster(identity, workspaceId, clusterId) {
+    return this.getExternalResource(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/kubernetes-clusters/${encodeURIComponent(clusterId)}`
+    );
+  }
+
+  async listKubernetesClusterResources(
+    identity,
+    workspaceId,
+    clusterId,
+    { limit = 100, cursor = "", q = "", family = "", kind = "", namespace = "", health = "" } = {}
+  ) {
+    return this.getExternalPage(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/kubernetes-clusters/${encodeURIComponent(clusterId)}/resources`,
+      { limit, cursor, q, family, kind, namespace, health }
+    );
+  }
+
+  async listKubernetesClusterFindings(
+    identity,
+    workspaceId,
+    clusterId,
+    { limit = 50, cursor = "", q = "", severity = "", namespace = "" } = {}
+  ) {
+    return this.getExternalPage(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/kubernetes-clusters/${encodeURIComponent(clusterId)}/findings`,
+      { limit, cursor, q, severity, namespace }
+    );
+  }
+
+  async listVirtualMachines(
+    identity,
+    workspaceId,
+    { limit = 50, cursor = "", q = "", status = "" } = {}
+  ) {
+    return this.getExternalPage(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/virtual-machines`,
+      { limit, cursor, q, status }
+    );
+  }
+
+  async getVirtualMachine(identity, workspaceId, vmId) {
+    return this.getExternalResource(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/virtual-machines/${encodeURIComponent(vmId)}`
+    );
+  }
+
+  async listVirtualMachineResources(identity, workspaceId, vmId) {
+    return this.getExternalResource(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/virtual-machines/${encodeURIComponent(vmId)}/resources`
+    );
+  }
+
+  async listVirtualMachineFindings(identity, workspaceId, vmId) {
+    return this.getExternalResource(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/virtual-machines/${encodeURIComponent(vmId)}/findings`
+    );
+  }
+
+  async listKubernetesClusterSessions(
+    identity,
+    workspaceId,
+    clusterId,
+    { limit = 20, cursor = "", q = "", status = "" } = {}
+  ) {
+    return this.getExternalPage(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/kubernetes-clusters/${encodeURIComponent(clusterId)}/sessions`,
+      { limit, cursor, q, status }
+    );
+  }
+
+  async listTargetSessions(
+    identity,
+    workspaceId,
+    targetId,
+    { limit = 20, cursor = "", q = "", status = "" } = {}
+  ) {
+    return this.getExternalPage(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/targets/${encodeURIComponent(targetId)}/sessions`,
+      { limit, cursor, q, status }
+    );
+  }
+
+  async createKubernetesClusterSession(identity, workspaceId, clusterId, { title }) {
+    return this.postExternalResource(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/kubernetes-clusters/${encodeURIComponent(clusterId)}/sessions`,
+      { title }
+    );
+  }
+
+  async createTargetSession(identity, workspaceId, targetId, { title }) {
+    return this.postExternalResource(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/targets/${encodeURIComponent(targetId)}/sessions`,
+      { title }
+    );
+  }
+
+  async getSession(identity, sessionId) {
+    return this.getExternalResource(identity, `/api/v1/sessions/${encodeURIComponent(sessionId)}`);
+  }
+
+  async listSessionMessages(identity, sessionId, { limit = 100, cursor = "" } = {}) {
+    return this.getExternalPage(
+      identity,
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/messages`,
+      { limit, cursor }
+    );
+  }
+
+  async postSessionMessage(identity, sessionId, { content, clientMessageId }) {
+    return this.postExternalResource(
+      identity,
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/messages`,
+      {
+        content,
+        toolAccessMode: "read_only",
+        clientMessageId
+      }
+    );
+  }
+
+  async getRun(identity, runId) {
+    return this.getExternalResource(identity, `/api/v1/runs/${encodeURIComponent(runId)}`);
+  }
+
+  async getExternalPage(identity, path, query = {}) {
+    this.requireExternalIntegrationAuth();
+
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== "" && value !== undefined && value !== null) {
+        params.set(key, String(value));
+      }
+    }
+
+    const queryString = params.toString();
+    return this.requestJson(
+      "GET",
+      queryString ? `${path}?${queryString}` : path,
+      undefined,
+      {
+        serviceAuth: true,
+        headers: this.externalUserHeaders(identity)
+      }
+    );
+  }
+
+  async getExternalResource(identity, path) {
+    this.requireExternalIntegrationAuth();
+
+    return this.requestJson("GET", path, undefined, {
+      serviceAuth: true,
+      headers: this.externalUserHeaders(identity)
+    });
+  }
+
+  async postExternalResource(identity, path, body) {
+    this.requireExternalIntegrationAuth();
+
+    return this.requestJson("POST", path, body, {
+      serviceAuth: true,
+      headers: this.externalUserHeaders(identity)
+    });
   }
 
   async requestJson(method, path, body, options = {}) {

@@ -14,6 +14,7 @@ The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/con
 6. Local AcornOps login command.
 7. OIDC-backed Mattermost login link.
 8. AcornOps-backed external integration account linking with `link` and `resolve`.
+9. Expanded AcornOps read and read-only assistant commands through the external integration credential.
 
 ## Current Learning Path
 
@@ -37,7 +38,8 @@ The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/con
 - Use AcornOps `POST /api/v1/auth/chat/integration/link` for `login`.
 - Use AcornOps `POST /api/v1/auth/chat/integration/resolve` for `status`.
 - Keep Mattermost identity values sourced from events, not user-supplied chat text.
-- Wire cluster-listing responses after the authenticated identity model is settled.
+- Accept plain commands without a leading slash. Keep `login` direct-message-only; allow authenticated read and read-only assistant commands from direct messages or channel mentions.
+- Use process-local command context for the current workspace, one selected cluster or VM, and current troubleshooting session.
 
 ## Initial Stack
 
@@ -52,7 +54,7 @@ The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/con
 
 - Local development topology: all Docker Compose, K3s-hosted services, or hybrid.
 - How much cluster-management behavior should be mocked before authenticated AcornOps cluster APIs are wired.
-- Whether authentication-sensitive actions should be direct-message only, even if general status/help works in channel mentions.
+- Whether process-local command context should move to shared TTL storage before any multi-replica bot deployment.
 
 ## Official References
 

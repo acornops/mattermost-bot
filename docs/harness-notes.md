@@ -33,4 +33,4 @@ The product goal, local learning stack, and first bot runtime are now selected. 
 4. Adding module-level docs near code as the architecture grows.
 5. Adding repeatable end-to-end checks for cross-component behavior when they can run without leaking local secrets.
 
-The immediate next product path is to live-smoke authenticated workspace listing, workspace detail, current-workspace, and cluster-listing commands against the local Mattermost and AcornOps stack.
+The immediate next product path is to live-smoke the expanded plain-command surface against the local Mattermost and AcornOps stack, especially workspace selection, cluster/VM selection, resources, findings, sessions, and read-only `ask` runs.

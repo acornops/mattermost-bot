@@ -2,6 +2,7 @@
 
 ## Currently Verified
 
+- Final `./init.sh` passed after the June 19 expanded external integration command work with harness verification, lint, build, and 64 tests.
 - Final `./init.sh` passed after the June 19 workspace-detail behavior clarification with harness verification, lint, build, and 53 tests.
 - Final `./init.sh` passed after the June 19 workspace-context and cluster-command work with harness verification, lint, build, and 52 tests.
 - Final `./init.sh` passed after the June 18 external integration contract update with harness verification, lint, build, and 41 tests.
@@ -15,22 +16,27 @@
 - First Mattermost integration style is selected: dedicated bot account `@acorn-ops-bot`.
 - Bot implementation runtime is Node.js ECMAScript modules with built-in runtime APIs.
 - The bot responds to Mattermost direct messages and channel mentions through REST plus WebSocket events.
-- `login` and `/login` in direct messages call AcornOps `POST /api/v1/auth/chat/integration/link` with `{ "externalUserId": "<post author user_id>" }`.
-- `status` and `/status` call AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same external user id.
-- `workspaces` and `/workspaces` in direct messages call AcornOps `GET /api/v1/workspaces?limit=50` using `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
-- `/workspaces` returns numbered workspace rows and remembers lightweight `{ id, name }` references per external user id.
-- `/workspaces 1` calls `GET /api/v1/workspaces/{workspaceId}` and shows detail without changing the current workspace.
-- `/workspace 1` calls `GET /api/v1/workspaces/{workspaceId}`, shows detail, and makes that workspace current.
-- `/workspace` calls `GET /api/v1/workspaces/{workspaceId}` and shows full details for the current workspace.
-- `/clusters` calls `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace; `/clusters 1` uses a remembered workspace number and makes it current.
+- The bot accepts commands without a leading slash only. Slash-prefixed commands return guidance to retry without `/`.
+- `login` in direct messages calls AcornOps `POST /api/v1/auth/chat/integration/link` with `{ "externalUserId": "<post author user_id>" }`.
+- `status` calls AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same external user id.
+- Only `login` is direct-message-only. Authenticated read and read-only assistant commands can run in direct messages or channel mentions.
+- `workspaces` calls AcornOps `GET /api/v1/workspaces?limit=50` using `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
+- `workspaces` returns numbered workspace rows and remembers lightweight `{ id, name }` references per external user id.
+- `workspaces 1` calls `GET /api/v1/workspaces/{workspaceId}` and shows detail without changing the current workspace.
+- `workspace 1` calls `GET /api/v1/workspaces/{workspaceId}`, shows detail, makes that workspace current, and clears current target/session context.
+- `workspace` calls `GET /api/v1/workspaces/{workspaceId}` and shows full details for the current workspace.
+- `clusters` calls `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace; `clusters 1` shows cluster detail without selecting it; `cluster 1` selects the current cluster.
+- `resources` and `findings` use the currently selected cluster or VM. `investigations` uses the current workspace.
+- `vms` lists current-workspace VMs; `vms 1` shows VM detail without selecting it; `vm 1` selects the current VM.
+- `sessions`, `session new`, `session 1`, `messages`, and `ask <question>` are wired to read-only assistant-session endpoints for the selected cluster or VM.
 - The current AcornOps link and resolve contract sends only `{ "externalUserId": "<post author user_id>" }`.
 - The user reported the updated live Mattermost `login` and `status` flow works after the user-id-only contract update.
 - The bot automatically loads `.env` before reading runtime variables.
 - Runtime defaults live in `src/bot/config.js`; change the bot mention name with `CSIT_MATTERMOST_BOT_USERNAME`.
 - Mattermost and AcornOps API clients share JSON fetch/error handling through `src/bot/http-client.js`.
 - The bot no longer uses `src/bot/auth-store.js`, bot-side login state, transaction polling, plain OIDC link construction, or AcornOps `dev-login` for command login.
-- The bot uses `src/bot/command-context.js` for process-local workspace list/current workspace memory. It stores only workspace ids and names and resets on restart.
-- `B05` authenticated workspace command and `B06` authenticated workspace detail/cluster commands are implemented with targeted tests passing.
+- The bot uses `src/bot/command-context.js` for process-local command memory. It stores only lightweight ids/names for workspaces, clusters, VMs, and sessions and resets on restart.
+- `B05` authenticated workspace command, `B06` authenticated workspace detail/cluster commands, and `B07` expanded external integration read/assistant commands are implemented with automated tests passing.
 
 ## Changes This Session
 
@@ -44,17 +50,23 @@
 - Added process-local command context plus `/workspaces 1`, `/workspace`, `/workspace 1`, `/clusters`, and `/clusters 1`.
 - Clarified workspace detail behavior: `/workspaces 1` is read-only, `/workspace 1` selects current workspace, and `/workspace` renders current workspace details.
 - Updated `feature_list.json`, `PROGRESS.md`, `DECISIONS.md`, and `docs/bot-runtime.md` for workspace detail, current-workspace context, and cluster-listing behavior.
+- Implemented the expanded external integration command surface from the updated endpoint contract.
+- Changed command parsing to reject slash-prefixed commands.
+- Kept only `login` direct-message-only; other authenticated read/read-only assistant commands can run from channel mentions.
+- Added client methods and message handlers for cluster detail, resources, findings, investigations, VMs, sessions, messages, and read-only `ask` runs.
+- Expanded command context so only one cluster or VM can be selected at a time, and parent selection changes clear dependent session state.
 
 ## Still Broken Or Unverified
 
 - The exact Mattermost post ids and AcornOps response snippets from the passing live account-link smoke are not recorded in this repository.
-- Live Mattermost/AcornOps smoke for workspace detail and cluster commands did not run because Mattermost was not listening on `localhost:8065` and AcornOps was not listening on `localhost:8081`.
+- Live Mattermost/AcornOps smoke for the expanded command surface did not run because Mattermost was not listening on `localhost:8065` and AcornOps was not listening on `localhost:8081`.
 - The current workspace context is process-local. Use shared TTL storage later if multi-replica or restart-resilient command context becomes necessary.
+- Assistant run observation beyond returning the run id is not yet user-facing.
 - The local Mattermost bot token must stay outside committed files.
 
 ## Next Best Action
 
-Live-smoke `/workspaces`, `/workspaces 1`, `/workspace 1`, `/workspace`, and `/clusters` against local Mattermost and AcornOps when the stack is available.
+Live-smoke `workspaces`, `workspace 1`, `clusters`, `cluster 1`, `resources`, `findings`, `vms`, `vm 1`, `sessions`, `session new`, `messages`, and `ask <question>` against local Mattermost and AcornOps when the stack is available.
 
 ## Commands
 

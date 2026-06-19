@@ -116,3 +116,9 @@
 - Decision: Store the last workspace list and current workspace in a small in-memory context keyed by external user id.
 - Reason: AcornOps has no current-workspace concept, but chat users need a simple way to say `/workspace 1` and then `/clusters`. Process-local memory is the smallest useful implementation for the current single-process local bot.
 - Consequence: The context stores only workspace ids and display names, not AcornOps sessions or browser credentials. It resets when the bot restarts and is not safe for multi-replica deployments. If the bot becomes multi-replica or needs restart-resilient selection, replace this store with shared TTL storage behind the same command-context interface.
+
+## 2026-06-19: Use plain commands and one selected target
+
+- Decision: Accept bot commands without a leading slash only, keep `login` direct-message-only, and allow authenticated read/read-only assistant commands from direct messages or channel mentions.
+- Reason: The Mattermost bot-account experience should be conversational and should not look like a slash-command integration. Non-login commands are explicitly allowed in mentioned channels by the requested command model.
+- Consequence: Slash-prefixed commands return guidance to retry without `/`. The process-local command context now tracks current workspace plus exactly one selected target: either a Kubernetes cluster or a VM. Selecting a workspace clears target and session context; selecting a cluster clears VM and session context; selecting a VM clears cluster and session context.

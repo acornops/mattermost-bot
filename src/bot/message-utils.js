@@ -1,7 +1,7 @@
 import { DEFAULT_MATTERMOST_BOT_USERNAME } from "./config.js";
 
 export function firstCommandWord(text) {
-  return text.trim().split(/\s+/, 1)[0]?.toLowerCase().replace(/^\/+/, "") ?? "";
+  return text.trim().split(/\s+/, 1)[0]?.toLowerCase() ?? "";
 }
 
 export function normalizeBotText(text, botUsername = DEFAULT_MATTERMOST_BOT_USERNAME) {

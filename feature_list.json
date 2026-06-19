@@ -218,14 +218,14 @@
       "priority": 11,
       "area": "bot",
       "title": "Wire authenticated workspace command",
-      "user_visible_behavior": "A linked Mattermost user can direct-message @acorn-ops-bot with /workspaces and receive workspace summaries backed by AcornOps authorization.",
+      "user_visible_behavior": "A linked Mattermost user can ask @acorn-ops-bot for workspaces and receive workspace summaries backed by AcornOps authorization.",
       "status": "passing",
       "verification": {
         "command": "./init.sh plus local AcornOps workspace-command smoke",
         "steps": [
           "Call GET /api/v1/workspaces with the external integration service token.",
           "Send x-acornops-external-user-id using the Mattermost post author's user id.",
-          "Keep authentication-sensitive flows direct-message first unless a channel-safe response is explicitly designed.",
+          "Keep login direct-message-only; later command policy is tracked by B07.",
           "Return workspace names, plan, quota, empty-state, and pagination cursor details to the user.",
           "Add automated tests for linked, unlinked, and backend-error responses.",
           "Run ./init.sh.",
@@ -233,7 +233,7 @@
         ]
       },
       "evidence": "On 2026-06-18, added AcornOpsClient.listWorkspaces() for GET /api/v1/workspaces?limit=50 with Authorization Bearer EXTERNAL_INTEGRATION_SERVICE_TOKEN and x-acornops-external-user-id set from the observed Mattermost post author. Added /workspaces direct-message command handling, no-argument validation, workspace summary formatting, empty-state output, direct-message channel guard, 401 login guidance, and backend-error handling that does not echo response bodies. Targeted tests passed: node --test test/acornops-client.test.js with 4 tests, node --test test/bot-message.test.js with 19 tests, and node --test test/bot-runner.test.js with 7 tests. Final ./init.sh passed with harness verification, lint, build, and 40 tests. Later on 2026-06-18, token naming moved to EXTERNAL_INTEGRATION_SERVICE_TOKEN and listWorkspaces uses the normalized externalUserId for x-acornops-external-user-id; ./init.sh passed with 41 tests after the external integration contract update. Live smoke did not run because Mattermost was not listening on localhost:8065 and AcornOps was not listening on localhost:8081.",
-      "notes": "Depends on B04. The command intentionally remains direct-message-only until a channel-safe workspace disclosure policy is designed."
+      "notes": "Depends on B04. Historical first workspace implementation was direct-message-only; B07 later allows authenticated read commands from channel mentions."
     },
     {
       "id": "B06",
@@ -249,18 +249,42 @@
           "Add GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters support for cluster listing.",
           "Use the verified external integration identity to authorize workspace detail and cluster access.",
           "Remember the last workspace list and current workspace per external user id inside the bot process.",
-          "Allow /workspaces 1 to fetch detail without changing the current workspace.",
-          "Allow /workspace 1 to fetch detail and update the current workspace.",
-          "Allow /workspace to fetch details for the current workspace.",
-          "Allow /clusters to use the current workspace and /clusters 1 to use a remembered workspace index.",
-          "Keep authentication-sensitive flows direct-message first unless a channel-safe response is explicitly designed.",
+          "Allow workspaces 1 to fetch detail without changing the current workspace.",
+          "Allow workspace 1 to fetch detail and update the current workspace.",
+          "Allow workspace to fetch details for the current workspace.",
+          "Allow clusters to use the current workspace.",
+          "Keep login direct-message-only; later command policy is tracked by B07.",
           "Add automated tests for client request shape, context behavior, message behavior, and runner context reuse.",
           "Run ./init.sh.",
           "Run a local AcornOps and Mattermost smoke test when the stack is available."
         ]
       },
       "evidence": "On 2026-06-19, added AcornOpsClient.getWorkspace() for GET /api/v1/workspaces/{workspaceId} and AcornOpsClient.listKubernetesClusters() for GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50, both using Authorization Bearer EXTERNAL_INTEGRATION_SERVICE_TOKEN and x-acornops-external-user-id from the observed Mattermost post author. Added an in-memory per-external-user command context for the last workspace list and current workspace. /workspaces now returns numbered workspaces; /workspaces 1 fetches detail without setting current workspace; /workspace 1 fetches detail and sets the current workspace; /workspace shows details for the current workspace; /clusters uses the current workspace; /clusters 1 lists clusters for a remembered workspace index and selects it. Targeted tests passed: node --test test/acornops-client.test.js with 6 tests, node --test test/command-context.test.js with 3 tests, node --test test/bot-message.test.js with 24 tests, and node --test test/bot-runner.test.js with 8 tests. Final ./init.sh passed with harness verification, lint, build, and 52 tests. On 2026-06-19, updated workspace detail behavior so /workspaces 1 is read-only and /workspace fetches full details for the current workspace. Targeted tests passed: node --test test/bot-message.test.js with 25 tests and node --test test/bot-runner.test.js with 8 tests. Final ./init.sh passed with harness verification, lint, build, and 53 tests. Live smoke did not run because Mattermost was not listening on localhost:8065 and AcornOps was not listening on localhost:8081.",
-      "notes": "Depends on B05. The command context is process-local and resets when the bot restarts; use shared TTL storage later if the bot becomes multi-replica or restart-resilient."
+      "notes": "Depends on B05. Historical cluster implementation used slash aliases and clusters 1 as a workspace selector; B07 later moves to plain commands and uses clusters 1 for cluster detail."
+    },
+    {
+      "id": "B07",
+      "priority": 13,
+      "area": "bot",
+      "title": "Wire expanded external integration read and assistant commands",
+      "user_visible_behavior": "A linked Mattermost user can use plain bot commands from direct messages or channel mentions to inspect workspaces, clusters, VMs, resources, findings, investigations, and read-only assistant sessions.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus local AcornOps expanded-command smoke",
+        "steps": [
+          "Reject slash-prefixed bot commands and accept plain commands only.",
+          "Keep login direct-message-only while allowing authenticated read and read-only assistant commands from channel mentions.",
+          "Add AcornOps client methods for cluster detail, resources, findings, investigations, VMs, sessions, messages, and read-only assistant message posting.",
+          "Track current workspace plus exactly one selected target, either cluster or VM, in process-local command context.",
+          "Clear target and session context when workspace changes; clear session context when cluster or VM changes.",
+          "Return a context header showing current workspace and selected cluster or VM at the top of command responses.",
+          "Add automated tests for client request shape, command context behavior, message behavior, and runner behavior.",
+          "Run ./init.sh.",
+          "Run a local AcornOps and Mattermost smoke test when the stack is available."
+        ]
+      },
+      "evidence": "On 2026-06-19, implemented the expanded external integration command surface from the updated endpoint contract. Commands are now accepted without a leading slash only, and only login remains direct-message-only. Added AcornOpsClient methods for GET /api/v1/workspaces/{workspaceId}/investigations, GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters/{clusterId}, cluster resources/findings, VM list/detail/resources/findings, cluster and target sessions, session metadata/messages, POST /api/v1/sessions/{sessionId}/messages with toolAccessMode read_only, and GET /api/v1/runs/{runId}. Added cluster, resources, findings, investigations, vms, vm, sessions, session new, session, messages, and ask command handling. Expanded process-local command context for numbered clusters, VMs, sessions, current workspace, exactly one selected target, and current session. Focused verification passed with node --test test/acornops-client.test.js test/command-context.test.js test/bot-message.test.js reporting 45 passing tests. Final ./init.sh passed with harness verification, lint, build, and 64 tests. Live smoke did not run because Mattermost and AcornOps local services were not available in this workspace.",
+      "notes": "Depends on B06. Assistant run observation beyond returning the run id is not yet user-facing. The command context remains process-local and should move to shared TTL storage before multi-replica or restart-resilient deployments."
     }
   ]
 }
