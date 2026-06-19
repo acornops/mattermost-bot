@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createInMemoryCommandContextStore } from "../src/bot/command-context.js";
 import {
   handleBotMessage,
   normalizeBotText,
@@ -49,6 +50,7 @@ test("shouldRespondToPost accepts mentions in channel posts", () => {
 test("handleBotMessage returns help by default", async () => {
   assert.match(await handleBotMessage({ text: "" }), /AcornOps bot commands:/);
   assert.match(await handleBotMessage({ text: "" }), /workspaces/);
+  assert.match(await handleBotMessage({ text: "" }), /clusters/);
 });
 
 test("handleBotMessage creates an AcornOps account link for direct /login", async () => {
@@ -198,11 +200,13 @@ test("handleBotMessage reports status configuration when service token is missin
 });
 
 test("handleBotMessage lists workspaces for a linked direct-message user", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
   const response = await handleBotMessage({
     text: "/workspaces",
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
+    commandContextStore,
     mattermostIdentity: mattermostIdentity(),
     acornOpsClient: {
       async listWorkspaces(input) {
@@ -238,9 +242,13 @@ test("handleBotMessage lists workspaces for a linked direct-message user", async
 
   assert.match(response, /AcornOps workspaces:/);
   assert.match(response, /Mattermost user: alice \(mattermost-user-1\)/);
-  assert.match(response, /Platform \(workspace-1\) \| plan: Team \| quota: members 0\/10, clusters 0\/3, VMs 0\/5/);
-  assert.match(response, /Sandbox \(workspace-2\) \| plan: free/);
+  assert.match(response, /1\. Platform \(workspace-1\) \| plan: Team \| quota: members 0\/10, clusters 0\/3, VMs 0\/5/);
+  assert.match(response, /2\. Sandbox \(workspace-2\) \| plan: free/);
   assert.match(response, /Next page cursor: cursor-2/);
+  assert.deepEqual(commandContextStore.get("mattermost-user-1").workspaces[0], {
+    id: "workspace-1",
+    name: "Platform"
+  });
 });
 
 test("handleBotMessage reports no available workspaces", async () => {
@@ -280,7 +288,7 @@ test("handleBotMessage keeps workspaces direct-message only", async () => {
 
 test("handleBotMessage requires bare workspaces command", async () => {
   const response = await handleBotMessage({
-    text: "/workspaces extra",
+    text: "/workspaces 1 extra",
     userId: "mattermost-user-1",
     channelType: "D",
     mattermostIdentity: mattermostIdentity(),
@@ -291,7 +299,7 @@ test("handleBotMessage requires bare workspaces command", async () => {
     }
   });
 
-  assert.match(response, /does not accept arguments/);
+  assert.match(response, /at most one/);
 });
 
 test("handleBotMessage reports workspaces configuration when service token is missing", async () => {
@@ -346,6 +354,156 @@ test("handleBotMessage reports backend workspace errors without leaking response
 
   assert.match(response, /HTTP 500/);
   assert.doesNotMatch(response, /database detail/);
+});
+
+test("handleBotMessage shows workspace detail by remembered index and selects current workspace", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.rememberWorkspaces("mattermost-user-1", [
+    { id: "workspace-1", name: "Platform" }
+  ]);
+
+  const response = await handleBotMessage({
+    text: "workspaces 1",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "D",
+    commandContextStore,
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      async getWorkspace(input, workspaceId) {
+        assert.deepEqual(input, mattermostIdentity());
+        assert.equal(workspaceId, "workspace-1");
+        return {
+          id: "workspace-1",
+          name: "Platform",
+          plan: { name: "Team" },
+          permissions: {
+            read_workspace_data: true,
+            read_members: false
+          },
+          counts: {
+            kubernetesClusters: 2
+          },
+          quota: {
+            members: { used: 0, limit: 10 },
+            kubernetesClusters: { used: 2, limit: 3 }
+          }
+        };
+      }
+    }
+  });
+
+  assert.match(response, /AcornOps workspace:/);
+  assert.match(response, /Name: Platform/);
+  assert.match(response, /Permissions: read_workspace_data/);
+  assert.match(response, /Counts: kubernetesClusters 2/);
+  assert.match(response, /Current workspace updated/);
+  assert.deepEqual(commandContextStore.get("mattermost-user-1").currentWorkspace, {
+    id: "workspace-1",
+    name: "Platform"
+  });
+});
+
+test("handleBotMessage reports current workspace", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.selectWorkspace("mattermost-user-1", {
+    id: "workspace-1",
+    name: "Platform"
+  });
+
+  const response = await handleBotMessage({
+    text: "workspace",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {}
+  });
+
+  assert.match(response, /Current AcornOps workspace:/);
+  assert.match(response, /Platform \(workspace-1\)/);
+});
+
+test("handleBotMessage asks for a workspace before clusters", async () => {
+  const response = await handleBotMessage({
+    text: "clusters",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      async listKubernetesClusters() {
+        throw new Error("listKubernetesClusters should not be called");
+      }
+    }
+  });
+
+  assert.match(response, /No current workspace is selected/);
+});
+
+test("handleBotMessage lists clusters in the current workspace", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.selectWorkspace("mattermost-user-1", {
+    id: "workspace-1",
+    name: "Platform"
+  });
+
+  const response = await handleBotMessage({
+    text: "clusters",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      async listKubernetesClusters(input, workspaceId) {
+        assert.deepEqual(input, mattermostIdentity());
+        assert.equal(workspaceId, "workspace-1");
+        return {
+          items: [
+            {
+              id: "cluster-1",
+              name: "Prod",
+              status: "ready",
+              agentState: "connected",
+              kubernetesVersion: "v1.33.0"
+            }
+          ],
+          nextCursor: "cluster-cursor-2"
+        };
+      }
+    }
+  });
+
+  assert.match(response, /AcornOps clusters in Platform \(workspace-1\):/);
+  assert.match(response, /1\. Prod \(cluster-1\) - status: ready, agent: connected, version: v1\.33\.0/);
+  assert.match(response, /Next page cursor: cluster-cursor-2/);
+});
+
+test("handleBotMessage lists clusters for a remembered workspace index and selects it", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.rememberWorkspaces("mattermost-user-1", [
+    { id: "workspace-1", name: "Platform" }
+  ]);
+
+  const response = await handleBotMessage({
+    text: "clusters 1",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    mattermostIdentity: mattermostIdentity(),
+    acornOpsClient: {
+      async listKubernetesClusters(input, workspaceId) {
+        assert.deepEqual(input, mattermostIdentity());
+        assert.equal(workspaceId, "workspace-1");
+        return { items: [] };
+      }
+    }
+  });
+
+  assert.match(response, /No clusters are available/);
+  assert.deepEqual(commandContextStore.get("mattermost-user-1").currentWorkspace, {
+    id: "workspace-1",
+    name: "Platform"
+  });
 });
 
 function mattermostIdentity() {

@@ -13,8 +13,8 @@
 - K3s readiness verification path: `./scripts/verify-k3s.sh`
 - Mattermost readiness verification path: `./scripts/verify-mattermost.sh`
 - Bot verification path: `./scripts/verify-bot.sh`
-- Highest priority unfinished feature: `B06`
-- Current blocker: none for the verified workspace command implementation.
+- Highest priority unfinished feature: none recorded.
+- Current blocker: live Mattermost/AcornOps smoke for authenticated workspace and cluster commands still requires local services.
 
 ## Completed
 
@@ -29,6 +29,7 @@
 - `B03`: Wire first local AcornOps login command.
 - `B04`: Move login to AcornOps external integration account linking.
 - `B05`: Wire authenticated workspace command.
+- `B06`: Wire authenticated workspace detail and cluster commands.
 
 ## In Progress
 
@@ -39,20 +40,23 @@
 - `login` direct messages now call AcornOps `POST /api/v1/auth/chat/integration/link` with `externalUserId` set to the Mattermost post author's `user_id`.
 - `status` now calls AcornOps `POST /api/v1/auth/chat/integration/resolve` and reports `linked` or tells unlinked users to run `/login`.
 - `/workspaces` direct messages now call AcornOps `GET /api/v1/workspaces?limit=50` with `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
+- `/workspaces` returns numbered workspace rows. `/workspaces 1` and `/workspace 1` call `GET /api/v1/workspaces/{workspaceId}`, show detail, and make that workspace current for the user.
+- `/workspace` shows the current process-local workspace selection for the user.
+- `/clusters` calls `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace, while `/clusters 1` uses a workspace number from the last `/workspaces` result.
 - AcornOps renamed the chat auth endpoint prefix on 2026-06-17 to `/auth/chat/integration/`; bot tests now assert the new link and resolve URLs.
 - AcornOps updated the account-link contract on 2026-06-18 to require `externalUserId`; the Mattermost adapter supplies the observed post author's Mattermost user id as that external id.
 - Bot runtime defaults now live in `src/bot/config.js`; `CSIT_MATTERMOST_BOT_USERNAME` is the runtime source for changing the bot mention name, with `acorn-ops-bot` as the single code fallback.
 - The most recent live account-link smoke passed after the earlier user-id-only update; the 2026-06-18 externalUserId rename is covered by automated tests but still needs live smoke.
-- Cluster listing is still a placeholder until authenticated AcornOps cluster APIs are wired.
+- The bot remembers only lightweight workspace command context in memory; it does not store AcornOps sessions, cookies, or tokens per user. The context resets when the bot process restarts.
 - The K3s verification command did not pass during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections.
 - Mattermost is running locally through the official Docker Compose deployment without NGINX.
 - Mattermost and K3s remain explicit local services; `./init.sh` verifies repo and bot code but does not start Docker Compose or k3d.
 
 ## Next Steps
 
-1. Run live Mattermost/AcornOps smoke for `/workspaces` when the local stack is available.
-2. Start `B06` by identifying the first authenticated AcornOps cluster API response to expose through `clusters`.
-3. Add repeatable live-smoke notes for `login`, `status`, and `workspaces` if local service command output becomes available.
+1. Run live Mattermost/AcornOps smoke for `/workspaces`, `/workspaces 1`, `/workspace`, and `/clusters` when the local stack is available.
+2. Add repeatable live-smoke notes for `login`, `status`, `workspaces`, workspace detail, and clusters if local service command output becomes available.
+3. Decide whether process-local command context is enough or whether shared TTL storage is needed before any multi-replica bot deployment.
 
 ## Session Log
 
@@ -266,3 +270,11 @@ Session log entries are historical. Superseded risks and decisions are corrected
 - Verification run: Baseline `./init.sh` initially failed with 10 tests because `normalizeMattermostIdentity()` built `externalUserId` but still validated `mattermostUserId`. Targeted verification passed after the fix: `node --test test/acornops-client.test.js test/bot-message.test.js test/bot-runner.test.js test/config.test.js` passed with 33 tests. Final `./init.sh` passed with harness verification, lint, build, and 41 tests.
 - Known risks: Live Mattermost/AcornOps smoke was not run in this workspace; automated tests cover the request body, token env selection, and trusted post-author extraction.
 - Next best action: live-smoke `/workspaces` against the local stack when available, then start `B06`.
+
+### 2026-06-19 - Workspace context and cluster commands wired
+
+- Goal: Add workspace detail, current workspace tracking, and cluster listing commands using the new AcornOps external integration endpoints.
+- Completed: Added `AcornOpsClient.getWorkspace()` for `GET /api/v1/workspaces/{workspaceId}` and `AcornOpsClient.listKubernetesClusters()` for `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50`. Added process-local per-external-user command context that stores the last numbered workspace list and current workspace. Updated `/workspaces` to return numbered rows, added `/workspaces 1` and `/workspace 1` for workspace detail and selection, added `/workspace` for current selection, and wired `/clusters` plus `/clusters 1` to the AcornOps cluster endpoint. Refactored authenticated data-command setup and formatting to reduce duplication for future commands.
+- Verification run: Baseline `./init.sh` passed before work with 41 tests. Targeted tests passed after implementation: `node --test test/acornops-client.test.js` with 6 tests, `node --test test/command-context.test.js` with 3 tests, `node --test test/bot-message.test.js` with 24 tests, and `node --test test/bot-runner.test.js` with 8 tests. Final `./init.sh` passed with harness verification, lint, build, and 52 tests.
+- Known risks: Live Mattermost/AcornOps smoke did not run because Mattermost was not listening on `localhost:8065` and AcornOps was not listening on `localhost:8081`. The current workspace context is process-local and will reset on bot restart; use shared TTL storage later if multi-replica or restart-resilient command context becomes necessary.
+- Next best action: live-smoke `/workspaces`, `/workspaces 1`, `/workspace`, and `/clusters` when the local stack is available.

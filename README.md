@@ -9,7 +9,7 @@ The product direction is to build a bot that helps authenticate Mattermost users
 1. Keep the local K3s and Mattermost learning environment restartable.
 2. Keep the dedicated Mattermost `@acorn-ops-bot` bot account prototype verified.
 3. Use the verified AcornOps external integration account-link contract for `login` and `status`.
-4. Live-smoke the authenticated `/workspaces` command, then wire authenticated cluster commands to the AcornOps control-plane API in small stages.
+4. Live-smoke authenticated workspace listing, workspace detail, current-workspace, and cluster-listing commands against the local stack.
 
 ## Local Learning Stack
 

@@ -2,7 +2,10 @@
 
 ## Currently Verified
 
+- Final `./init.sh` passed after the June 19 workspace-context and cluster-command work with harness verification, lint, build, and 52 tests.
 - Final `./init.sh` passed after the June 18 external integration contract update with harness verification, lint, build, and 41 tests.
+- Baseline `./init.sh` passed before the June 19 workspace-context and cluster-command work with harness verification, lint, build, and 41 tests.
+- Targeted workspace-context and cluster-command tests passed after implementation: `node --test test/acornops-client.test.js` with 6 tests, `node --test test/command-context.test.js` with 3 tests, `node --test test/bot-message.test.js` with 24 tests, and `node --test test/bot-runner.test.js` with 8 tests.
 - Baseline `./init.sh` passed before the June 18 workspace-command work with harness verification, lint, build, and 31 tests.
 - Targeted workspace-command tests passed after implementation: `node --test test/acornops-client.test.js` with 4 tests, `node --test test/bot-message.test.js` with 19 tests, and `node --test test/bot-runner.test.js` with 7 tests.
 - `./scripts/verify-harness.sh` passes.
@@ -14,14 +17,18 @@
 - `login` and `/login` in direct messages call AcornOps `POST /api/v1/auth/chat/integration/link` with `{ "externalUserId": "<post author user_id>" }`.
 - `status` and `/status` call AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same external user id.
 - `workspaces` and `/workspaces` in direct messages call AcornOps `GET /api/v1/workspaces?limit=50` using `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
-- `/workspaces` rejects extra arguments and shared-channel use for now.
+- `/workspaces` returns numbered workspace rows and remembers lightweight `{ id, name }` references per external user id.
+- `/workspaces 1` and `/workspace 1` call `GET /api/v1/workspaces/{workspaceId}`, show detail, and make that workspace current.
+- `/workspace` shows the current process-local workspace selection.
+- `/clusters` calls `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace; `/clusters 1` uses a remembered workspace number and makes it current.
 - The current AcornOps link and resolve contract sends only `{ "externalUserId": "<post author user_id>" }`.
 - The user reported the updated live Mattermost `login` and `status` flow works after the user-id-only contract update.
 - The bot automatically loads `.env` before reading runtime variables.
 - Runtime defaults live in `src/bot/config.js`; change the bot mention name with `CSIT_MATTERMOST_BOT_USERNAME`.
 - Mattermost and AcornOps API clients share JSON fetch/error handling through `src/bot/http-client.js`.
 - The bot no longer uses `src/bot/auth-store.js`, bot-side login state, transaction polling, plain OIDC link construction, or AcornOps `dev-login` for command login.
-- `B05` authenticated workspace command is implemented and `./init.sh` passes; `B06` authenticated cluster commands is the next not-started feature.
+- The bot uses `src/bot/command-context.js` for process-local workspace list/current workspace memory. It stores only workspace ids and names and resets on restart.
+- `B05` authenticated workspace command and `B06` authenticated workspace detail/cluster commands are implemented with targeted tests passing.
 
 ## Changes This Session
 
@@ -31,18 +38,20 @@
 - Created branch `feat/add-authenticated-commands`.
 - Added `AcornOpsClient.listWorkspaces()` for the provided `GET /api/v1/workspaces` endpoint.
 - Added `/workspaces` direct-message command handling, workspace response formatting, empty-state output, next-cursor display, 401 login guidance, and backend-error handling that avoids echoing response bodies.
-- Updated `feature_list.json`, `PROGRESS.md`, `DECISIONS.md`, and `docs/bot-runtime.md` for the workspace-command behavior and the new `B06` cluster follow-up.
+- Added `AcornOpsClient.getWorkspace()` and `AcornOpsClient.listKubernetesClusters()`.
+- Added process-local command context plus `/workspaces 1`, `/workspace`, `/workspace 1`, `/clusters`, and `/clusters 1`.
+- Updated `feature_list.json`, `PROGRESS.md`, `DECISIONS.md`, and `docs/bot-runtime.md` for workspace detail, current-workspace context, and cluster-listing behavior.
 
 ## Still Broken Or Unverified
 
 - The exact Mattermost post ids and AcornOps response snippets from the passing live account-link smoke are not recorded in this repository.
-- Live Mattermost/AcornOps `/workspaces` smoke did not run because Mattermost was not listening on `localhost:8065` and AcornOps was not listening on `localhost:8081`.
-- Cluster listing remains a placeholder until wired to authenticated AcornOps APIs.
+- Live Mattermost/AcornOps smoke for workspace detail and cluster commands did not run because Mattermost was not listening on `localhost:8065` and AcornOps was not listening on `localhost:8081`.
+- The current workspace context is process-local. Use shared TTL storage later if multi-replica or restart-resilient command context becomes necessary.
 - The local Mattermost bot token must stay outside committed files.
 
 ## Next Best Action
 
-Live-smoke `/workspaces` against local Mattermost and AcornOps when the stack is available. After that, start `B06` by identifying the first AcornOps cluster API response to expose through the `clusters` command.
+Live-smoke `/workspaces`, `/workspaces 1`, `/workspace`, and `/clusters` against local Mattermost and AcornOps when the stack is available.
 
 ## Commands
 

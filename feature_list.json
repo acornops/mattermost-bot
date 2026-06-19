@@ -239,23 +239,26 @@
       "id": "B06",
       "priority": 12,
       "area": "bot",
-      "title": "Wire authenticated cluster commands",
-      "user_visible_behavior": "A linked Mattermost user can ask @acorn-ops-bot for cluster information backed by AcornOps authorization instead of receiving a placeholder.",
-      "status": "not_started",
+      "title": "Wire authenticated workspace detail and cluster commands",
+      "user_visible_behavior": "A linked Mattermost user can use numbered workspaces, inspect workspace details, set a current workspace, and list clusters backed by AcornOps authorization.",
+      "status": "passing",
       "verification": {
         "command": "./init.sh plus local AcornOps cluster-command smoke",
         "steps": [
-          "Identify the AcornOps cluster API shape that should back the first chat command.",
-          "Use the verified Mattermost account link or external integration identity to authorize cluster access.",
+          "Add GET /api/v1/workspaces/{workspaceId} support for workspace detail.",
+          "Add GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters support for cluster listing.",
+          "Use the verified external integration identity to authorize workspace detail and cluster access.",
+          "Remember the last workspace list and current workspace per external user id inside the bot process.",
+          "Allow /workspaces 1 and /workspace 1 to fetch detail and update the current workspace.",
+          "Allow /clusters to use the current workspace and /clusters 1 to use a remembered workspace index.",
           "Keep authentication-sensitive flows direct-message first unless a channel-safe response is explicitly designed.",
-          "Replace the current clusters placeholder with a backend-backed response.",
-          "Add automated tests for linked, unlinked, and backend-error responses.",
+          "Add automated tests for client request shape, context behavior, message behavior, and runner context reuse.",
           "Run ./init.sh.",
           "Run a local AcornOps and Mattermost smoke test when the stack is available."
         ]
       },
-      "evidence": "",
-      "notes": "Depends on B05. Scope this to one narrow cluster-information command before expanding broader cluster-management behavior."
+      "evidence": "On 2026-06-19, added AcornOpsClient.getWorkspace() for GET /api/v1/workspaces/{workspaceId} and AcornOpsClient.listKubernetesClusters() for GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50, both using Authorization Bearer EXTERNAL_INTEGRATION_SERVICE_TOKEN and x-acornops-external-user-id from the observed Mattermost post author. Added an in-memory per-external-user command context for the last workspace list and current workspace. /workspaces now returns numbered workspaces; /workspaces 1 and /workspace 1 fetch detail and set the current workspace; /workspace shows the current workspace; /clusters uses the current workspace; /clusters 1 lists clusters for a remembered workspace index and selects it. Targeted tests passed: node --test test/acornops-client.test.js with 6 tests, node --test test/command-context.test.js with 3 tests, node --test test/bot-message.test.js with 24 tests, and node --test test/bot-runner.test.js with 8 tests. Final ./init.sh passed with harness verification, lint, build, and 52 tests. Live smoke did not run because Mattermost was not listening on localhost:8065 and AcornOps was not listening on localhost:8081.",
+      "notes": "Depends on B05. The command context is process-local and resets when the bot restarts; use shared TTL storage later if the bot becomes multi-replica or restart-resilient."
     }
   ]
 }

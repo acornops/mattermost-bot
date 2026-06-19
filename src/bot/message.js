@@ -1,5 +1,9 @@
 import { DEFAULT_MATTERMOST_BOT_USERNAME } from "./config.js";
 import {
+  createNullCommandContextStore,
+  resolveWorkspaceReference
+} from "./command-context.js";
+import {
   escapeRegExp,
   firstCommandWord,
   identityLabel,
@@ -13,8 +17,13 @@ const helpText = [
   "- `login` creates an AcornOps account-link URL.",
   "- `status` checks whether this external chat account is linked to AcornOps.",
   "- `workspaces` lists AcornOps workspaces available to your linked account.",
-  "- `clusters` will list accessible clusters once the backend API exists."
+  "- `workspaces 1` shows details for a workspace and makes it current.",
+  "- `workspace` shows the current workspace.",
+  "- `workspace 1` changes the current workspace.",
+  "- `clusters` lists clusters in the current workspace."
 ].join("\n");
+
+const nullCommandContextStore = createNullCommandContextStore();
 
 export { normalizeBotText } from "./message-utils.js";
 
@@ -47,6 +56,7 @@ export async function handleBotMessage({
   botUsername = DEFAULT_MATTERMOST_BOT_USERNAME,
   channelType = "",
   acornOpsClient = null,
+  commandContextStore = nullCommandContextStore,
   mattermostIdentity = null
 }) {
   const normalizedText = normalizeBotText(text, botUsername);
@@ -76,12 +86,32 @@ export async function handleBotMessage({
       userName,
       channelType,
       acornOpsClient,
+      commandContextStore,
+      mattermostIdentity
+    });
+  }
+
+  if (action === "workspace") {
+    return handleWorkspace({
+      commandArgs,
+      userId,
+      userName,
+      channelType,
+      acornOpsClient,
+      commandContextStore,
       mattermostIdentity
     });
   }
 
   if (action === "clusters") {
-    return "Cluster listing placeholder. The backend cluster-management API is not connected yet.";
+    return handleClusters({
+      commandArgs,
+      userId,
+      channelType,
+      acornOpsClient,
+      commandContextStore,
+      mattermostIdentity
+    });
   }
 
   return `Unknown AcornOps bot command: ${action}\n\n${helpText}`;
@@ -153,27 +183,38 @@ async function handleWorkspaces({
   userName,
   channelType,
   acornOpsClient,
+  commandContextStore,
   mattermostIdentity
 }) {
-  if (commandArgs.length > 0) {
-    return "`/workspaces` does not accept arguments yet. Send `/workspaces` by itself.";
+  if (commandArgs.length > 1) {
+    return "`/workspaces` accepts at most one workspace number or id.";
   }
 
-  if (channelType !== "D") {
-    return "For workspace listings, send me a direct message with `/workspaces`.";
+  const auth = requireExternalDataCommand({
+    channelType,
+    acornOpsClient,
+    mattermostIdentity,
+    userId,
+    commandLabel: "workspaces"
+  });
+  if (auth.response) {
+    return auth.response;
   }
 
-  if (!isAcornOpsChatAuthConfigured(acornOpsClient)) {
-    return "AcornOps workspaces are not configured. Set `ACORNOPS_API_BASE_URL` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN`, then restart the bot.";
-  }
-
-  const identity = normalizeMattermostIdentity({ mattermostIdentity, userId });
-  if (!identity) {
-    return missingIdentityText();
+  if (commandArgs.length === 1) {
+    return handleWorkspaceDetail({
+      reference: commandArgs[0],
+      userId,
+      userName,
+      identity: auth.identity,
+      acornOpsClient,
+      commandContextStore
+    });
   }
 
   try {
-    const page = await acornOpsClient.listWorkspaces(identity);
+    const page = await acornOpsClient.listWorkspaces(auth.identity);
+    commandContextStore.rememberWorkspaces(auth.identity.externalUserId, page.items ?? []);
     return formatWorkspacePage({
       page,
       userId,
@@ -181,6 +222,127 @@ async function handleWorkspaces({
     });
   } catch (error) {
     return workspaceErrorText(error);
+  }
+}
+
+async function handleWorkspace({
+  commandArgs,
+  userId,
+  userName,
+  channelType,
+  acornOpsClient,
+  commandContextStore,
+  mattermostIdentity
+}) {
+  if (commandArgs.length > 1) {
+    return "`/workspace` accepts at most one workspace number or id.";
+  }
+
+  const auth = requireExternalDataCommand({
+    channelType,
+    acornOpsClient,
+    mattermostIdentity,
+    userId,
+    commandLabel: "workspace"
+  });
+  if (auth.response) {
+    return auth.response;
+  }
+
+  if (commandArgs.length === 0) {
+    const currentWorkspace = commandContextStore.get(auth.identity.externalUserId).currentWorkspace;
+    if (!currentWorkspace) {
+      return "No current workspace is selected. Send `/workspaces`, then `/workspace 1`.";
+    }
+
+    return [
+      "Current AcornOps workspace:",
+      `- ${formatWorkspaceReference(currentWorkspace)}`,
+      "Use `/clusters` to list clusters in this workspace."
+    ].join("\n");
+  }
+
+  return handleWorkspaceDetail({
+    reference: commandArgs[0],
+    userId,
+    userName,
+    identity: auth.identity,
+    acornOpsClient,
+    commandContextStore
+  });
+}
+
+async function handleWorkspaceDetail({
+  reference,
+  userId,
+  userName,
+  identity,
+  acornOpsClient,
+  commandContextStore
+}) {
+  const workspace = resolveWorkspaceForUser({
+    reference,
+    identity,
+    commandContextStore
+  });
+  if (!workspace) {
+    return "I do not have that workspace number yet. Send `/workspaces` first, or use a workspace id.";
+  }
+
+  try {
+    const detail = await acornOpsClient.getWorkspace(identity, workspace.id);
+    commandContextStore.selectWorkspace(identity.externalUserId, detail);
+    return formatWorkspaceDetail({
+      workspace: detail,
+      userId,
+      userName
+    });
+  } catch (error) {
+    return workspaceErrorText(error);
+  }
+}
+
+async function handleClusters({
+  commandArgs,
+  userId,
+  channelType,
+  acornOpsClient,
+  commandContextStore,
+  mattermostIdentity
+}) {
+  if (commandArgs.length > 1) {
+    return "`/clusters` accepts at most one workspace number or id.";
+  }
+
+  const auth = requireExternalDataCommand({
+    channelType,
+    acornOpsClient,
+    mattermostIdentity,
+    userId,
+    commandLabel: "clusters"
+  });
+  if (auth.response) {
+    return auth.response;
+  }
+
+  const workspace = resolveWorkspaceForUser({
+    reference: commandArgs[0] ?? "",
+    identity: auth.identity,
+    commandContextStore
+  });
+  if (!workspace) {
+    return "No current workspace is selected. Send `/workspaces`, then `/workspace 1` or `/clusters 1`.";
+  }
+
+  try {
+    const page = await acornOpsClient.listKubernetesClusters(auth.identity, workspace.id);
+    commandContextStore.selectWorkspace(auth.identity.externalUserId, workspace);
+    return formatClusterPage({
+      page,
+      workspace
+    });
+  } catch (error) {
+    return clusterErrorText(error);
   }
 }
 
@@ -199,14 +361,48 @@ function formatWorkspacePage({ page, userId, userName }) {
     `Mattermost user: ${identityLabel({ userId, userName })}`
   ];
 
-  for (const workspace of items) {
-    lines.push(`- ${formatWorkspaceSummary(workspace)}`);
+  for (const [index, workspace] of items.entries()) {
+    lines.push(`${index + 1}. ${formatWorkspaceSummary(workspace)}`);
   }
 
   if (page.nextCursor) {
     lines.push(`Next page cursor: ${page.nextCursor}`);
   }
 
+  lines.push("Use `/workspaces 1` for details or `/workspace 1` to set the current workspace.");
+
+  return lines.join("\n");
+}
+
+function formatWorkspaceDetail({ workspace, userId, userName }) {
+  const lines = [
+    "AcornOps workspace:",
+    `- Name: ${workspace.name ?? workspace.displayName ?? workspace.slug ?? "Unnamed workspace"}`,
+    `- ID: ${workspace.id ?? "unknown"}`,
+    `- Mattermost user: ${identityLabel({ userId, userName })}`
+  ];
+
+  const plan = workspace.plan?.name ?? workspace.plan?.key ?? "";
+  if (plan) {
+    lines.push(`- Plan: ${plan}`);
+  }
+
+  const permissions = formatPermissions(workspace.permissions);
+  if (permissions) {
+    lines.push(`- Permissions: ${permissions}`);
+  }
+
+  const counts = formatCounts(workspace.counts ?? workspace.listCounts ?? workspace.boundedListCounts);
+  if (counts) {
+    lines.push(`- Counts: ${counts}`);
+  }
+
+  const quota = formatWorkspaceQuota(workspace.quota);
+  if (quota) {
+    lines.push(`- Quota: ${quota}`);
+  }
+
+  lines.push("Current workspace updated. Use `/clusters` to list clusters here.");
   return lines.join("\n");
 }
 
@@ -239,6 +435,73 @@ function formatWorkspaceQuota(quota) {
   ].filter(Boolean).join(", ");
 }
 
+function formatPermissions(permissions) {
+  if (!permissions || typeof permissions !== "object") {
+    return "";
+  }
+
+  const enabled = Object.entries(permissions)
+    .filter(([, value]) => value === true)
+    .map(([key]) => key);
+
+  return enabled.length > 0 ? enabled.join(", ") : "none";
+}
+
+function formatCounts(counts) {
+  if (!counts || typeof counts !== "object") {
+    return "";
+  }
+
+  return Object.entries(counts)
+    .filter(([, value]) => typeof value === "number" || typeof value === "string")
+    .map(([key, value]) => `${key} ${value}`)
+    .join(", ");
+}
+
+function formatClusterPage({ page, workspace }) {
+  const items = Array.isArray(page?.items) ? page.items : [];
+  const lines = [
+    `AcornOps clusters in ${formatWorkspaceReference(workspace)}:`
+  ];
+
+  if (items.length === 0) {
+    lines.push("- No clusters are available in this workspace.");
+    return lines.join("\n");
+  }
+
+  for (const [index, cluster] of items.entries()) {
+    lines.push(`${index + 1}. ${formatClusterSummary(cluster)}`);
+  }
+
+  if (page.nextCursor) {
+    lines.push(`Next page cursor: ${page.nextCursor}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatClusterSummary(cluster) {
+  const name = cluster.name ?? cluster.displayName ?? cluster.slug ?? cluster.id ?? "Unnamed cluster";
+  const id = cluster.id && cluster.id !== name ? ` (${cluster.id})` : "";
+  const details = [
+    formatField("status", cluster.status),
+    formatField("agent", cluster.agentState),
+    formatField("version", cluster.kubernetesVersion ?? cluster.version),
+    formatField("provider", cluster.provider),
+    formatField("region", cluster.region)
+  ].filter(Boolean);
+
+  if (details.length === 0) {
+    return `${name}${id}`;
+  }
+
+  return `${name}${id} - ${details.join(", ")}`;
+}
+
+function formatField(label, value) {
+  return value ? `${label}: ${value}` : "";
+}
+
 function formatQuotaValue(label, quota) {
   if (!quota || typeof quota !== "object") {
     return "";
@@ -258,11 +521,35 @@ function workspaceErrorText(error) {
     ].join("\n");
   }
 
+  if (status === 404) {
+    return "AcornOps workspace could not be found or is not accessible to this linked account.";
+  }
+
   if (status) {
     return `AcornOps workspaces could not be loaded (HTTP ${status}). Try again later or check the bot logs.`;
   }
 
   return "AcornOps workspaces could not be loaded. Try again later or check the bot logs.";
+}
+
+function clusterErrorText(error) {
+  const status = httpStatusFromError(error);
+  if (status === 401) {
+    return [
+      "AcornOps clusters could not be loaded because this external chat account is not linked or the bot credentials are invalid.",
+      "Run `/login` in a direct message, then try `/clusters` again."
+    ].join("\n");
+  }
+
+  if (status === 404) {
+    return "AcornOps workspace could not be found or is not accessible to this linked account.";
+  }
+
+  if (status) {
+    return `AcornOps clusters could not be loaded (HTTP ${status}). Try again later or check the bot logs.`;
+  }
+
+  return "AcornOps clusters could not be loaded. Try again later or check the bot logs.";
 }
 
 function httpStatusFromError(error) {
@@ -297,6 +584,53 @@ function normalizeMattermostIdentity({ mattermostIdentity, userId }) {
   }
 
   return identity;
+}
+
+function requireExternalDataCommand({
+  channelType,
+  acornOpsClient,
+  mattermostIdentity,
+  userId,
+  commandLabel
+}) {
+  if (channelType !== "D") {
+    return {
+      response: `For ${commandLabel} details, send me a direct message with \`/${commandLabel}\`.`
+    };
+  }
+
+  if (!isAcornOpsChatAuthConfigured(acornOpsClient)) {
+    const verb = commandLabel === "workspaces" ? "are" : "is";
+    return {
+      response: `AcornOps ${commandLabel} ${verb} not configured. Set \`ACORNOPS_API_BASE_URL\` and \`EXTERNAL_INTEGRATION_SERVICE_TOKEN\`, then restart the bot.`
+    };
+  }
+
+  const identity = normalizeMattermostIdentity({ mattermostIdentity, userId });
+  if (!identity) {
+    return {
+      response: missingIdentityText()
+    };
+  }
+
+  return { identity };
+}
+
+function resolveWorkspaceForUser({ reference, identity, commandContextStore }) {
+  const context = commandContextStore.get(identity.externalUserId);
+  return resolveWorkspaceReference(reference, context);
+}
+
+function formatWorkspaceReference(workspace) {
+  if (!workspace) {
+    return "unknown workspace";
+  }
+
+  if (workspace.name && workspace.id) {
+    return `${workspace.name} (${workspace.id})`;
+  }
+
+  return workspace.name || workspace.id || "unknown workspace";
 }
 
 function isAcornOpsChatAuthConfigured(acornOpsClient) {

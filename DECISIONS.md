@@ -110,3 +110,9 @@
 - Decision: The first authenticated data command, `/workspaces`, only returns results in direct messages. Channel mentions ask the user to direct-message the bot instead.
 - Reason: Workspace names, quotas, and later cluster details can reveal account or infrastructure information. The project does not yet have a channel-safe disclosure policy.
 - Consequence: Future authenticated commands should default to direct-message-only unless their response is explicitly designed and reviewed as safe for shared channels. The bot uses the observed Mattermost post author id as `x-acornops-external-user-id` for external integration service-token requests.
+
+## 2026-06-19: Track current workspace in process-local bot context
+
+- Decision: Store the last workspace list and current workspace in a small in-memory context keyed by external user id.
+- Reason: AcornOps has no current-workspace concept, but chat users need a simple way to say `/workspaces 1` and then `/clusters`. Process-local memory is the smallest useful implementation for the current single-process local bot.
+- Consequence: The context stores only workspace ids and display names, not AcornOps sessions or browser credentials. It resets when the bot restarts and is not safe for multi-replica deployments. If the bot becomes multi-replica or needs restart-resilient selection, replace this store with shared TTL storage behind the same command-context interface.

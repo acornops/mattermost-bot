@@ -69,9 +69,12 @@ EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-acornops-chat-token
 - `login` in a shared channel does not call AcornOps; it asks the user to direct-message `@acorn-ops-bot`.
 - `status` and `/status` call AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same external user id.
 - `workspaces` and `/workspaces` in a direct message call AcornOps `GET /api/v1/workspaces?limit=50` with the external integration service token and `x-acornops-external-user-id` set to the observed Mattermost post author id.
+- Workspace results are numbered. `workspaces 1` and `/workspace 1` call AcornOps `GET /api/v1/workspaces/{workspaceId}` for the remembered workspace id and update the user's current workspace.
+- `workspace` shows the user's current workspace selection.
+- `clusters` and `/clusters` call AcornOps `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace.
+- `clusters 1` lists clusters for a workspace number from the most recent workspace list and makes it current.
 - `workspaces` in a shared channel does not call AcornOps; it asks the user to direct-message `@acorn-ops-bot`.
-- The bot does not keep bot-side login state or AcornOps sessions.
-- `clusters` remains a placeholder until cluster listing is wired to the AcornOps API.
+- The bot does not keep bot-side login state or AcornOps sessions. It keeps only process-local command context containing lightweight workspace ids and names.
 - `CSIT_MATTERMOST_URL` defaults to `http://localhost:8065`, and `ACORNOPS_API_BASE_URL` defaults to `http://localhost:8081`, the standalone AcornOps control-plane URL.
 
 ## Message Flow
@@ -84,8 +87,21 @@ EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-acornops-chat-token
 6. `src/bot/message.js` uses helpers from `src/bot/message-utils.js` to ignore bot-authored posts, accept direct messages, and accept channel posts that mention the configured bot username.
 7. `login` direct messages ask AcornOps to create a short-lived account link and return the `linkUrl` exactly as AcornOps sent it.
 8. `status` asks AcornOps whether the Mattermost identity is durably linked.
-9. `workspaces` direct messages ask AcornOps for the current user's workspace page, then formats workspace name, plan, quota, empty-state, and next-cursor details.
-10. `src/bot/mattermost-client.js` posts the response with `POST /api/v4/posts` and no `root_id`, so Mattermost renders it in the main timeline instead of a thread.
+9. `workspaces` direct messages ask AcornOps for the current user's workspace page, format numbered workspace rows, and store the lightweight workspace references in `src/bot/command-context.js`.
+10. `workspaces 1` or `workspace 1` resolves the number from the remembered list, fetches workspace detail, and stores that workspace as current.
+11. `clusters` resolves the current workspace, while `clusters 1` resolves a workspace number, then asks AcornOps for the cluster page in that workspace.
+12. `src/bot/mattermost-client.js` posts the response with `POST /api/v4/posts` and no `root_id`, so Mattermost renders it in the main timeline instead of a thread.
+
+## Command Context
+
+Current workspace state is a Mattermost chat convenience, not an AcornOps concept.
+
+The first implementation uses an in-memory store keyed by external user id. It stores only:
+
+- the most recent workspace list as `{ id, name }` references for numbered commands;
+- the current workspace as `{ id, name }`.
+
+This state resets when the bot process restarts. If the bot becomes multi-replica or restart-resilient, replace `src/bot/command-context.js` with shared TTL storage while keeping the command interface stable.
 
 ## AcornOps Account-Link Stage
 

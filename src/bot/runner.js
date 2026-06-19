@@ -1,4 +1,5 @@
 import { DEFAULT_MATTERMOST_BOT_USERNAME } from "./config.js";
+import { createInMemoryCommandContextStore } from "./command-context.js";
 import { handleBotMessage, shouldRespondToPost } from "./message.js";
 
 export function createMattermostBotRunner({
@@ -6,7 +7,8 @@ export function createMattermostBotRunner({
   acornOpsClient = null,
   websocketFactory,
   logger = console,
-  botUsername = DEFAULT_MATTERMOST_BOT_USERNAME
+  botUsername = DEFAULT_MATTERMOST_BOT_USERNAME,
+  commandContextStore = createInMemoryCommandContextStore()
 }) {
   return {
     async start() {
@@ -34,6 +36,7 @@ export function createMattermostBotRunner({
               event: message,
               botUser,
               botUsername,
+              commandContextStore,
               logger
             });
           }
@@ -71,6 +74,7 @@ export async function handlePostedEvent({
   event,
   botUser,
   botUsername = DEFAULT_MATTERMOST_BOT_USERNAME,
+  commandContextStore = createInMemoryCommandContextStore(),
   logger = console
 }) {
   const post = parsePostedPost(event);
@@ -95,6 +99,7 @@ export async function handlePostedEvent({
     channelType,
     botUsername,
     acornOpsClient,
+    commandContextStore,
     mattermostIdentity: extractMattermostIdentity({ post })
   });
 

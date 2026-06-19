@@ -33,4 +33,4 @@ The product goal, local learning stack, and first bot runtime are now selected. 
 4. Adding module-level docs near code as the architecture grows.
 5. Adding repeatable end-to-end checks for cross-component behavior when they can run without leaking local secrets.
 
-The immediate next product path is to live-smoke the authenticated `/workspaces` command, then wire authenticated cluster commands using the verified AcornOps external integration identity flow.
+The immediate next product path is to live-smoke authenticated workspace listing, workspace detail, current-workspace, and cluster-listing commands against the local Mattermost and AcornOps stack.

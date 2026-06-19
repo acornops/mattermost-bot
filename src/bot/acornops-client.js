@@ -36,9 +36,7 @@ export class AcornOpsClient {
   }
 
   async listWorkspaces(identity, { limit = 50, cursor = "", q = "" } = {}) {
-    if (!this.canUseMattermostChatAuth()) {
-      throw new Error("EXTERNAL_INTEGRATION_SERVICE_TOKEN is required for external integration chat auth.");
-    }
+    this.requireExternalIntegrationAuth();
 
     const params = new URLSearchParams();
     params.set("limit", String(limit));
@@ -55,9 +53,54 @@ export class AcornOpsClient {
       undefined,
       {
         serviceAuth: true,
-        headers: {
-          "x-acornops-external-user-id": identity.externalUserId
-        }
+        headers: this.externalUserHeaders(identity)
+      }
+    );
+  }
+
+  async getWorkspace(identity, workspaceId) {
+    this.requireExternalIntegrationAuth();
+
+    return this.requestJson(
+      "GET",
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}`,
+      undefined,
+      {
+        serviceAuth: true,
+        headers: this.externalUserHeaders(identity)
+      }
+    );
+  }
+
+  async listKubernetesClusters(
+    identity,
+    workspaceId,
+    { limit = 50, cursor = "", q = "", status = "", agentState = "" } = {}
+  ) {
+    this.requireExternalIntegrationAuth();
+
+    const params = new URLSearchParams();
+    params.set("limit", String(limit));
+    if (cursor) {
+      params.set("cursor", cursor);
+    }
+    if (q) {
+      params.set("q", q);
+    }
+    if (status) {
+      params.set("status", status);
+    }
+    if (agentState) {
+      params.set("agentState", agentState);
+    }
+
+    return this.requestJson(
+      "GET",
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/kubernetes-clusters?${params.toString()}`,
+      undefined,
+      {
+        serviceAuth: true,
+        headers: this.externalUserHeaders(identity)
       }
     );
   }
@@ -88,6 +131,18 @@ export class AcornOpsClient {
     return {
       ...headers,
       authorization: `Bearer ${this.chatServiceToken}`
+    };
+  }
+
+  requireExternalIntegrationAuth() {
+    if (!this.canUseMattermostChatAuth()) {
+      throw new Error("EXTERNAL_INTEGRATION_SERVICE_TOKEN is required for external integration chat auth.");
+    }
+  }
+
+  externalUserHeaders(identity) {
+    return {
+      "x-acornops-external-user-id": identity.externalUserId
     };
   }
 }

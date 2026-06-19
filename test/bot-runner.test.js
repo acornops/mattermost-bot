@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EventEmitter } from "node:events";
+import { createInMemoryCommandContextStore } from "../src/bot/command-context.js";
 import {
   createMattermostBotRunner,
   extractMattermostIdentity,
@@ -219,7 +220,91 @@ test("handlePostedEvent lists workspaces for direct message posts", async () => 
 
   assert.equal(result.id, "reply-1");
   assert.match(posts[0].message, /AcornOps workspaces:/);
-  assert.match(posts[0].message, /Platform \(workspace-1\)/);
+  assert.match(posts[0].message, /1\. Platform \(workspace-1\)/);
+});
+
+test("handlePostedEvent reuses workspace context across direct message posts", async () => {
+  const posts = [];
+  const commandContextStore = createInMemoryCommandContextStore();
+  const client = fakeClient({
+    createPost: async (post) => {
+      posts.push(post);
+      return { id: `reply-${posts.length}`, ...post };
+    }
+  });
+  const acornOpsClient = {
+    async listWorkspaces(input) {
+      assert.deepEqual(input, mattermostIdentity("user-1"));
+      return {
+        items: [
+          {
+            id: "workspace-1",
+            name: "Platform"
+          }
+        ]
+      };
+    },
+    async getWorkspace(input, workspaceId) {
+      assert.deepEqual(input, mattermostIdentity("user-1"));
+      assert.equal(workspaceId, "workspace-1");
+      return {
+        id: "workspace-1",
+        name: "Platform"
+      };
+    },
+    async listKubernetesClusters(input, workspaceId) {
+      assert.deepEqual(input, mattermostIdentity("user-1"));
+      assert.equal(workspaceId, "workspace-1");
+      return {
+        items: [
+          {
+            id: "cluster-1",
+            name: "Prod",
+            status: "ready"
+          }
+        ]
+      };
+    }
+  };
+
+  await handlePostedEvent({
+    client,
+    acornOpsClient,
+    commandContextStore,
+    botUser: {
+      id: "bot",
+      username: "acorn-ops-bot"
+    },
+    event: postedEvent("user-1", "/workspaces"),
+    logger: quietLogger()
+  });
+  await handlePostedEvent({
+    client,
+    acornOpsClient,
+    commandContextStore,
+    botUser: {
+      id: "bot",
+      username: "acorn-ops-bot"
+    },
+    event: postedEvent("user-1", "/workspaces 1"),
+    logger: quietLogger()
+  });
+  const result = await handlePostedEvent({
+    client,
+    acornOpsClient,
+    commandContextStore,
+    botUser: {
+      id: "bot",
+      username: "acorn-ops-bot"
+    },
+    event: postedEvent("user-1", "/clusters"),
+    logger: quietLogger()
+  });
+
+  assert.equal(result.id, "reply-3");
+  assert.match(posts[1].message, /Current workspace updated/);
+  assert.match(posts[2].message, /AcornOps clusters in Platform \(workspace-1\):/);
+  assert.match(posts[2].message, /Prod \(cluster-1\)/);
 });
 
 test("extractMattermostIdentity reads only observed post author id", () => {
@@ -256,6 +341,22 @@ function quietLogger() {
   return {
     log() {},
     error() {}
+  };
+}
+
+function postedEvent(userId, message) {
+  return {
+    event: "posted",
+    data: {
+      channel_type: "D",
+      sender_name: "alice",
+      post: JSON.stringify({
+        id: `post-${message}`,
+        channel_id: "channel-1",
+        user_id: userId,
+        message
+      })
+    }
   };
 }
 

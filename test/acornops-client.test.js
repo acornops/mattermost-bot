@@ -104,6 +104,72 @@ test("listWorkspaces uses service auth and external user header", async () => {
   assert.equal(requests[0].init.headers["x-acornops-external-user-id"], "mattermost-user-1");
 });
 
+test("getWorkspace uses service auth and external user header", async () => {
+  const requests = [];
+  const client = new AcornOpsClient({
+    baseUrl: "http://acornops/",
+    chatServiceToken: "chat-token",
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({
+        id: "workspace-1",
+        name: "Platform"
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  });
+
+  const response = await client.getWorkspace(mattermostIdentity(), "workspace-1");
+
+  assert.equal(response.id, "workspace-1");
+  assert.equal(requests[0].url, "http://acornops/api/v1/workspaces/workspace-1");
+  assert.equal(requests[0].init.method, "GET");
+  assert.equal(requests[0].init.body, undefined);
+  assert.equal(requests[0].init.headers.authorization, "Bearer chat-token");
+  assert.equal(requests[0].init.headers["x-acornops-external-user-id"], "mattermost-user-1");
+});
+
+test("listKubernetesClusters uses workspace path query and external user header", async () => {
+  const requests = [];
+  const client = new AcornOpsClient({
+    baseUrl: "http://acornops/",
+    chatServiceToken: "chat-token",
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({
+        items: [
+          {
+            id: "cluster-1",
+            name: "Prod",
+            status: "ready"
+          }
+        ]
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  });
+
+  const response = await client.listKubernetesClusters(mattermostIdentity(), "workspace-1", {
+    q: "prod",
+    status: "ready",
+    agentState: "connected"
+  });
+
+  assert.equal(response.items[0].id, "cluster-1");
+  assert.equal(
+    requests[0].url,
+    "http://acornops/api/v1/workspaces/workspace-1/kubernetes-clusters?limit=50&q=prod&status=ready&agentState=connected"
+  );
+  assert.equal(requests[0].init.method, "GET");
+  assert.equal(requests[0].init.body, undefined);
+  assert.equal(requests[0].init.headers.authorization, "Bearer chat-token");
+  assert.equal(requests[0].init.headers["x-acornops-external-user-id"], "mattermost-user-1");
+});
+
 test("external integration chat auth requires the service token", async () => {
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",
@@ -119,6 +185,16 @@ test("external integration chat auth requires the service token", async () => {
 
   await assert.rejects(
     client.listWorkspaces(mattermostIdentity()),
+    /EXTERNAL_INTEGRATION_SERVICE_TOKEN/
+  );
+
+  await assert.rejects(
+    client.getWorkspace(mattermostIdentity(), "workspace-1"),
+    /EXTERNAL_INTEGRATION_SERVICE_TOKEN/
+  );
+
+  await assert.rejects(
+    client.listKubernetesClusters(mattermostIdentity(), "workspace-1"),
     /EXTERNAL_INTEGRATION_SERVICE_TOKEN/
   );
 });
