@@ -2,6 +2,7 @@
 
 ## Currently Verified
 
+- Final `./init.sh` passed after the June 19 workspace-detail behavior clarification with harness verification, lint, build, and 53 tests.
 - Final `./init.sh` passed after the June 19 workspace-context and cluster-command work with harness verification, lint, build, and 52 tests.
 - Final `./init.sh` passed after the June 18 external integration contract update with harness verification, lint, build, and 41 tests.
 - Baseline `./init.sh` passed before the June 19 workspace-context and cluster-command work with harness verification, lint, build, and 41 tests.
@@ -18,8 +19,9 @@
 - `status` and `/status` call AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same external user id.
 - `workspaces` and `/workspaces` in direct messages call AcornOps `GET /api/v1/workspaces?limit=50` using `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
 - `/workspaces` returns numbered workspace rows and remembers lightweight `{ id, name }` references per external user id.
-- `/workspaces 1` and `/workspace 1` call `GET /api/v1/workspaces/{workspaceId}`, show detail, and make that workspace current.
-- `/workspace` shows the current process-local workspace selection.
+- `/workspaces 1` calls `GET /api/v1/workspaces/{workspaceId}` and shows detail without changing the current workspace.
+- `/workspace 1` calls `GET /api/v1/workspaces/{workspaceId}`, shows detail, and makes that workspace current.
+- `/workspace` calls `GET /api/v1/workspaces/{workspaceId}` and shows full details for the current workspace.
 - `/clusters` calls `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace; `/clusters 1` uses a remembered workspace number and makes it current.
 - The current AcornOps link and resolve contract sends only `{ "externalUserId": "<post author user_id>" }`.
 - The user reported the updated live Mattermost `login` and `status` flow works after the user-id-only contract update.
@@ -40,6 +42,7 @@
 - Added `/workspaces` direct-message command handling, workspace response formatting, empty-state output, next-cursor display, 401 login guidance, and backend-error handling that avoids echoing response bodies.
 - Added `AcornOpsClient.getWorkspace()` and `AcornOpsClient.listKubernetesClusters()`.
 - Added process-local command context plus `/workspaces 1`, `/workspace`, `/workspace 1`, `/clusters`, and `/clusters 1`.
+- Clarified workspace detail behavior: `/workspaces 1` is read-only, `/workspace 1` selects current workspace, and `/workspace` renders current workspace details.
 - Updated `feature_list.json`, `PROGRESS.md`, `DECISIONS.md`, and `docs/bot-runtime.md` for workspace detail, current-workspace context, and cluster-listing behavior.
 
 ## Still Broken Or Unverified
@@ -51,7 +54,7 @@
 
 ## Next Best Action
 
-Live-smoke `/workspaces`, `/workspaces 1`, `/workspace`, and `/clusters` against local Mattermost and AcornOps when the stack is available.
+Live-smoke `/workspaces`, `/workspaces 1`, `/workspace 1`, `/workspace`, and `/clusters` against local Mattermost and AcornOps when the stack is available.
 
 ## Commands
 

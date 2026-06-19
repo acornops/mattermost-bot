@@ -286,7 +286,7 @@ test("handlePostedEvent reuses workspace context across direct message posts", a
       id: "bot",
       username: "acorn-ops-bot"
     },
-    event: postedEvent("user-1", "/workspaces 1"),
+    event: postedEvent("user-1", "/workspace 1"),
     logger: quietLogger()
   });
   const result = await handlePostedEvent({

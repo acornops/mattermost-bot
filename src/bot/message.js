@@ -17,8 +17,8 @@ const helpText = [
   "- `login` creates an AcornOps account-link URL.",
   "- `status` checks whether this external chat account is linked to AcornOps.",
   "- `workspaces` lists AcornOps workspaces available to your linked account.",
-  "- `workspaces 1` shows details for a workspace and makes it current.",
-  "- `workspace` shows the current workspace.",
+  "- `workspaces 1` shows details for a workspace.",
+  "- `workspace` shows details for the current workspace.",
   "- `workspace 1` changes the current workspace.",
   "- `clusters` lists clusters in the current workspace."
 ].join("\n");
@@ -208,7 +208,8 @@ async function handleWorkspaces({
       userName,
       identity: auth.identity,
       acornOpsClient,
-      commandContextStore
+      commandContextStore,
+      selectCurrent: false
     });
   }
 
@@ -255,11 +256,16 @@ async function handleWorkspace({
       return "No current workspace is selected. Send `/workspaces`, then `/workspace 1`.";
     }
 
-    return [
-      "Current AcornOps workspace:",
-      `- ${formatWorkspaceReference(currentWorkspace)}`,
-      "Use `/clusters` to list clusters in this workspace."
-    ].join("\n");
+    return handleWorkspaceDetail({
+      reference: currentWorkspace.id,
+      userId,
+      userName,
+      identity: auth.identity,
+      acornOpsClient,
+      commandContextStore,
+      selectCurrent: false,
+      currentPrefix: true
+    });
   }
 
   return handleWorkspaceDetail({
@@ -268,7 +274,8 @@ async function handleWorkspace({
     userName,
     identity: auth.identity,
     acornOpsClient,
-    commandContextStore
+    commandContextStore,
+    selectCurrent: true
   });
 }
 
@@ -278,7 +285,9 @@ async function handleWorkspaceDetail({
   userName,
   identity,
   acornOpsClient,
-  commandContextStore
+  commandContextStore,
+  selectCurrent,
+  currentPrefix = false
 }) {
   const workspace = resolveWorkspaceForUser({
     reference,
@@ -291,11 +300,15 @@ async function handleWorkspaceDetail({
 
   try {
     const detail = await acornOpsClient.getWorkspace(identity, workspace.id);
-    commandContextStore.selectWorkspace(identity.externalUserId, detail);
+    if (selectCurrent) {
+      commandContextStore.selectWorkspace(identity.externalUserId, detail);
+    }
     return formatWorkspaceDetail({
       workspace: detail,
       userId,
-      userName
+      userName,
+      selectCurrent,
+      currentPrefix
     });
   } catch (error) {
     return workspaceErrorText(error);
@@ -374,9 +387,9 @@ function formatWorkspacePage({ page, userId, userName }) {
   return lines.join("\n");
 }
 
-function formatWorkspaceDetail({ workspace, userId, userName }) {
+function formatWorkspaceDetail({ workspace, userId, userName, selectCurrent, currentPrefix }) {
   const lines = [
-    "AcornOps workspace:",
+    currentPrefix ? "Current AcornOps workspace:" : "AcornOps workspace:",
     `- Name: ${workspace.name ?? workspace.displayName ?? workspace.slug ?? "Unnamed workspace"}`,
     `- ID: ${workspace.id ?? "unknown"}`,
     `- Mattermost user: ${identityLabel({ userId, userName })}`
@@ -402,7 +415,13 @@ function formatWorkspaceDetail({ workspace, userId, userName }) {
     lines.push(`- Quota: ${quota}`);
   }
 
-  lines.push("Current workspace updated. Use `/clusters` to list clusters here.");
+  if (selectCurrent) {
+    lines.push("Current workspace updated. Use `/clusters` to list clusters here.");
+  } else if (!currentPrefix) {
+    lines.push("Use `/workspace 1` to make this the current workspace.");
+  } else {
+    lines.push("Use `/clusters` to list clusters in this workspace.");
+  }
   return lines.join("\n");
 }
 

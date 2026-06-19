@@ -15,5 +15,5 @@ cat <<'MSG'
 Initialization complete.
 
 Project direction: Mattermost ChatOps bot for authenticating users to AcornOps, a Kubernetes cluster-management backend.
-Next action: live-smoke /workspaces, /workspaces 1, /workspace, and /clusters against the local stack.
+Next action: live-smoke /workspaces, /workspaces 1, /workspace 1, /workspace, and /clusters against the local stack.
 MSG

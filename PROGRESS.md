@@ -40,8 +40,9 @@
 - `login` direct messages now call AcornOps `POST /api/v1/auth/chat/integration/link` with `externalUserId` set to the Mattermost post author's `user_id`.
 - `status` now calls AcornOps `POST /api/v1/auth/chat/integration/resolve` and reports `linked` or tells unlinked users to run `/login`.
 - `/workspaces` direct messages now call AcornOps `GET /api/v1/workspaces?limit=50` with `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
-- `/workspaces` returns numbered workspace rows. `/workspaces 1` and `/workspace 1` call `GET /api/v1/workspaces/{workspaceId}`, show detail, and make that workspace current for the user.
-- `/workspace` shows the current process-local workspace selection for the user.
+- `/workspaces` returns numbered workspace rows. `/workspaces 1` calls `GET /api/v1/workspaces/{workspaceId}` and shows detail without changing the current workspace.
+- `/workspace 1` calls `GET /api/v1/workspaces/{workspaceId}`, shows detail, and makes that workspace current for the user.
+- `/workspace` shows full details for the current process-local workspace selection.
 - `/clusters` calls `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace, while `/clusters 1` uses a workspace number from the last `/workspaces` result.
 - AcornOps renamed the chat auth endpoint prefix on 2026-06-17 to `/auth/chat/integration/`; bot tests now assert the new link and resolve URLs.
 - AcornOps updated the account-link contract on 2026-06-18 to require `externalUserId`; the Mattermost adapter supplies the observed post author's Mattermost user id as that external id.
@@ -278,3 +279,11 @@ Session log entries are historical. Superseded risks and decisions are corrected
 - Verification run: Baseline `./init.sh` passed before work with 41 tests. Targeted tests passed after implementation: `node --test test/acornops-client.test.js` with 6 tests, `node --test test/command-context.test.js` with 3 tests, `node --test test/bot-message.test.js` with 24 tests, and `node --test test/bot-runner.test.js` with 8 tests. Final `./init.sh` passed with harness verification, lint, build, and 52 tests.
 - Known risks: Live Mattermost/AcornOps smoke did not run because Mattermost was not listening on `localhost:8065` and AcornOps was not listening on `localhost:8081`. The current workspace context is process-local and will reset on bot restart; use shared TTL storage later if multi-replica or restart-resilient command context becomes necessary.
 - Next best action: live-smoke `/workspaces`, `/workspaces 1`, `/workspace`, and `/clusters` when the local stack is available.
+
+### 2026-06-19 - Workspace detail commands clarified
+
+- Goal: Make `workspaces 1` read-only and make `workspace` show full current-workspace details.
+- Completed: Changed `workspaces 1` so it fetches and displays workspace detail without updating current workspace. Kept `workspace 1` as the explicit current-workspace selection command. Changed `workspace` to call `GET /api/v1/workspaces/{workspaceId}` and render the same detail shape for the current workspace.
+- Verification run: Baseline `./init.sh` passed before work with 52 tests. Targeted tests passed after the behavior change: `node --test test/bot-message.test.js` passed with 25 tests and `node --test test/bot-runner.test.js` passed with 8 tests. Final `./init.sh` passed with harness verification, lint, build, and 53 tests.
+- Known risks: Live Mattermost/AcornOps smoke still has not run in this workspace because the local services are not available here.
+- Next best action: live-smoke `/workspaces`, `/workspaces 1`, `/workspace 1`, `/workspace`, and `/clusters` when the local stack is available.
