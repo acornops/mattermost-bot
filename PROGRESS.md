@@ -38,8 +38,8 @@
 
 ## Known Issues
 
-- `login` direct messages now call AcornOps `POST /api/v1/auth/chat/integration/link` with `externalUserId` set to the Mattermost post author's `user_id`.
-- `status` now calls AcornOps `POST /api/v1/auth/chat/integration/resolve` and reports `linked` or tells unlinked users to run `login`.
+- `login` direct messages now call AcornOps `POST /api/v1/auth/external-integrations/link` with `externalUserId` set to the Mattermost post author's `user_id` and optional `externalDisplayName` from the Mattermost sender name.
+- `status` now calls AcornOps `POST /api/v1/auth/external-integrations/resolve` and reports `linked` or tells unlinked users to run `login`.
 - The bot accepts commands without a leading slash only. Slash-prefixed commands return guidance to retry without `/`.
 - Only `login` is direct-message-only. Authenticated read and read-only assistant commands can run in direct messages or channel mentions.
 - `workspaces` calls AcornOps `GET /api/v1/workspaces?limit=50` with `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
@@ -49,10 +49,10 @@
 - `clusters` calls `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace. `clusters 1` shows cluster detail without selecting it, and `cluster 1` selects the current cluster.
 - `resources` and `findings` use the currently selected cluster or VM. `investigations` uses the current workspace. `vms` lists VMs, `vms 1` shows VM detail, and `vm 1` selects the current VM.
 - `sessions`, `session new`, `session 1`, `messages`, and `ask <question>` use read-only assistant-session endpoints for the selected cluster or VM.
-- AcornOps renamed the chat auth endpoint prefix on 2026-06-17 to `/auth/chat/integration/`; bot tests now assert the new link and resolve URLs.
+- AcornOps moved account-link endpoints on 2026-06-23 to `/auth/external-integrations/`; bot tests now assert the current link and resolve URLs.
 - AcornOps updated the account-link contract on 2026-06-18 to require `externalUserId`; the Mattermost adapter supplies the observed post author's Mattermost user id as that external id.
 - Bot runtime defaults now live in `src/bot/config.js`; `CSIT_MATTERMOST_BOT_USERNAME` is the runtime source for changing the bot mention name, with `acorn-ops-bot` as the single code fallback.
-- The most recent live account-link smoke passed after the earlier user-id-only update; the 2026-06-18 externalUserId rename is covered by automated tests but still needs live smoke.
+- The most recent live account-link smoke passed after the earlier user-id-only update; the 2026-06-23 external-integrations endpoint move is covered by automated tests but still needs live smoke.
 - The bot remembers only lightweight command context in memory: numbered workspaces, clusters, VMs, sessions, current workspace, one selected target, and current session. It does not store AcornOps browser sessions, cookies, tokens, or link URLs. The context resets when the bot process restarts.
 - The K3s verification command did not pass during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections.
 - Mattermost is running locally through the official Docker Compose deployment without NGINX.
@@ -67,6 +67,13 @@
 ## Session Log
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
+
+### 2026-06-23 - External integration endpoint move adopted
+
+- Goal: Merge the authenticated-command branch into `main`, then update CSIT for the latest AcornOps external integration account-link contracts.
+- Completed: Fast-forward merged `feat/add-authenticated-commands` into `main`. Updated the AcornOps client to call `POST /api/v1/auth/external-integrations/link` and `POST /api/v1/auth/external-integrations/resolve`. Kept the existing `EXTERNAL_INTEGRATION_SERVICE_TOKEN` runtime behavior with the legacy `MATTERMOST_CHAT_SERVICE_TOKEN` fallback. Renamed internal config/client paths toward external-integration terminology while keeping compatibility aliases. Added optional `externalDisplayName` from trusted Mattermost sender metadata on link creation. Updated tests and durable docs for the new contract.
+- Verification run: Targeted `node --test test/acornops-client.test.js test/bot-message.test.js test/bot-runner.test.js test/config.test.js` passed with 51 tests. Final `./init.sh` passed with harness verification, lint, build, and 64 tests. Local AcornOps health probe failed to connect to `http://localhost:8081/health`; `./scripts/verify-mattermost.sh` failed to connect to `http://localhost:8065/api/v4/system/ping`.
+- Known risks: Live Mattermost/AcornOps smoke for the new `/api/v1/auth/external-integrations/*` link and resolve calls still needs to run when both local services are available.
 
 ### 2026-05-25 - Initializer pass
 

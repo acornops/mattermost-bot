@@ -3,6 +3,8 @@
 ## Currently Verified
 
 - Final `./init.sh` passed after the June 19 expanded external integration command work with harness verification, lint, build, and 64 tests.
+- Targeted tests passed after the June 23 external integration endpoint update: `node --test test/acornops-client.test.js test/bot-message.test.js test/bot-runner.test.js test/config.test.js` with 51 tests.
+- Final `./init.sh` passed after the June 23 external integration endpoint update with harness verification, lint, build, and 64 tests.
 - Final `./init.sh` passed after the June 19 workspace-detail behavior clarification with harness verification, lint, build, and 53 tests.
 - Final `./init.sh` passed after the June 19 workspace-context and cluster-command work with harness verification, lint, build, and 52 tests.
 - Final `./init.sh` passed after the June 18 external integration contract update with harness verification, lint, build, and 41 tests.
@@ -17,8 +19,8 @@
 - Bot implementation runtime is Node.js ECMAScript modules with built-in runtime APIs.
 - The bot responds to Mattermost direct messages and channel mentions through REST plus WebSocket events.
 - The bot accepts commands without a leading slash only. Slash-prefixed commands return guidance to retry without `/`.
-- `login` in direct messages calls AcornOps `POST /api/v1/auth/chat/integration/link` with `{ "externalUserId": "<post author user_id>" }`.
-- `status` calls AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same external user id.
+- `login` in direct messages calls AcornOps `POST /api/v1/auth/external-integrations/link` with `{ "externalUserId": "<post author user_id>", "externalDisplayName": "<sender name when available>" }`.
+- `status` calls AcornOps `POST /api/v1/auth/external-integrations/resolve` with the same external user id.
 - Only `login` is direct-message-only. Authenticated read and read-only assistant commands can run in direct messages or channel mentions.
 - `workspaces` calls AcornOps `GET /api/v1/workspaces?limit=50` using `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
 - `workspaces` returns numbered workspace rows and remembers lightweight `{ id, name }` references per external user id.
@@ -55,11 +57,16 @@
 - Kept only `login` direct-message-only; other authenticated read/read-only assistant commands can run from channel mentions.
 - Added client methods and message handlers for cluster detail, resources, findings, investigations, VMs, sessions, messages, and read-only `ask` runs.
 - Expanded command context so only one cluster or VM can be selected at a time, and parent selection changes clear dependent session state.
+- Merged `feat/add-authenticated-commands` into `main` by fast-forward before starting the June 23 contract work.
+- Updated account-link and resolve calls from `/api/v1/auth/chat/integration/*` to `/api/v1/auth/external-integrations/*`.
+- Kept the existing `EXTERNAL_INTEGRATION_SERVICE_TOKEN` behavior and legacy `MATTERMOST_CHAT_SERVICE_TOKEN` env fallback.
+- Added optional `externalDisplayName` to link creation from trusted Mattermost sender metadata.
+- Updated client, message, runner, config tests, runtime docs, API inventory, decisions, feature evidence, and this handoff for the new contract.
 
 ## Still Broken Or Unverified
 
 - The exact Mattermost post ids and AcornOps response snippets from the passing live account-link smoke are not recorded in this repository.
-- Live Mattermost/AcornOps smoke for the expanded command surface did not run because Mattermost was not listening on `localhost:8065` and AcornOps was not listening on `localhost:8081`.
+- Live Mattermost/AcornOps smoke for the June 23 external-integrations endpoint move and expanded command surface has not run in this session yet.
 - The current workspace context is process-local. Use shared TTL storage later if multi-replica or restart-resilient command context becomes necessary.
 - Assistant run observation beyond returning the run id is not yet user-facing.
 - The local Mattermost bot token must stay outside committed files.

@@ -1,38 +1,51 @@
 import { JsonHttpClient } from "./http-client.js";
 
 export class AcornOpsClient {
-  constructor({ baseUrl, chatServiceToken = "", fetchImpl = globalThis.fetch }) {
+  constructor({
+    baseUrl,
+    externalIntegrationToken = "",
+    chatServiceToken = "",
+    fetchImpl = globalThis.fetch
+  }) {
     this.http = new JsonHttpClient({
       baseUrl,
       fetchImpl,
       serviceName: "AcornOps",
       missingBaseUrlMessage: "ACORNOPS_API_BASE_URL is required."
     });
-    this.chatServiceToken = chatServiceToken;
+    this.externalIntegrationToken = externalIntegrationToken || chatServiceToken;
+  }
+
+  canUseExternalIntegrationAuth() {
+    return Boolean(this.externalIntegrationToken);
   }
 
   canUseMattermostChatAuth() {
-    return Boolean(this.chatServiceToken);
+    return this.canUseExternalIntegrationAuth();
+  }
+
+  async createExternalIntegrationLink(identity) {
+    this.requireExternalIntegrationAuth();
+
+    return this.requestJson("POST", "/api/v1/auth/external-integrations/link", identity, {
+      serviceAuth: true
+    });
   }
 
   async createMattermostLink(identity) {
-    if (!this.canUseMattermostChatAuth()) {
-      throw new Error("EXTERNAL_INTEGRATION_SERVICE_TOKEN is required for external integration chat auth.");
-    }
+    return this.createExternalIntegrationLink(identity);
+  }
 
-    return this.requestJson("POST", "/api/v1/auth/chat/integration/link", identity, {
+  async resolveExternalIntegrationLink(identity) {
+    this.requireExternalIntegrationAuth();
+
+    return this.requestJson("POST", "/api/v1/auth/external-integrations/resolve", identity, {
       serviceAuth: true
     });
   }
 
   async resolveMattermostLink(identity) {
-    if (!this.canUseMattermostChatAuth()) {
-      throw new Error("EXTERNAL_INTEGRATION_SERVICE_TOKEN is required for external integration chat auth.");
-    }
-
-    return this.requestJson("POST", "/api/v1/auth/chat/integration/resolve", identity, {
-      serviceAuth: true
-    });
+    return this.resolveExternalIntegrationLink(identity);
   }
 
   async listWorkspaces(identity, { limit = 50, cursor = "", q = "" } = {}) {
@@ -318,13 +331,13 @@ export class AcornOpsClient {
 
     return {
       ...headers,
-      authorization: `Bearer ${this.chatServiceToken}`
+      authorization: `Bearer ${this.externalIntegrationToken}`
     };
   }
 
   requireExternalIntegrationAuth() {
-    if (!this.canUseMattermostChatAuth()) {
-      throw new Error("EXTERNAL_INTEGRATION_SERVICE_TOKEN is required for external integration chat auth.");
+    if (!this.canUseExternalIntegrationAuth()) {
+      throw new Error("EXTERNAL_INTEGRATION_SERVICE_TOKEN is required for external integration auth.");
     }
   }
 

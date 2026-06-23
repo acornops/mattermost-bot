@@ -54,7 +54,7 @@ CSIT_MATTERMOST_TOKEN=replace-with-bot-token
 CSIT_MATTERMOST_BOT_USERNAME=acorn-ops-bot
 
 ACORNOPS_API_BASE_URL=http://localhost:8081
-EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-acornops-chat-token
+EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-acornops-external-integration-token
 ```
 
 ## Current Behavior
@@ -66,9 +66,9 @@ EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-acornops-chat-token
 - The bot posts responses as normal channel messages instead of threaded replies.
 - The bot ignores messages authored by itself.
 - Commands are accepted without a leading slash only, for example `clusters`. Slash-prefixed commands return guidance to retry without `/`.
-- `login` in a direct message calls AcornOps `POST /api/v1/auth/chat/integration/link` with `externalUserId` set to the Mattermost user id read from the post author.
+- `login` in a direct message calls AcornOps `POST /api/v1/auth/external-integrations/link` with `externalUserId` set to the Mattermost user id read from the post author and `externalDisplayName` set from the Mattermost sender name when available.
 - `login` in a shared channel does not call AcornOps; it asks the user to direct-message `@acorn-ops-bot`.
-- `status` calls AcornOps `POST /api/v1/auth/chat/integration/resolve` with the same external user id.
+- `status` calls AcornOps `POST /api/v1/auth/external-integrations/resolve` with the same external user id.
 - `workspaces` calls AcornOps `GET /api/v1/workspaces?limit=50` with the external integration service token and `x-acornops-external-user-id` set to the observed Mattermost post author id.
 - Workspace results are numbered. `workspaces 1` calls AcornOps `GET /api/v1/workspaces/{workspaceId}` for the remembered workspace id and shows details without changing the user's current workspace.
 - `workspace 1` calls AcornOps `GET /api/v1/workspaces/{workspaceId}` for the remembered workspace id, shows details, and updates the user's current workspace.

@@ -270,7 +270,7 @@ async function handleLogin({ userId, userName, acornOpsClient, mattermostIdentit
     return missingIdentityText();
   }
 
-  const link = await acornOpsClient.createMattermostLink(identity);
+  const link = await acornOpsClient.createExternalIntegrationLink(linkIdentityForUser(identity, userName));
   return [
     "AcornOps account link:",
     link.linkUrl,
@@ -291,7 +291,7 @@ async function handleStatus({ userId, userName, acornOpsClient, mattermostIdenti
     return missingIdentityText();
   }
 
-  const result = await acornOpsClient.resolveMattermostLink(identity);
+  const result = await acornOpsClient.resolveExternalIntegrationLink(identity);
   if (result.status === "linked") {
     const user = result.user ?? {};
     const linkedUser = [user.displayName, user.email, user.id].filter(Boolean).join(" / ");
@@ -1696,6 +1696,18 @@ function normalizeMattermostIdentity({ mattermostIdentity, userId }) {
   return identity;
 }
 
+function linkIdentityForUser(identity, userName) {
+  const externalDisplayName = String(userName ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+  if (!externalDisplayName) {
+    return identity;
+  }
+
+  return {
+    ...identity,
+    externalDisplayName
+  };
+}
+
 function requireExternalDataCommand({
   acornOpsClient,
   mattermostIdentity,
@@ -1842,6 +1854,10 @@ function hashText(value) {
 function isAcornOpsChatAuthConfigured(acornOpsClient) {
   if (!acornOpsClient) {
     return false;
+  }
+
+  if (typeof acornOpsClient.canUseExternalIntegrationAuth === "function") {
+    return acornOpsClient.canUseExternalIntegrationAuth();
   }
 
   if (typeof acornOpsClient.canUseMattermostChatAuth !== "function") {

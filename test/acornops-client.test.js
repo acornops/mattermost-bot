@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AcornOpsClient } from "../src/bot/acornops-client.js";
 
-test("createMattermostLink posts the AcornOps external integration identity contract", async () => {
+test("createExternalIntegrationLink posts the AcornOps external integration identity contract", async () => {
   const requests = [];
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",
-    chatServiceToken: "chat-token",
+    externalIntegrationToken: "chat-token",
     fetchImpl: async (url, init) => {
       requests.push({ url, init });
       return new Response(JSON.stringify({
-        linkUrl: "https://console.acornops.dev/integrations/external-chat/link?token=intlink_123",
+        linkUrl: "https://console.acornops.dev/integrations/external/link?token=intlink_123",
         expiresAt: "2026-06-09T00:10:00.000Z"
       }), {
         status: 200,
@@ -19,23 +19,23 @@ test("createMattermostLink posts the AcornOps external integration identity cont
     }
   });
 
-  const response = await client.createMattermostLink(mattermostIdentity());
+  const response = await client.createExternalIntegrationLink(linkIdentity());
 
   assert.deepEqual(response, {
-    linkUrl: "https://console.acornops.dev/integrations/external-chat/link?token=intlink_123",
+    linkUrl: "https://console.acornops.dev/integrations/external/link?token=intlink_123",
     expiresAt: "2026-06-09T00:10:00.000Z"
   });
-  assert.equal(requests[0].url, "http://acornops/api/v1/auth/chat/integration/link");
+  assert.equal(requests[0].url, "http://acornops/api/v1/auth/external-integrations/link");
   assert.equal(requests[0].init.method, "POST");
   assert.equal(requests[0].init.headers.authorization, "Bearer chat-token");
-  assert.deepEqual(JSON.parse(requests[0].init.body), mattermostIdentity());
+  assert.deepEqual(JSON.parse(requests[0].init.body), linkIdentity());
 });
 
-test("resolveMattermostLink asks AcornOps for durable link state", async () => {
+test("resolveExternalIntegrationLink asks AcornOps for durable link state", async () => {
   const requests = [];
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",
-    chatServiceToken: "chat-token",
+    externalIntegrationToken: "chat-token",
     fetchImpl: async (url, init) => {
       requests.push({ url, init });
       return new Response(JSON.stringify({
@@ -52,11 +52,11 @@ test("resolveMattermostLink asks AcornOps for durable link state", async () => {
     }
   });
 
-  const response = await client.resolveMattermostLink(mattermostIdentity());
+  const response = await client.resolveExternalIntegrationLink(mattermostIdentity());
 
   assert.equal(response.status, "linked");
   assert.equal(response.user.id, "acorn-user-1");
-  assert.equal(requests[0].url, "http://acornops/api/v1/auth/chat/integration/resolve");
+  assert.equal(requests[0].url, "http://acornops/api/v1/auth/external-integrations/resolve");
   assert.equal(requests[0].init.method, "POST");
   assert.equal(requests[0].init.headers.authorization, "Bearer chat-token");
   assert.deepEqual(JSON.parse(requests[0].init.body), mattermostIdentity());
@@ -66,7 +66,7 @@ test("listWorkspaces uses service auth and external user header", async () => {
   const requests = [];
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",
-    chatServiceToken: "chat-token",
+    externalIntegrationToken: "chat-token",
     fetchImpl: async (url, init) => {
       requests.push({ url, init });
       return new Response(JSON.stringify({
@@ -108,7 +108,7 @@ test("getWorkspace uses service auth and external user header", async () => {
   const requests = [];
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",
-    chatServiceToken: "chat-token",
+    externalIntegrationToken: "chat-token",
     fetchImpl: async (url, init) => {
       requests.push({ url, init });
       return new Response(JSON.stringify({
@@ -135,7 +135,7 @@ test("listKubernetesClusters uses workspace path query and external user header"
   const requests = [];
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",
-    chatServiceToken: "chat-token",
+    externalIntegrationToken: "chat-token",
     fetchImpl: async (url, init) => {
       requests.push({ url, init });
       return new Response(JSON.stringify({
@@ -174,7 +174,7 @@ test("allowed external bot read endpoints use service auth and external user hea
   const requests = [];
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",
-    chatServiceToken: "chat-token",
+    externalIntegrationToken: "chat-token",
     fetchImpl: async (url, init) => {
       requests.push({ url, init });
       return new Response(JSON.stringify({ items: [] }), {
@@ -221,7 +221,7 @@ test("assistant session endpoints always post read-only runs", async () => {
   const requests = [];
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",
-    chatServiceToken: "chat-token",
+    externalIntegrationToken: "chat-token",
     fetchImpl: async (url, init) => {
       requests.push({ url, init });
       return new Response(JSON.stringify({
@@ -269,7 +269,7 @@ test("assistant session endpoints always post read-only runs", async () => {
   });
 });
 
-test("external integration chat auth requires the service token", async () => {
+test("external integration auth requires the service token", async () => {
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",
     fetchImpl: async () => {
@@ -278,7 +278,7 @@ test("external integration chat auth requires the service token", async () => {
   });
 
   await assert.rejects(
-    client.createMattermostLink(mattermostIdentity()),
+    client.createExternalIntegrationLink(mattermostIdentity()),
     /EXTERNAL_INTEGRATION_SERVICE_TOKEN/
   );
 
@@ -301,5 +301,12 @@ test("external integration chat auth requires the service token", async () => {
 function mattermostIdentity() {
   return {
     externalUserId: "mattermost-user-1"
+  };
+}
+
+function linkIdentity() {
+  return {
+    ...mattermostIdentity(),
+    externalDisplayName: "Alice"
   };
 }

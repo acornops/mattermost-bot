@@ -59,7 +59,7 @@ test("handlePostedEvent responds to direct message posts in the main timeline", 
   const result = await handlePostedEvent({
     client,
     acornOpsClient: {
-      async resolveMattermostLink(input) {
+      async resolveExternalIntegrationLink(input) {
         assert.deepEqual(input, mattermostIdentity("user-1"));
         return { status: "unlinked" };
       }
@@ -135,10 +135,10 @@ test("handlePostedEvent creates AcornOps account link for direct message login p
   const result = await handlePostedEvent({
     client,
     acornOpsClient: {
-      async createMattermostLink(input) {
-        assert.deepEqual(input, mattermostIdentity("user-1"));
+      async createExternalIntegrationLink(input) {
+        assert.deepEqual(input, linkIdentity("user-1"));
         return {
-          linkUrl: "https://console.acornops.dev/integrations/external-chat/link?token=intlink_123",
+          linkUrl: "https://console.acornops.dev/integrations/external/link?token=intlink_123",
           expiresAt: "2026-06-09T00:10:00.000Z"
         };
       }
@@ -334,6 +334,13 @@ function fakeClient(overrides = {}) {
 function mattermostIdentity(externalUserId = "mattermost-user-1") {
   return {
     externalUserId
+  };
+}
+
+function linkIdentity(externalUserId = "mattermost-user-1") {
+  return {
+    ...mattermostIdentity(externalUserId),
+    externalDisplayName: "alice"
   };
 }
 

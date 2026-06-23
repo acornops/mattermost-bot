@@ -35,8 +35,8 @@ The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/con
 
 - Use the selected Node.js runtime to run a Mattermost bot account that receives messages and responds.
 - The previous local AcornOps `dev-login` bridge was only a development step.
-- Use AcornOps `POST /api/v1/auth/chat/integration/link` for `login`.
-- Use AcornOps `POST /api/v1/auth/chat/integration/resolve` for `status`.
+- Use AcornOps `POST /api/v1/auth/external-integrations/link` for `login`.
+- Use AcornOps `POST /api/v1/auth/external-integrations/resolve` for `status`.
 - Keep Mattermost identity values sourced from events, not user-supplied chat text.
 - Accept plain commands without a leading slash. Keep `login` direct-message-only; allow authenticated read and read-only assistant commands from direct messages or channel mentions.
 - Use process-local command context for the current workspace, one selected cluster or VM, and current troubleshooting session.

@@ -69,10 +69,10 @@ test("handleBotMessage creates an AcornOps account link for direct login", async
     channelType: "D",
     mattermostIdentity: mattermostIdentity(),
     acornOpsClient: {
-      async createMattermostLink(input) {
-        assert.deepEqual(input, mattermostIdentity());
+      async createExternalIntegrationLink(input) {
+        assert.deepEqual(input, linkIdentity());
         return {
-          linkUrl: "https://console.acornops.dev/integrations/external-chat/link?token=intlink_123",
+          linkUrl: "https://console.acornops.dev/integrations/external/link?token=intlink_123",
           expiresAt: "2026-06-09T00:10:00.000Z"
         };
       }
@@ -80,7 +80,7 @@ test("handleBotMessage creates an AcornOps account link for direct login", async
   });
 
   assert.match(response, /AcornOps account link:/);
-  assert.match(response, /https:\/\/console\.acornops\.dev\/integrations\/external-chat\/link\?token=intlink_123/);
+  assert.match(response, /https:\/\/console\.acornops\.dev\/integrations\/external\/link\?token=intlink_123/);
   assert.match(response, /This link expires in 10 minutes\./);
   assert.match(response, /No AcornOps password should be typed into Mattermost\./);
 });
@@ -92,8 +92,8 @@ test("handleBotMessage refuses login without complete Mattermost identity", asyn
     channelType: "D",
     mattermostIdentity: {},
     acornOpsClient: {
-      async createMattermostLink() {
-        throw new Error("createMattermostLink should not be called");
+      async createExternalIntegrationLink() {
+        throw new Error("createExternalIntegrationLink should not be called");
       }
     }
   });
@@ -109,11 +109,11 @@ test("handleBotMessage reports login configuration when service token is missing
     channelType: "D",
     mattermostIdentity: mattermostIdentity(),
     acornOpsClient: {
-      canUseMattermostChatAuth() {
+      canUseExternalIntegrationAuth() {
         return false;
       },
-      async createMattermostLink() {
-        throw new Error("createMattermostLink should not be called");
+      async createExternalIntegrationLink() {
+        throw new Error("createExternalIntegrationLink should not be called");
       }
     }
   });
@@ -130,8 +130,8 @@ test("handleBotMessage keeps login direct-message only", async () => {
     channelType: "O",
     mattermostIdentity: mattermostIdentity(),
     acornOpsClient: {
-      async createMattermostLink() {
-        throw new Error("createMattermostLink should not be called");
+      async createExternalIntegrationLink() {
+        throw new Error("createExternalIntegrationLink should not be called");
       }
     }
   });
@@ -146,7 +146,7 @@ test("handleBotMessage status reports linked AcornOps identity", async () => {
     userName: "alice",
     mattermostIdentity: mattermostIdentity(),
     acornOpsClient: {
-      async resolveMattermostLink(input) {
+      async resolveExternalIntegrationLink(input) {
         assert.deepEqual(input, mattermostIdentity());
         return {
           status: "linked",
@@ -175,7 +175,7 @@ test("handleBotMessage status tells unlinked users to run login", async () => {
     userName: "alice",
     mattermostIdentity: mattermostIdentity(),
     acornOpsClient: {
-      async resolveMattermostLink(input) {
+      async resolveExternalIntegrationLink(input) {
         assert.deepEqual(input, mattermostIdentity());
         return {
           status: "unlinked"
@@ -194,11 +194,11 @@ test("handleBotMessage reports status configuration when service token is missin
     userId: "mattermost-user-1",
     mattermostIdentity: mattermostIdentity(),
     acornOpsClient: {
-      canUseMattermostChatAuth() {
+      canUseExternalIntegrationAuth() {
         return false;
       },
-      async resolveMattermostLink() {
-        throw new Error("resolveMattermostLink should not be called");
+      async resolveExternalIntegrationLink() {
+        throw new Error("resolveExternalIntegrationLink should not be called");
       }
     }
   });
@@ -318,7 +318,7 @@ test("handleBotMessage reports workspaces configuration when service token is mi
     channelType: "D",
     mattermostIdentity: mattermostIdentity(),
     acornOpsClient: {
-      canUseMattermostChatAuth() {
+      canUseExternalIntegrationAuth() {
         return false;
       },
       async listWorkspaces() {
@@ -852,5 +852,12 @@ function selectedVmContext() {
 function mattermostIdentity() {
   return {
     externalUserId: "mattermost-user-1"
+  };
+}
+
+function linkIdentity() {
+  return {
+    ...mattermostIdentity(),
+    externalDisplayName: "alice"
   };
 }

@@ -13,7 +13,7 @@ test("readBotConfig applies local development defaults", () => {
     mattermostToken: "",
     mattermostBotUsername: DEFAULT_MATTERMOST_BOT_USERNAME,
     acornOpsUrl: DEFAULT_ACORNOPS_API_BASE_URL,
-    mattermostChatServiceToken: ""
+    externalIntegrationServiceToken: ""
   });
 });
 
@@ -31,5 +31,5 @@ test("readBotConfig prefers the external integration service token", () => {
     MATTERMOST_CHAT_SERVICE_TOKEN: "legacy-token"
   });
 
-  assert.equal(config.mattermostChatServiceToken, "external-token");
+  assert.equal(config.externalIntegrationServiceToken, "external-token");
 });

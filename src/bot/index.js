@@ -18,7 +18,7 @@ const client = new MattermostClient({
 });
 const acornOpsClient = new AcornOpsClient({
   baseUrl: config.acornOpsUrl,
-  chatServiceToken: config.mattermostChatServiceToken
+  externalIntegrationToken: config.externalIntegrationServiceToken
 });
 const runner = createMattermostBotRunner({
   client,

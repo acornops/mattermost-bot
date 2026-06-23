@@ -95,15 +95,22 @@
 
 ## 2026-06-17: Use AcornOps generic chat integration endpoint prefix
 
+- Status: superseded by the 2026-06-23 external integration endpoint family.
 - Decision: The bot calls AcornOps chat auth through `POST /api/v1/auth/chat/integration/link` and `POST /api/v1/auth/chat/integration/resolve`.
 - Reason: AcornOps renamed the endpoint prefix to use a provider-neutral chat integration path while the CSIT adapter still handles Mattermost-specific identity extraction.
-- Consequence: Request-shape tests assert the new URLs. The bot must not accept user-typed Mattermost ids from chat.
+- Consequence: Superseded by `/api/v1/auth/external-integrations/*` endpoints.
 
 ## 2026-06-18: Use external integration identity names for linking
 
 - Decision: The bot sends the observed Mattermost post author id as `externalUserId` to AcornOps `link` and `resolve`, and uses `EXTERNAL_INTEGRATION_SERVICE_TOKEN` for service authentication.
 - Reason: AcornOps now exposes provider-neutral external integration account-link endpoints. The integration client supplies only the external user id; AcornOps owns browser handoff, approval, durable linking, and token security.
 - Consequence: The Mattermost adapter remains the source of the external user id, but the AcornOps request body is no longer Mattermost-specific. The legacy `MATTERMOST_CHAT_SERVICE_TOKEN` env name is accepted only as a local backward-compatible fallback.
+
+## 2026-06-23: Use AcornOps external integration account-link endpoints
+
+- Decision: The bot now calls `POST /api/v1/auth/external-integrations/link` for `login` and `POST /api/v1/auth/external-integrations/resolve` for `status`.
+- Reason: AcornOps moved account-linking out of the chat-auth path into the external integration endpoint family. The installed external integration client id and provider are derived from the bearer token.
+- Consequence: Link creation sends the observed Mattermost post author id as `externalUserId` and may include a trusted Mattermost sender name as `externalDisplayName`. Resolve and operational bot calls continue to use only the stable `externalUserId`; operational calls still send `x-acornops-external-user-id`.
 
 ## 2026-06-18: Keep authenticated data-listing commands direct-message-first
 
