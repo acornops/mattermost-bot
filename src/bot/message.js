@@ -1856,13 +1856,9 @@ function isAcornOpsChatAuthConfigured(acornOpsClient) {
     return false;
   }
 
-  if (typeof acornOpsClient.canUseExternalIntegrationAuth === "function") {
-    return acornOpsClient.canUseExternalIntegrationAuth();
-  }
-
-  if (typeof acornOpsClient.canUseMattermostChatAuth !== "function") {
+  if (typeof acornOpsClient.canUseExternalIntegrationAuth !== "function") {
     return true;
   }
 
-  return acornOpsClient.canUseMattermostChatAuth();
+  return acornOpsClient.canUseExternalIntegrationAuth();
 }

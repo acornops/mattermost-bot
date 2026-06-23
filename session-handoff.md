@@ -5,6 +5,8 @@
 - Final `./init.sh` passed after the June 19 expanded external integration command work with harness verification, lint, build, and 64 tests.
 - Targeted tests passed after the June 23 external integration endpoint update: `node --test test/acornops-client.test.js test/bot-message.test.js test/bot-runner.test.js test/config.test.js` with 51 tests.
 - Final `./init.sh` passed after the June 23 external integration endpoint update with harness verification, lint, build, and 64 tests.
+- Targeted tests passed after removing `MATTERMOST_CHAT_SERVICE_TOKEN` fallback: `node --test test/acornops-client.test.js test/bot-message.test.js test/bot-runner.test.js test/config.test.js` with 52 tests.
+- Final `./init.sh` passed after removing the fallback with harness verification, lint, build, and 65 tests.
 - Final `./init.sh` passed after the June 19 workspace-detail behavior clarification with harness verification, lint, build, and 53 tests.
 - Final `./init.sh` passed after the June 19 workspace-context and cluster-command work with harness verification, lint, build, and 52 tests.
 - Final `./init.sh` passed after the June 18 external integration contract update with harness verification, lint, build, and 41 tests.
@@ -43,7 +45,7 @@
 ## Changes This Session
 
 - Updated the account-link and resolve contract to use provider-neutral `externalUserId`.
-- Switched runtime setup text to `EXTERNAL_INTEGRATION_SERVICE_TOKEN`, with `MATTERMOST_CHAT_SERVICE_TOKEN` retained as a backward-compatible env fallback.
+- Switched runtime setup text to `EXTERNAL_INTEGRATION_SERVICE_TOKEN`.
 - Fixed the startup failure caused by the partial identity rename from `mattermostUserId` to `externalUserId`.
 - Created branch `feat/add-authenticated-commands`.
 - Added `AcornOpsClient.listWorkspaces()` for the provided `GET /api/v1/workspaces` endpoint.
@@ -59,9 +61,10 @@
 - Expanded command context so only one cluster or VM can be selected at a time, and parent selection changes clear dependent session state.
 - Merged `feat/add-authenticated-commands` into `main` by fast-forward before starting the June 23 contract work.
 - Updated account-link and resolve calls from `/api/v1/auth/chat/integration/*` to `/api/v1/auth/external-integrations/*`.
-- Kept the existing `EXTERNAL_INTEGRATION_SERVICE_TOKEN` behavior and legacy `MATTERMOST_CHAT_SERVICE_TOKEN` env fallback.
+- Removed the legacy `MATTERMOST_CHAT_SERVICE_TOKEN` env fallback; the bot now requires `EXTERNAL_INTEGRATION_SERVICE_TOKEN`.
 - Added optional `externalDisplayName` to link creation from trusted Mattermost sender metadata.
 - Updated client, message, runner, config tests, runtime docs, API inventory, decisions, feature evidence, and this handoff for the new contract.
+- Removed the old `MATTERMOST_CHAT_SERVICE_TOKEN` runtime behavior from config and client compatibility code; `.env.example` now documents only `EXTERNAL_INTEGRATION_SERVICE_TOKEN`.
 
 ## Still Broken Or Unverified
 

@@ -4,7 +4,6 @@ export class AcornOpsClient {
   constructor({
     baseUrl,
     externalIntegrationToken = "",
-    chatServiceToken = "",
     fetchImpl = globalThis.fetch
   }) {
     this.http = new JsonHttpClient({
@@ -13,15 +12,11 @@ export class AcornOpsClient {
       serviceName: "AcornOps",
       missingBaseUrlMessage: "ACORNOPS_API_BASE_URL is required."
     });
-    this.externalIntegrationToken = externalIntegrationToken || chatServiceToken;
+    this.externalIntegrationToken = externalIntegrationToken;
   }
 
   canUseExternalIntegrationAuth() {
     return Boolean(this.externalIntegrationToken);
-  }
-
-  canUseMattermostChatAuth() {
-    return this.canUseExternalIntegrationAuth();
   }
 
   async createExternalIntegrationLink(identity) {
@@ -32,20 +27,12 @@ export class AcornOpsClient {
     });
   }
 
-  async createMattermostLink(identity) {
-    return this.createExternalIntegrationLink(identity);
-  }
-
   async resolveExternalIntegrationLink(identity) {
     this.requireExternalIntegrationAuth();
 
     return this.requestJson("POST", "/api/v1/auth/external-integrations/resolve", identity, {
       serviceAuth: true
     });
-  }
-
-  async resolveMattermostLink(identity) {
-    return this.resolveExternalIntegrationLink(identity);
   }
 
   async listWorkspaces(identity, { limit = 50, cursor = "", q = "" } = {}) {

@@ -104,13 +104,19 @@
 
 - Decision: The bot sends the observed Mattermost post author id as `externalUserId` to AcornOps `link` and `resolve`, and uses `EXTERNAL_INTEGRATION_SERVICE_TOKEN` for service authentication.
 - Reason: AcornOps now exposes provider-neutral external integration account-link endpoints. The integration client supplies only the external user id; AcornOps owns browser handoff, approval, durable linking, and token security.
-- Consequence: The Mattermost adapter remains the source of the external user id, but the AcornOps request body is no longer Mattermost-specific. The legacy `MATTERMOST_CHAT_SERVICE_TOKEN` env name is accepted only as a local backward-compatible fallback.
+- Consequence: The Mattermost adapter remains the source of the external user id, but the AcornOps request body is no longer Mattermost-specific. The legacy `MATTERMOST_CHAT_SERVICE_TOKEN` env name is no longer accepted.
 
 ## 2026-06-23: Use AcornOps external integration account-link endpoints
 
 - Decision: The bot now calls `POST /api/v1/auth/external-integrations/link` for `login` and `POST /api/v1/auth/external-integrations/resolve` for `status`.
 - Reason: AcornOps moved account-linking out of the chat-auth path into the external integration endpoint family. The installed external integration client id and provider are derived from the bearer token.
 - Consequence: Link creation sends the observed Mattermost post author id as `externalUserId` and may include a trusted Mattermost sender name as `externalDisplayName`. Resolve and operational bot calls continue to use only the stable `externalUserId`; operational calls still send `x-acornops-external-user-id`.
+
+## 2026-06-23: Require only EXTERNAL_INTEGRATION_SERVICE_TOKEN
+
+- Decision: Remove the `MATTERMOST_CHAT_SERVICE_TOKEN` runtime fallback and require `EXTERNAL_INTEGRATION_SERVICE_TOKEN` for AcornOps external integration authentication.
+- Reason: The AcornOps contract is now provider-neutral, and preserving the older Mattermost-specific token name adds unnecessary configuration ambiguity.
+- Consequence: Local `.env` files must use `EXTERNAL_INTEGRATION_SERVICE_TOKEN`; setting only `MATTERMOST_CHAT_SERVICE_TOKEN` leaves AcornOps integration auth unconfigured.
 
 ## 2026-06-18: Keep authenticated data-listing commands direct-message-first
 

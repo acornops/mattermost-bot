@@ -8,6 +8,6 @@ export function readBotConfig(env = process.env) {
     mattermostToken: env.CSIT_MATTERMOST_TOKEN || "",
     mattermostBotUsername: env.CSIT_MATTERMOST_BOT_USERNAME || DEFAULT_MATTERMOST_BOT_USERNAME,
     acornOpsUrl: env.ACORNOPS_API_BASE_URL || DEFAULT_ACORNOPS_API_BASE_URL,
-    externalIntegrationServiceToken: env.EXTERNAL_INTEGRATION_SERVICE_TOKEN || env.MATTERMOST_CHAT_SERVICE_TOKEN || ""
+    externalIntegrationServiceToken: env.EXTERNAL_INTEGRATION_SERVICE_TOKEN || ""
   };
 }
