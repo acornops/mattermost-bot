@@ -2,6 +2,8 @@
 
 ## Currently Verified
 
+- Final `./init.sh` passed after the June 25 README production repositioning with harness verification, lint, build, and 65 tests.
+- This repository is now documented as the official AcornOps Mattermost bot integration, not a CSIT learning repository.
 - Final `./init.sh` passed after the June 19 expanded external integration command work with harness verification, lint, build, and 64 tests.
 - Targeted tests passed after the June 23 external integration endpoint update: `node --test test/acornops-client.test.js test/bot-message.test.js test/bot-runner.test.js test/config.test.js` with 51 tests.
 - Final `./init.sh` passed after the June 23 external integration endpoint update with harness verification, lint, build, and 64 tests.
@@ -44,6 +46,9 @@
 
 ## Changes This Session
 
+- Reviewed AcornOps public repository READMEs excluding this repository: `acornops-workspace`, `control-plane`, `management-console`, `docs-website`, `acornops-deployment`, `execution-engine`, `llm-gateway`, `k8s-agent`, and `vm-agent`; confirmed `acornops/.github` has no README.
+- Replaced the README with an AcornOps-style production service README for the Mattermost bot integration.
+- Updated current-state artifacts and startup output to describe the repository as the official AcornOps Mattermost bot integration.
 - Updated the account-link and resolve contract to use provider-neutral `externalUserId`.
 - Switched runtime setup text to `EXTERNAL_INTEGRATION_SERVICE_TOKEN`.
 - Fixed the startup failure caused by the partial identity rename from `mattermostUserId` to `externalUserId`.

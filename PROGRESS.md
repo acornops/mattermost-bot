@@ -3,8 +3,8 @@
 ## Current Verified State
 
 - Repository root directory: `/Users/ryangoh/Desktop/Development/csit`
-- Current phase: local learning and platform setup
-- Product direction: Mattermost ChatOps bot for authenticating users to AcornOps, a Kubernetes cluster-management backend
+- Current phase: official AcornOps Mattermost bot integration, production-oriented
+- Product direction: Mattermost ChatOps bot for authenticating users to AcornOps through the external integration account-link contract, then exposing AcornOps read and read-only assistant workflows in Mattermost
 - Local learning stack: K3s, kubectl, Helm evaluation, local Mattermost via Docker
 - Bot implementation stack: Node.js ECMAScript modules with built-in runtime APIs
 - First Mattermost integration style: dedicated bot account
@@ -67,6 +67,14 @@
 ## Session Log
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
+
+### 2026-06-25 - README repositioned for official AcornOps offering
+
+- Goal: Read the AcornOps multi-repo README set, excluding this repository, and update this repository README so it presents as the official production Mattermost bot integration.
+- Completed: Reviewed public AcornOps repositories through GitHub: `acornops-workspace`, `control-plane`, `management-console`, `docs-website`, `acornops-deployment`, `execution-engine`, `llm-gateway`, `k8s-agent`, and `vm-agent`; confirmed `acornops/.github` has no README and excluded `mattermost-bot` as this repository. Replaced the old CSIT learning README with an AcornOps-style service README covering status, system role, repository boundaries, contracts, runtime configuration, commands, local development, production notes, docs, and validation. Updated durable repo state to describe this as the official AcornOps Mattermost bot integration rather than a learning repo.
+- Verification run: Initial `./init.sh` failed because the harness still required the exact phrase `Mattermost ChatOps bot` in `README.md`; the README was adjusted without changing the verification rule. Final `./init.sh` passed with harness verification, lint, build, and 65 tests.
+- Known risks: Several historical docs still contain local-learning background for traceability. Production multi-replica deployment still needs shared TTL command context or a single-active-replica deployment policy.
+- Next best action: live-smoke the plain command surface against local Mattermost and AcornOps when the stack is available, then align deployment packaging in `acornops-deployment`.
 
 ### 2026-06-23 - External integration endpoint move adopted
 

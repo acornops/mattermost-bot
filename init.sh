@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "Repository root: ${ROOT_DIR}"
-echo "Phase: local learning and platform setup"
+echo "Phase: official AcornOps Mattermost bot integration"
 echo
 
 "${ROOT_DIR}/scripts/verify-harness.sh"
@@ -14,6 +14,6 @@ cat <<'MSG'
 
 Initialization complete.
 
-Project direction: Mattermost ChatOps bot for authenticating users to AcornOps, a Kubernetes cluster-management backend.
+Project direction: production Mattermost ChatOps bot for authenticating users to AcornOps through external integrations.
 Next action: live-smoke plain commands for workspace, cluster, VM, resource, finding, session, and read-only ask flows against the local stack.
 MSG

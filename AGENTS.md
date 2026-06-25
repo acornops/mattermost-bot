@@ -3,9 +3,9 @@
 This repository is designed for long-running coding-agent work. The goal is not to maximize raw code output. The goal is to leave the repo in a state where the next session can continue without guessing.
 
 ## Project Status
-This repository is in local learning and platform setup phase.
+This repository is the official AcornOps Mattermost bot integration and is production-oriented.
 
-The project direction is a Mattermost ChatOps bot that authenticates Mattermost users to a backend system for managing Kubernetes clusters. The backend API will be provided later. Current work should first make the local Kubernetes and Mattermost learning path agent-readable and verifiable.
+The product direction is a Mattermost ChatOps bot that authenticates Mattermost users to AcornOps through the external integration account-link contract, then exposes AcornOps workspace, target, resource, finding, investigation, and read-only assistant commands from Mattermost. Local learning notes remain for traceability, but new work should treat this as production service code.
 
 ## Startup Workflow
 Before writing code:
@@ -70,7 +70,7 @@ Before ending a session:
 ## Topic Docs
 - `docs/startup-readiness.md` - initialization acceptance checklist and current startup state.
 - `docs/harness-notes.md` - harness design notes and why these files exist.
-- `docs/project-direction.md` - product direction, learning path, and open decisions.
+- `docs/project-direction.md` - product direction, historical learning path, and open decisions.
 - `docs/local-environment.md` - local K3s and Mattermost setup notes.
 - `docs/bot-integrations.md` - Mattermost integration tradeoffs and bot-account decision.
 - `docs/bot-runtime.md` - Node.js bot process architecture, commands, and runtime notes.

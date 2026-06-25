@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-06-25: Treat this repository as the official AcornOps Mattermost bot integration
+
+- Decision: Reposition the repository from CSIT/local learning to the production-oriented AcornOps Mattermost bot integration.
+- Reason: The repository remote is `acornops/mattermost-bot`, the AcornOps external integration contract is implemented, and the user directed that this is part of the official AcornOps offering rather than a learning repo.
+- Consequence: README and current-state artifacts should follow the AcornOps multi-repo README pattern: explicit ownership, contract boundary, deployment boundary, production notes, and validation. Historical learning docs may remain for traceability, but new work should treat this as production service code and coordinate cross-repo changes through `acornops-workspace`.
+
 ## 2026-05-25: Start with a harness initializer phase
 
 - Decision: Build repository-local harness infrastructure before product feature work.
