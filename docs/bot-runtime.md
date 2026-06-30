@@ -73,13 +73,15 @@ EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-acornops-external-integration-to
 - Workspace results are numbered. `workspaces 1` calls AcornOps `GET /api/v1/workspaces/{workspaceId}` for the remembered workspace id and shows details without changing the user's current workspace.
 - `workspace 1` calls AcornOps `GET /api/v1/workspaces/{workspaceId}` for the remembered workspace id, shows details, and updates the user's current workspace.
 - `workspace` shows details for the user's current workspace selection.
-- `clusters` calls AcornOps `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace.
-- `clusters 1` calls AcornOps `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters/{clusterId}` for a remembered cluster and shows details without changing the current cluster.
-- `cluster 1` fetches cluster detail and updates the current cluster. Selecting a cluster clears the current VM and current session.
-- `resources` and `findings` list resources or findings for the currently selected cluster or VM.
+- `targets` calls AcornOps `GET /api/v1/workspaces/{workspaceId}/targets?limit=50` for the current workspace.
+- `target 1` fetches `GET /api/v1/workspaces/{workspaceId}/targets/{targetId}` and updates the current generic target.
+- `clusters`/`cluster 1` and `vms`/`vm 1` remain compatibility shortcuts over Kubernetes- and VM-specific endpoints.
+- `resources` and `findings` list resources or findings for the currently selected target. They accept documented `key=value` filters where the AcornOps endpoint supports them.
 - `investigations` lists snapshot-derived investigations for the current workspace.
-- `vms` lists VMs in the current workspace. `vms 1` shows VM detail without selecting it, and `vm 1` selects the current VM. Selecting a VM clears the current cluster and current session.
-- `sessions` lists sessions for the selected cluster or VM. `session new` creates a read-only troubleshooting session for the selected target. `session 1` selects a session. `messages` lists current-session messages. `ask <question>` posts a read-only assistant message and returns the AcornOps message and run ids.
+- `help` shows only the common workflow. `help filters` shows supported filters and finite values. The full reference lives in `docs/wiki-mattermost-bot-commands.md`.
+- `chat new` creates a read-only troubleshooting session for the selected target and enters chat mode. Generic `target 1` selections use AcornOps target session endpoints; compatibility `cluster 1` selections keep using Kubernetes cluster session endpoints. While chat mode is active, normal messages and command-looking text are posted to AcornOps as read-only assistant questions.
+- If a chat answer is still running after the brief immediate polling window, the bot follows the run with AcornOps SSE and posts the final assistant answer back to the same Mattermost channel when it completes.
+- `chat pause` leaves chat mode while preserving the current session and any active streamed answer, `chat resume` re-enters it, and `chat end` clears the bot's current chat pointer and aborts any active streamed answer. `ask <question>`, `sessions`, `session`, and `messages` remain compatibility commands but are not part of the short help surface.
 - Only `login` is direct-message-only. Authenticated read and read-only assistant commands can run in direct messages or channel mentions.
 - The bot does not keep bot-side login state or AcornOps browser sessions. It keeps only process-local command context containing lightweight ids and names for command convenience.
 - `CSIT_MATTERMOST_URL` defaults to `http://localhost:8065`, and `ACORNOPS_API_BASE_URL` defaults to `http://localhost:8081`, the standalone AcornOps control-plane URL.
@@ -97,10 +99,14 @@ EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-acornops-external-integration-to
 9. `status` asks AcornOps whether the Mattermost identity is durably linked.
 10. `workspaces` asks AcornOps for the current user's workspace page, formats numbered workspace rows, and stores lightweight workspace references in `src/bot/command-context.js`.
 11. `workspace 1` selects current workspace and clears current cluster, VM, and session.
-12. `clusters`, `vms`, and related detail commands use the current workspace and update numbered target references.
-13. `cluster 1` and `vm 1` select exactly one current target and clear the previous target plus current session.
-14. `session new` creates a read-only troubleshooting session for the selected target, while `ask <question>` posts a session message with `toolAccessMode: "read_only"`.
-15. `src/bot/mattermost-client.js` posts the response with `POST /api/v4/posts` and no `root_id`, so Mattermost renders it in the main timeline instead of a thread.
+12. `targets` uses the current workspace and updates numbered generic target references; `clusters` and `vms` remain shortcuts.
+13. `target 1`, `cluster 1`, and `vm 1` select exactly one current target and clear the previous target plus current chat/session state.
+14. `chat new` creates a read-only troubleshooting session for the selected target. A target chosen through `target 1` uses `POST /api/v1/workspaces/{workspaceId}/targets/{targetId}/sessions`; a Kubernetes cluster chosen through the compatibility `cluster 1` command uses the Kubernetes-cluster session endpoint. While chat mode is active, free-form messages post session messages with `toolAccessMode: "read_only"` and stable `clientMessageId` values derived from the Mattermost source post id when available.
+15. After posting a chat message, the bot polls the read-only run briefly, fetches session messages when the run completes, and renders the newest assistant reply for that run. The default response window is 15 poll attempts with a 1000 ms interval, configured by `CSIT_CHAT_RUN_POLL_ATTEMPTS` and `CSIT_CHAT_RUN_POLL_INTERVAL_MS`.
+16. If the run is still active after the response window, the bot records one active streamed run for that external user, returns a short acknowledgement, and starts `src/bot/run-follower.js` in the background.
+17. The run follower opens `GET /api/v1/runs/{runId}/stream` with `Authorization: Bearer EXTERNAL_INTEGRATION_SERVICE_TOKEN`, `x-acornops-external-user-id`, and `Accept: text/event-stream`. `run_completed` loads the newest assistant message for that run and posts it to Mattermost. `run_failed` and `run_cancelled` post concise terminal messages.
+18. If SSE disconnects before a terminal state, the follower checks `GET /api/v1/runs/{runId}`, reconnects up to 3 times, then falls back to bounded polling. The reconnect and fallback defaults are controlled by `CSIT_RUN_STREAM_RECONNECT_ATTEMPTS`, `CSIT_RUN_STREAM_RECONNECT_DELAY_MS`, `CSIT_RUN_STREAM_FALLBACK_POLL_INTERVAL_MS`, and `CSIT_RUN_STREAM_FALLBACK_POLL_MAX_MS`.
+19. `src/bot/mattermost-client.js` posts the response with `POST /api/v4/posts` and no `root_id`, so Mattermost renders it in the main timeline instead of a thread.
 
 ## Command Context
 
@@ -110,13 +116,15 @@ The first implementation uses an in-memory store keyed by external user id. It s
 
 - the most recent workspace list as `{ id, name }` references for numbered commands;
 - the current workspace as `{ id, name }`;
+- the most recent generic target list and current generic target as `{ id, name, type, source }`, where `source` distinguishes generic target selections from compatibility cluster/VM selections for session routing;
 - the most recent cluster list and current cluster as `{ id, name }`;
 - the most recent VM list and current VM as `{ id, name }`;
-- the most recent session list and current session as `{ id, name }`.
+- the most recent session list and current session as `{ id, name }`;
+- the chat mode flag, latest run id/status/session reference, and one active streamed run pointer.
 
-Only one target can be selected at a time. Selecting a workspace clears the current cluster, VM, and session. Selecting a cluster clears the current VM and session. Selecting a VM clears the current cluster and session.
+Only one target can be selected at a time. Selecting a workspace clears the current target, cluster, VM, session, and latest run. Selecting a target, cluster, or VM clears the previous target-specific session and latest run. V1 follows only one active streamed run per external user; a second chat question is rejected until that answer completes or the user sends `chat end`.
 
-This state resets when the bot process restarts. If the bot becomes multi-replica or restart-resilient, replace `src/bot/command-context.js` with shared TTL storage while keeping the command interface stable.
+This state resets when the bot process restarts. Active SSE follows are process-local: if the bot crashes or restarts, AcornOps may finish the run but the bot will not post the final answer. If the bot becomes multi-replica or restart-resilient, replace `src/bot/command-context.js` and the run follower registry with shared TTL storage while keeping the command interface stable.
 
 ## AcornOps Account-Link Stage
 

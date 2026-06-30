@@ -4,7 +4,9 @@
 
 Build a Mattermost ChatOps bot that authenticates Mattermost users to AcornOps, a backend system for managing Kubernetes clusters.
 
-The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/control-plane`. The repository should keep the verified local platform and bot-account prototype restartable while wiring backend-backed commands in small stages:
+The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/control-plane`. The repository should keep the Mattermost bot-account prototype restartable while wiring backend-backed commands in small stages.
+
+Historical learning stages already completed:
 
 1. Kubernetes fundamentals with K3s.
 2. Local workload deployment and inspection.
@@ -16,7 +18,7 @@ The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/con
 8. AcornOps-backed external integration account linking with `link` and `resolve`.
 9. Expanded AcornOps read and read-only assistant commands through the external integration credential.
 
-## Current Learning Path
+## Historical Learning Path
 
 ### Phase 1: K3s And Kubernetes Basics
 
@@ -39,7 +41,7 @@ The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/con
 - Use AcornOps `POST /api/v1/auth/external-integrations/resolve` for `status`.
 - Keep Mattermost identity values sourced from events, not user-supplied chat text.
 - Accept plain commands without a leading slash. Keep `login` direct-message-only; allow authenticated read and read-only assistant commands from direct messages or channel mentions.
-- Use process-local command context for the current workspace, one selected cluster or VM, and current troubleshooting session.
+- Use process-local command context for the current workspace, one selected target, active/paused chat mode, and active run follow-up state.
 
 ## Initial Stack
 
@@ -52,7 +54,6 @@ The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/con
 
 ## Open Decisions
 
-- Local development topology: all Docker Compose, K3s-hosted services, or hybrid.
 - How much cluster-management behavior should be mocked before authenticated AcornOps cluster APIs are wired.
 - Whether process-local command context should move to shared TTL storage before any multi-replica bot deployment.
 

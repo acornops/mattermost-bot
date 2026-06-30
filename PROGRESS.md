@@ -10,7 +10,6 @@
 - First Mattermost integration style: dedicated bot account
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify-harness.sh`
-- K3s readiness verification path: `./scripts/verify-k3s.sh`
 - Mattermost readiness verification path: `./scripts/verify-mattermost.sh`
 - Bot verification path: `./scripts/verify-bot.sh`
 - Highest priority unfinished feature: none recorded.
@@ -31,6 +30,7 @@
 - `B05`: Wire authenticated workspace command.
 - `B06`: Wire authenticated workspace detail and cluster commands.
 - `B07`: Wire expanded external integration read and assistant commands.
+- `B08`: Redesign Mattermost bot UX around context and chat mode.
 
 ## In Progress
 
@@ -46,27 +46,59 @@
 - `workspaces` returns numbered workspace rows. `workspaces 1` calls `GET /api/v1/workspaces/{workspaceId}` and shows detail without changing the current workspace.
 - `workspace 1` calls `GET /api/v1/workspaces/{workspaceId}`, shows detail, and makes that workspace current for the user.
 - `workspace` shows full details for the current process-local workspace selection.
-- `clusters` calls `GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters?limit=50` for the current workspace. `clusters 1` shows cluster detail without selecting it, and `cluster 1` selects the current cluster.
-- `resources` and `findings` use the currently selected cluster or VM. `investigations` uses the current workspace. `vms` lists VMs, `vms 1` shows VM detail, and `vm 1` selects the current VM.
-- `sessions`, `session new`, `session 1`, `messages`, and `ask <question>` use read-only assistant-session endpoints for the selected cluster or VM.
+- `targets` calls `GET /api/v1/workspaces/{workspaceId}/targets?limit=50` for the current workspace, and `target 1` selects a generic Kubernetes or VM target.
+- `clusters`/`cluster 1` and `vms`/`vm 1` remain compatibility shortcuts for Kubernetes and VM-specific target paths.
+- `resources` and `findings` use the currently selected target. `investigations` uses the current workspace.
+- `chat new` creates a read-only troubleshooting session for the selected target and enters chat mode. Targets selected through `target 1` use AcornOps generic target session endpoints; compatibility clusters selected through `cluster 1` use Kubernetes cluster session endpoints. While chat mode is active, ordinary non-command messages are sent as read-only AcornOps assistant questions.
+- Chat question `clientMessageId` values are stable per Mattermost post id when available, so websocket retries are idempotent while repeated identical questions in separate Mattermost posts create distinct AcornOps messages/runs.
+- If a chat run does not complete inside the brief immediate polling window, the bot follows `GET /api/v1/runs/{runId}/stream` with SSE and posts the final assistant answer back to the same Mattermost channel.
+- V1 follows one active streamed run per external user. A second chat question is rejected until the active answer completes or the user sends `chat end`.
+- `chat pause`, `chat resume`, and `chat end` control chat mode. `sessions`, `session new`, `session 1`, `messages`, and `ask <question>` remain compatibility commands but are no longer shown in the short help.
+- `chat pause` leaves any active streamed run following in place and still posts the final answer. `chat end` aborts active SSE following, clears the active run pointer, and suppresses any eventual answer.
+- `help` shows the common workflow only. `help filters` shows supported filter names and finite values. `docs/wiki-mattermost-bot-commands.md` records advanced filters, aliases, shortcuts, and compatibility commands.
 - AcornOps moved account-link endpoints on 2026-06-23 to `/auth/external-integrations/`; bot tests now assert the current link and resolve URLs.
 - AcornOps updated the account-link contract on 2026-06-18 to require `externalUserId`; the Mattermost adapter supplies the observed post author's Mattermost user id as that external id.
 - Bot runtime defaults now live in `src/bot/config.js`; `CSIT_MATTERMOST_BOT_USERNAME` is the runtime source for changing the bot mention name, with `acorn-ops-bot` as the single code fallback.
 - The most recent live account-link smoke passed after the earlier user-id-only update; the 2026-06-23 external-integrations endpoint move is covered by automated tests but still needs live smoke.
-- The bot remembers only lightweight command context in memory: numbered workspaces, clusters, VMs, sessions, current workspace, one selected target, and current session. It does not store AcornOps browser sessions, cookies, tokens, or link URLs. The context resets when the bot process restarts.
-- The K3s verification command did not pass during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections.
-- Mattermost is running locally through the official Docker Compose deployment without NGINX.
-- Mattermost and K3s remain explicit local services; `./init.sh` verifies repo and bot code but does not start Docker Compose or k3d.
+- The bot remembers only lightweight command context in memory: numbered workspaces, targets, clusters, VMs, sessions, current workspace, one selected target, active/paused chat state, latest run reference, and one active streamed run pointer. It does not store AcornOps browser sessions, cookies, tokens, or link URLs. The context and active run follows reset when the bot process restarts.
+- K3s was a completed local learning stage. Its repo-local readiness script has been removed from the active production bot harness; historical K3s notes remain for traceability.
+- Mattermost local setup is documented through the official Docker Compose deployment without NGINX, but the current host readiness probe on 2026-06-30 failed because `localhost:8065` was not listening.
+- Mattermost remains an explicit local service; `./init.sh` verifies repo and bot code but does not start Docker Compose.
 
 ## Next Steps
 
-1. Run live Mattermost/AcornOps smoke for `workspaces`, `workspace 1`, `clusters`, `cluster 1`, `resources`, `findings`, `vms`, `vm 1`, `sessions`, `session new`, `messages`, and `ask <question>` when the local stack is available.
-2. Add repeatable live-smoke notes for `login`, `status`, workspace, target, and session commands if local service command output becomes available.
-3. Decide whether process-local command context is enough or whether shared TTL storage is needed before any multi-replica bot deployment.
+1. Run live Mattermost/AcornOps smoke for `login`, `status`, `workspaces`, `workspace 1`, `targets`, `target 1`, `resources`, `findings`, `chat new`, a plain chat question, `chat pause`, `chat resume`, another question, and `chat end` when the local stack is available.
+2. Add repeatable live-smoke notes for `login`, `status`, workspace, target, filters, and chat-mode commands if local service command output becomes available.
+3. Decide whether process-local command context and active run following are enough or whether shared TTL storage is needed before any multi-replica bot deployment.
 
 ## Session Log
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
+
+### 2026-06-30 - K3s readiness removed from active harness
+
+- Goal: Remove the obsolete K3s readiness verifier from the active production bot harness and amend the latest commit message.
+- Completed: Deleted the K3s readiness script. Updated `AGENTS.md`, current progress, startup readiness, local environment notes, feature evidence, and handoff docs so K3s is recorded as historical learning traceability rather than an active verification path.
+- Verification run: Baseline `./init.sh` passed before the cleanup with harness verification, lint, build, and 92 tests. Final `./init.sh` passed after the cleanup with harness verification, lint, build, and 92 tests.
+- Known risks: Historical K3s learning notes still refer to the old `k3d-csit-lab` context and commands for traceability, but no active harness command depends on them.
+- Next best action: live-smoke workspace, target, resource, finding, chat-mode, and SSE follow-up flows against the local stack.
+
+### 2026-06-30 - SSE follow-up delivery for chat mode
+
+- Goal: Implement SSE-based follow-up delivery so long-running AcornOps assistant answers are posted back to Mattermost after the immediate response window.
+- Completed: Added AcornOps `streamRun()` support for `GET /api/v1/runs/{runId}/stream` with service auth, external user headers, and SSE parsing. Added `src/bot/run-follower.js` to follow one active run per external user, reconnect on dropped SSE streams, fall back to bounded polling, post completed assistant answers, post concise failed/cancelled messages, and suppress stale results after `chat end`. Added active streamed run state to command context. Updated the Mattermost runner so message handling can return follow-up effects after posting the immediate acknowledgement. Preserved fast same-response answers when polling completes quickly. `chat pause` now keeps any active run following in place, while `chat end` aborts it.
+- Verification run: Baseline `./init.sh` passed before changes with 79 tests. Focused `node --test test/acornops-client.test.js test/command-context.test.js test/bot-message.test.js test/bot-runner.test.js test/run-follower.test.js` passed with 79 tests. Full `npm test` passed with 91 tests. Final `./init.sh` passed with harness verification, lint, build, and 91 tests.
+- Review follow-up: Fixed generic target session routing so `target 1` followed by `chat new` uses `POST /api/v1/workspaces/{workspaceId}/targets/{targetId}/sessions` instead of the compatibility Kubernetes cluster session endpoint. Added command-context source markers and regression coverage for generic Kubernetes target chat sessions. Focused `node --test test/command-context.test.js test/bot-message.test.js test/bot-runner.test.js test/run-follower.test.js test/acornops-client.test.js` passed with 80 tests. Full `npm test` passed with 92 tests. Final `./init.sh` passed with harness verification, lint, build, and 92 tests. Harness/readiness review also ran `./scripts/verify-harness.sh` and `./scripts/verify-mattermost.sh`; harness passed, and Mattermost failed to connect to `localhost:8065`.
+- Known risks: Live Mattermost/AcornOps smoke for SSE follow-up delivery still needs to run against local services. Active streamed runs are process-local; if the bot restarts, AcornOps may complete the run but the bot will not post the final answer.
+- Next best action: run live smoke for `chat new`, a long-running question that triggers SSE follow-up, a second question while the first is active, `chat pause` followed by a normal command while the answer is still running, and `chat end` suppressing a later result.
+
+### 2026-06-26 - Bot UX redesigned around context and chat mode
+
+- Goal: Implement the approved Mattermost bot UX redesign: concise help, generic targets, visible filter help, and read-only chat mode with pause/resume/end.
+- Completed: Added generic `targets` and `target` commands backed by AcornOps target endpoints. Reworked `help` into a short common workflow and added `help filters`. Added `docs/wiki-mattermost-bot-commands.md` for filters, aliases, shortcuts, and compatibility commands. Added `chat new`, `chat pause`, `chat resume`, `chat end`, active chat-mode free-text question handling, latest-run context tracking, and completed-run assistant answer rendering when AcornOps reports completion during the response. Kept `clusters`, `vms`, `sessions`, `session`, `messages`, and `ask` available as compatibility commands outside the short help surface.
+- Verification run: Baseline `./init.sh` passed before changes with 65 tests. Focused `node --test test/command-context.test.js test/acornops-client.test.js test/bot-message.test.js` passed with 52 tests. Full `npm test` passed with 72 tests. Final `./init.sh` passed with harness verification, lint, build, and 72 tests.
+- Known risks: Live Mattermost/AcornOps smoke for the new target and chat-mode flow still needs to run when the local stack is available. Chat mode context remains process-local, so multi-replica or restart-resilient deployments still need shared TTL context.
+- Next best action: live-smoke `login`, `status`, `workspaces`, `workspace 1`, `targets`, `target 1`, `resources`, `findings`, `chat new`, a plain chat question, `chat pause`, `chat resume`, another question, and `chat end`.
 
 ### 2026-06-25 - README repositioned for official AcornOps offering
 
@@ -115,8 +147,8 @@ Session log entries are historical. Superseded risks and decisions are corrected
 ### 2026-05-26 - Local K3s verified and first workload deployed
 
 - Goal: Verify local K3s access, then deploy and inspect a first learning workload.
-- Completed: Installed `k3d` 5.8.3 with Homebrew; created local cluster `csit-lab` with one server and one agent; added `scripts/verify-k3s.sh`; deployed `nginx:stable` as `hello-nginx` in namespace `csit-lab`; exposed it as a ClusterIP service; cleaned up the learning namespace.
-- Verification run: `./scripts/verify-k3s.sh` passed against kubectl context `k3d-csit-lab`; workload rollout passed with `deployment "hello-nginx" successfully rolled out`; `kubectl get all --namespace csit-lab -o wide` showed pod `1/1 Running`, service `hello-nginx` on `80/TCP`, deployment `1/1 available`; logs showed nginx `Configuration complete; ready for start up`; `kubectl get namespace csit-lab` returned `NotFound` after cleanup; `./init.sh` passed after artifact updates.
+- Completed: Installed `k3d` 5.8.3 with Homebrew; created local cluster `csit-lab` with one server and one agent; added a temporary repo-local K3s verifier for the learning stage; deployed `nginx:stable` as `hello-nginx` in namespace `csit-lab`; exposed it as a ClusterIP service; cleaned up the learning namespace.
+- Verification run: the temporary K3s verifier passed against kubectl context `k3d-csit-lab`; workload rollout passed with `deployment "hello-nginx" successfully rolled out`; `kubectl get all --namespace csit-lab -o wide` showed pod `1/1 Running`, service `hello-nginx` on `80/TCP`, deployment `1/1 available`; logs showed nginx `Configuration complete; ready for start up`; `kubectl get namespace csit-lab` returned `NotFound` after cleanup; `./init.sh` passed after artifact updates.
 - Evidence recorded: K3s nodes `k3d-csit-lab-server-0` and `k3d-csit-lab-agent-0` were `Ready` on K3s `v1.33.6+k3s1`; namespaces `default`, `kube-node-lease`, `kube-public`, and `kube-system` were active.
 - Known risks: Docker Desktop must be running for `k3d-csit-lab`; application code and Mattermost are still absent.
 - Next best action: start `L03` by setting up local Mattermost.
@@ -288,7 +320,7 @@ Session log entries are historical. Superseded risks and decisions are corrected
 
 - Goal: Update the bot to the AcornOps external integration account-link contract.
 - Completed: Changed link and resolve request bodies from Mattermost-specific `mattermostUserId` to provider-neutral `externalUserId`, sourced only from the observed Mattermost post author id. Updated the workspace external-user header to use the same normalized id. Switched runtime configuration and user-facing setup text to `EXTERNAL_INTEGRATION_SERVICE_TOKEN`, while retaining `MATTERMOST_CHAT_SERVICE_TOKEN` as a backward-compatible local fallback. Updated tests, contract docs, API inventory, decisions, runtime notes, and handoff state.
-- Verification run: Baseline `./init.sh` initially failed with 10 tests because `normalizeMattermostIdentity()` built `externalUserId` but still validated `mattermostUserId`. Targeted verification passed after the fix: `node --test test/acornops-client.test.js test/bot-message.test.js test/bot-runner.test.js test/config.test.js` passed with 33 tests. Final `./init.sh` passed with harness verification, lint, build, and 41 tests.
+- Verification run: Baseline `./init.sh` initially failed with 10 tests because `external identity helper` built `externalUserId` but still validated `mattermostUserId`. Targeted verification passed after the fix: `node --test test/acornops-client.test.js test/bot-message.test.js test/bot-runner.test.js test/config.test.js` passed with 33 tests. Final `./init.sh` passed with harness verification, lint, build, and 41 tests.
 - Known risks: Live Mattermost/AcornOps smoke was not run in this workspace; automated tests cover the request body, token env selection, and trusted post-author extraction.
 - Next best action: live-smoke `/workspaces` against the local stack when available, then start `B06`.
 
@@ -315,3 +347,42 @@ Session log entries are historical. Superseded risks and decisions are corrected
 - Verification run: Focused verification passed with `node --test test/acornops-client.test.js test/command-context.test.js test/bot-message.test.js` reporting 45 passing tests. Final `./init.sh` passed with harness verification, lint, build, and 64 tests.
 - Known risks: Live Mattermost/AcornOps smoke still has not run in this workspace because the local services are not available here. Assistant run observation beyond returning the run id is not yet user-facing.
 - Next best action: live-smoke the plain command surface against local Mattermost and AcornOps when the stack is available.
+
+### 2026-06-26 - Chat-mode question 400 and UX copy follow-up
+
+- Goal: Fix the live `chat new` then free-text question failure and remove stale command copy from the context-plus-chat UX.
+- Completed: Changed chat-mode question posting to generate an identifier-like `clientMessageId` from hashed Mattermost user, session, and question values instead of using a raw `externalUserId:hash` string. Added a clearer 400 response for rejected chat messages. Updated workspace, cluster shortcut, VM shortcut, resource, and finding responses to reinforce the generic `targets` and `chat new` flow instead of old cluster/VM session wording.
+- Verification run: `node --test test/bot-message.test.js` passed with 38 tests. Final `./init.sh` passed with harness verification, lint, build, and 72 tests.
+- Known risks: Live Mattermost/AcornOps smoke still needs to rerun to confirm the AcornOps backend now accepts the updated chat message payload.
+- Next best action: live-smoke `chat new`, a free-text question, `resources`, `chat pause`, `chat resume`, another question, and `chat end` against the local stack.
+
+### 2026-06-29 - Chat-mode 400 reason surfaced
+
+- Goal: Continue the live `chat new` then free-text question investigation after the sanitized `clientMessageId` still produced an AcornOps HTTP 400.
+- Completed: Re-read the external integration bot endpoint contract and confirmed the documented message body remains `content`, `toolAccessMode: "read_only"`, and `clientMessageId`. Added parsing for structured AcornOps error responses embedded in failed HTTP errors, and changed chat-message 400 handling to show a safe AcornOps error code/message instead of incorrectly suggesting that the user rephrase the question. Added regression coverage for structured chat 400 responses such as `AI_PROVIDER_NOT_CONFIGURED`.
+- Verification run: Baseline `./init.sh` passed before the change with 72 tests. Focused `node --test test/bot-message.test.js` passed with 39 tests. Final `./init.sh` passed with harness verification, lint, build, and 73 tests.
+- Known risks: Local AcornOps and Mattermost were not listening on `localhost:8081` or `localhost:8065` from this workspace, so the live chat question could not be reproduced here. The next live attempt should now reveal whether the 400 is validation, AI provider configuration, ownership/session scope, or another AcornOps-side reason.
+- Next best action: rerun the live `chat new` plus free-text question smoke and capture the new AcornOps error code/message shown by the bot.
+
+### 2026-06-29 - Chat-mode response UX made conversational
+
+- Goal: Replace the run-submission response after `chat new` with a conversational chat-mode response that feels like directly talking to the AcornOps assistant.
+- Completed: Kept chat context intact after `chat new`. Changed chat question handling to poll the read-only run briefly, return the assistant reply directly when available, and hide session/message/run ids by default. Added a non-technical "still working" fallback when the run remains active after the response window. Made active chat mode modal: command-looking text such as `status`, `resources`, and `findings` is sent to the assistant until the user sends `chat pause`; chat controls such as `chat pause` and `chat end` remain available. Added tests for polling through `dispatching` to completion, hiding run details while still active, treating `status` and `resources` as assistant input while chat is active, and running commands after `chat pause`. Updated runtime and wiki docs to describe polling and the revised pause semantics.
+- Verification run: Focused `node --test test/bot-message.test.js` passed with 44 tests. Final `./init.sh` passed with harness verification, lint, build, and 78 tests after tightening active chat mode so command-looking text is assistant input until `chat pause`.
+- Known risks: The bot does not use SSE or proactive follow-up posts yet; it polls within the current Mattermost response window and falls back if the AcornOps run is still active.
+- Next best action: live-smoke `chat new`, a free-text question that completes quickly, a longer-running question that exercises the fallback, `status` while chat mode is active, and `chat end`.
+
+### 2026-06-29 - Review fixes for chat idempotency and command docs link
+
+- Goal: Address review findings for chat `clientMessageId` reuse, assistant reply correlation, and the missing local command-reference doc.
+- Completed: Threaded the Mattermost source post id from the WebSocket runner into chat question handling and now derives `clientMessageId` from that post id only. This keeps retries of the same Mattermost post idempotent while allowing repeated identical questions in separate Mattermost posts. Tightened completed-run answer rendering so the run must correlate to the accepted user `message_id`, and assistant session-message fallback now requires the exact run id instead of accepting untagged assistant rows. Updated repo docs and artifacts to point to `docs/wiki-mattermost-bot-commands.md`.
+- Verification run: Focused `node --test test/bot-message.test.js test/bot-runner.test.js` passed with 54 tests. Final `./init.sh` passed with harness verification, lint, build, and 80 tests.
+- Known risks: Live Mattermost/AcornOps smoke still needs to rerun for the context-plus-chat path.
+- Next best action: live-smoke `chat new`, repeated identical questions in separate Mattermost posts, completed-run assistant replies, and `chat pause`/`chat resume` against the local stack.
+
+### 2026-06-30 - Message identity path simplified
+
+- Goal: Remove duplicate Mattermost identity wiring from the Mattermost runner and message handler.
+- Completed: Stopped constructing a separate identity object in `src/bot/runner.js`; the runner now passes the observed `post.user_id` once as `userId`. `src/bot/message.js` no longer accepts a compatibility identity parameter and derives `{ externalUserId }` directly from `userId`. Removed the runner-only identity helper and renamed test helpers to the provider-neutral external identity shape.
+- Verification run: Focused `node --test test/bot-message.test.js test/bot-runner.test.js test/acornops-client.test.js` passed with 61 tests. Final `./init.sh` passed with harness verification, lint, build, and 79 tests.
+- Known risks: None beyond the existing live-smoke gap for the context-plus-chat path.

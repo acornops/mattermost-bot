@@ -55,7 +55,7 @@
       "user_visible_behavior": "A developer can confirm local Kubernetes access with K3s and see recorded evidence of node, namespace, and cluster-info checks.",
       "status": "passing",
       "verification": {
-        "command": "./scripts/verify-k3s.sh plus ./init.sh",
+        "command": "Historical manual K3s verification plus ./init.sh",
         "steps": [
           "Confirm the local K3s installation or access method.",
           "Run kubectl or sudo k3s kubectl node and namespace checks.",
@@ -64,8 +64,8 @@
           "Run ./init.sh successfully."
         ]
       },
-      "evidence": "On 2026-05-26, installed k3d 5.8.3 with Homebrew and created local cluster csit-lab with one server and one agent. ./scripts/verify-k3s.sh passed for kubectl context k3d-csit-lab. Evidence: kubectl cluster-info reached the control plane; kubectl get nodes -o wide showed k3d-csit-lab-server-0 and k3d-csit-lab-agent-0 Ready on K3s v1.33.6+k3s1; kubectl get namespaces showed default, kube-node-lease, kube-public, and kube-system Active.",
-      "notes": "Local macOS path uses Docker Desktop plus k3d instead of a host-level K3s service. Do not auto-install or start K3s from init.sh."
+      "evidence": "On 2026-05-26, installed k3d 5.8.3 with Homebrew and created local cluster csit-lab with one server and one agent. The temporary K3s learning verifier passed for kubectl context k3d-csit-lab. Evidence: kubectl cluster-info reached the control plane; kubectl get nodes -o wide showed k3d-csit-lab-server-0 and k3d-csit-lab-agent-0 Ready on K3s v1.33.6+k3s1; kubectl get namespaces showed default, kube-node-lease, kube-public, and kube-system Active.",
+      "notes": "Local macOS path used Docker Desktop plus k3d instead of a host-level K3s service. K3s was a completed learning stage; the active production bot harness no longer includes a K3s readiness script."
     },
     {
       "id": "L02",
@@ -277,7 +277,7 @@
           "Add AcornOps client methods for cluster detail, resources, findings, investigations, VMs, sessions, messages, and read-only assistant message posting.",
           "Track current workspace plus exactly one selected target, either cluster or VM, in process-local command context.",
           "Clear target and session context when workspace changes; clear session context when cluster or VM changes.",
-          "Return a context header showing current workspace and selected cluster or VM at the top of command responses.",
+          "Return a context header showing current workspace and selected target at the top of command responses.",
           "Add automated tests for client request shape, command context behavior, message behavior, and runner behavior.",
           "Run ./init.sh.",
           "Run a local AcornOps and Mattermost smoke test when the stack is available."
@@ -285,6 +285,31 @@
       },
       "evidence": "On 2026-06-19, implemented the expanded external integration command surface from the updated endpoint contract. Commands are now accepted without a leading slash only, and only login remains direct-message-only. Added AcornOpsClient methods for GET /api/v1/workspaces/{workspaceId}/investigations, GET /api/v1/workspaces/{workspaceId}/kubernetes-clusters/{clusterId}, cluster resources/findings, VM list/detail/resources/findings, cluster and target sessions, session metadata/messages, POST /api/v1/sessions/{sessionId}/messages with toolAccessMode read_only, and GET /api/v1/runs/{runId}. Added cluster, resources, findings, investigations, vms, vm, sessions, session new, session, messages, and ask command handling. Expanded process-local command context for numbered clusters, VMs, sessions, current workspace, exactly one selected target, and current session. Focused verification passed with node --test test/acornops-client.test.js test/command-context.test.js test/bot-message.test.js reporting 45 passing tests. Final ./init.sh passed with harness verification, lint, build, and 64 tests. Live smoke did not run because Mattermost and AcornOps local services were not available in this workspace.",
       "notes": "Depends on B06. Assistant run observation beyond returning the run id is not yet user-facing. The command context remains process-local and should move to shared TTL storage before multi-replica or restart-resilient deployments."
+    },
+    {
+      "id": "B08",
+      "priority": 14,
+      "area": "bot",
+      "title": "Redesign Mattermost bot UX around context and chat mode",
+      "user_visible_behavior": "A linked Mattermost user can choose a workspace and target, start a read-only chat with AcornOps, ask follow-up questions as plain messages, pause/resume/end chat mode, and discover filters without a noisy main help page.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus local AcornOps chat-mode smoke",
+        "steps": [
+          "Keep main help concise and focused on the common workflow.",
+          "Document filters through help filters and docs/wiki-mattermost-bot-commands.md.",
+          "Add generic targets and target selection as the primary target UX.",
+          "Keep clusters, vms, sessions, messages, and ask as compatibility commands outside the short help surface.",
+          "Add chat new, chat pause, chat resume, and chat end.",
+          "Treat non-command messages as read-only AcornOps questions while chat mode is active.",
+          "Track active/paused chat session, latest run, and one active streamed run in process-local context.",
+          "Follow long-running chat runs over SSE and post final answers back to Mattermost.",
+          "Run ./init.sh.",
+          "Run a local AcornOps and Mattermost smoke test when the stack is available."
+        ]
+      },
+      "evidence": "On 2026-06-26, implemented the context-plus-chat UX redesign. Added AcornOpsClient.listTargets(), getTarget(), and listRunEvents(). Updated help to show the concise login -> workspaces -> workspace 1 -> targets -> target 1 -> chat new flow and added help filters with finite filter values. Added docs/wiki-mattermost-bot-commands.md for advanced filters, aliases, shortcuts, and compatibility assistant commands. Added generic targets/target commands. Added chat new, chat pause, chat resume, chat end, active chat-mode free-text question handling, latest-run context, and completed-run answer rendering when available. Kept sessions, session, messages, and ask as compatibility commands outside the short help surface. Focused verification passed with node --test test/command-context.test.js test/acornops-client.test.js test/bot-message.test.js reporting 52 passing tests. npm test passed with 72 tests. Final ./init.sh passed with harness verification, lint, build, and 72 tests. Follow-up after live chat-mode testing changed chat questions to use hashed identifier-like clientMessageId values instead of raw externalUserId:hash strings, added a clearer rejected-chat-message response, and updated stale cluster/VM copy to reinforce targets and chat new. Follow-up verification passed with node --test test/bot-message.test.js reporting 38 passing tests and ./init.sh passing with harness verification, lint, build, and 72 tests. On 2026-06-29, live testing still returned HTTP 400 after chat new, so CSIT re-read the endpoint contract, confirmed the documented chat message body, added structured AcornOps error detail parsing, and changed chat-message 400 responses to surface safe AcornOps error code/message details rather than suggesting rephrasing. Focused verification passed with node --test test/bot-message.test.js reporting 39 passing tests, and ./init.sh passed with harness verification, lint, build, and 73 tests. Later on 2026-06-29, CSIT changed chat questions to poll read-only runs briefly, return assistant replies directly, hide session/message/run ids by default, and use a non-technical still-working fallback. CSIT then made active chat mode modal: command-looking text such as status, resources, and findings is sent to the assistant until the user sends chat pause; chat controls remain available. Focused verification passed with node --test test/bot-message.test.js reporting 44 passing tests, and ./init.sh passed with harness verification, lint, build, and 78 tests. Review follow-up on 2026-06-29 changed chat clientMessageId generation to use the Mattermost source post id when available, tightened assistant answer rendering to correlate with the accepted user message_id and exact assistant run id, and repointed local command-reference links to docs/wiki-mattermost-bot-commands.md. Focused verification passed with node --test test/bot-message.test.js test/bot-runner.test.js reporting 54 passing tests, and ./init.sh passed with harness verification, lint, build, and 80 tests. Follow-up on 2026-06-30 simplified the message identity path so post.user_id is passed once as userId, message handling no longer accepts a compatibility identity parameter, and { externalUserId } is derived directly from userId; focused node --test test/bot-message.test.js test/bot-runner.test.js test/acornops-client.test.js passed with 61 tests, and ./init.sh passed with harness verification, lint, build, and 79 tests. SSE follow-up work on 2026-06-30 added AcornOpsClient.streamRun() for GET /api/v1/runs/{runId}/stream, SSE parsing, process-local active streamed run state, and src/bot/run-follower.js for one active followed run per external user. The runner now starts follow-up delivery after posting the immediate acknowledgement; run_completed posts the final assistant answer, run_failed/run_cancelled post concise terminal messages, dropped streams reconnect and fall back to bounded polling, chat pause keeps following, and chat end aborts following and suppresses eventual results. Focused node --test test/acornops-client.test.js test/command-context.test.js test/bot-message.test.js test/bot-runner.test.js test/run-follower.test.js passed with 79 tests. Full npm test passed with 91 tests. Final ./init.sh passed with harness verification, lint, build, and 91 tests. Review follow-up fixed generic target chat session routing so target 1 followed by chat new uses POST /api/v1/workspaces/{workspaceId}/targets/{targetId}/sessions instead of the compatibility Kubernetes cluster session endpoint. Focused node --test test/command-context.test.js test/bot-message.test.js test/bot-runner.test.js test/run-follower.test.js test/acornops-client.test.js passed with 80 tests. Full npm test passed with 92 tests. Final ./init.sh passed with harness verification, lint, build, and 92 tests. Live smoke still needs to rerun for SSE follow-up delivery.",
+      "notes": "Depends on B07. Chat mode remains process-local and read-only. V1 follows one active streamed run per external user. chat pause leaves an active run following in place; chat end aborts it. If the bot process restarts, active run follows are lost and AcornOps may complete without a Mattermost follow-up post."
     }
   ]
 }

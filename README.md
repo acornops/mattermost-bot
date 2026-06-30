@@ -28,7 +28,7 @@ The Mattermost bot gives Mattermost users a chat entry point into AcornOps:
 2. `login` creates an AcornOps external integration account-link request.
 3. `status` resolves the linked AcornOps identity for the observed Mattermost user.
 4. Read commands call AcornOps control-plane APIs with service authentication and `x-acornops-external-user-id`.
-5. Assistant commands submit read-only AcornOps session messages for the selected cluster or VM.
+5. Chat mode submits read-only AcornOps assistant messages for the selected workspace and target.
 
 The bot never asks users for AcornOps passwords in Mattermost and does not store AcornOps browser sessions, cookies, OIDC tokens, refresh tokens, or raw link tokens.
 
@@ -39,8 +39,8 @@ This repository owns:
 - Mattermost WebSocket event handling and REST replies
 - plain bot command parsing for `@acorn-ops-bot`
 - external integration link and resolve calls to AcornOps
-- read-only workspace, cluster, VM, resource, finding, investigation, session, and `ask` command surfaces
-- process-local conversational selection state for numbered workspaces, clusters, VMs, and sessions
+- read-only workspace, target, resource, finding, investigation, and chat-mode command surfaces
+- process-local conversational selection state for numbered workspaces, targets, sessions, active/paused chat mode, and one active streamed assistant run per user
 - repo-local lint, build, and test verification
 
 This repository does not own:
@@ -60,6 +60,7 @@ The bot depends on the AcornOps control-plane external integration contract:
 - `POST /api/v1/auth/external-integrations/link`
 - `POST /api/v1/auth/external-integrations/resolve`
 - authenticated read APIs under `/api/v1/workspaces`, `/api/v1/sessions`, and `/api/v1/runs`
+- `GET /api/v1/runs/{runId}/stream` for long-running assistant follow-up delivery
 
 The bot authenticates to AcornOps with `EXTERNAL_INTEGRATION_SERVICE_TOKEN`. The external user id is always derived from the observed Mattermost post author id; it is never accepted from user-typed chat text.
 
@@ -88,21 +89,25 @@ Local `.env` files are loaded without overriding existing process environment va
 
 Commands are plain Mattermost messages, not slash commands. Slash-prefixed input returns guidance to retry without `/`.
 
-- `help`: show supported commands
+- `help`: show the short common workflow
+- `help filters`: show supported filters and finite values
 - `login`: create an AcornOps account-link request; direct-message only
-- `status`: show linked or unlinked account state
+- `status`: show linked or unlinked account state plus current context
 - `workspaces`: list accessible workspaces
 - `workspaces 1`: show workspace details without changing current workspace
 - `workspace 1`: select a workspace
 - `workspace`: show the current workspace
-- `clusters`, `clusters 1`, `cluster 1`: list, inspect, and select Kubernetes clusters
-- `vms`, `vms 1`, `vm 1`: list, inspect, and select VMs
-- `resources`: list resources for the selected cluster or VM
-- `findings`: list findings for the selected cluster or VM
+- `targets`: list Kubernetes and VM targets in the current workspace
+- `target 1`: select a target
+- `resources`: list resources for the selected target
+- `findings`: list findings for the selected target
 - `investigations`: list workspace investigations
-- `sessions`, `session new`, `session 1`: list, create, and select assistant sessions
-- `messages`: show messages for the current session
-- `ask <question>`: submit a read-only assistant question for the selected target
+- `chat new`: create a read-only troubleshooting chat for the selected target
+- `chat pause`: leave chat mode while keeping the session resumable
+- `chat resume`: resume the latest paused chat session
+- `chat end`: clear the current chat session pointer
+
+When chat mode is active, ordinary messages and command-looking text such as `status`, `resources`, and `findings` are sent to AcornOps as read-only assistant questions. The bot briefly polls for fast answers, then follows long-running runs over SSE and posts the final assistant response back to the same Mattermost channel. Use `chat pause` before running normal commands; use `chat end` to stop following an active answer. Advanced filters, shortcuts such as `clusters` and `vms`, and compatibility session commands are documented in [`docs/wiki-mattermost-bot-commands.md`](docs/wiki-mattermost-bot-commands.md).
 
 Only `login` is direct-message-only. Authenticated read and read-only assistant commands can run in direct messages or channel mentions.
 
@@ -141,7 +146,7 @@ Do not run overlapping local stacks on the same host ports.
 - Store the Mattermost bot token and AcornOps external integration service token in the deployment secret manager, not in committed files.
 - Keep the external integration token scoped to the installed Mattermost integration.
 - Run behind the deployment topology owned by `acornops-deployment`.
-- The current command context is process-local. Run a single bot replica or add shared TTL-backed command context before deploying multiple active bot replicas.
+- The current command context and active SSE run-following registry are process-local. Run a single bot replica or add shared TTL-backed command context and run-following state before deploying multiple active bot replicas.
 - Treat channel responses as potentially visible to the whole channel. Login remains direct-message-only; read and assistant commands are intentionally channel-capable.
 - Rotate service tokens through AcornOps control-plane procedures and restart the bot runtime after secret updates.
 
@@ -151,6 +156,7 @@ Primary docs:
 
 - [`AGENTS.md`](AGENTS.md)
 - [`docs/bot-runtime.md`](docs/bot-runtime.md)
+- [`docs/wiki-mattermost-bot-commands.md`](docs/wiki-mattermost-bot-commands.md)
 - [`docs/bot-integrations.md`](docs/bot-integrations.md)
 - [`docs/bot-auth-sessions.md`](docs/bot-auth-sessions.md)
 - [`docs/acornops-api-inventory.md`](docs/acornops-api-inventory.md)

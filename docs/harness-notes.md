@@ -28,9 +28,7 @@ This repository starts with a harness-first baseline. The harness exists to make
 The product goal, local learning stack, and first bot runtime are now selected. Continue upgrading the harness by:
 
 1. Keeping `./init.sh` focused on non-mutating repo and bot verification.
-2. Keeping host-level services such as k3d and Mattermost explicit until the local topology is settled.
+2. Keeping host-level services such as Mattermost explicit until the local topology is settled.
 3. Adding product features to `feature_list.json` before implementation begins.
 4. Adding module-level docs near code as the architecture grows.
 5. Adding repeatable end-to-end checks for cross-component behavior when they can run without leaking local secrets.
-
-The immediate next product path is to live-smoke the expanded plain-command surface against the local Mattermost and AcornOps stack, especially workspace selection, cluster/VM selection, resources, findings, sessions, and read-only `ask` runs.

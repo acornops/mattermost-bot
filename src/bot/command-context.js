@@ -23,7 +23,37 @@ export function createInMemoryCommandContextStore() {
         currentWorkspace: workspaceReference(workspace),
         currentCluster: null,
         currentVm: null,
-        currentSession: null
+        targets: [],
+        currentTarget: null,
+        currentSession: null,
+        chatActive: false,
+        latestRun: null
+      };
+      contexts.set(externalUserId, nextContext);
+      return nextContext;
+    },
+
+    rememberTargets(externalUserId, targets) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const nextContext = {
+        ...context,
+        targets: targets.map((target) => targetReference({ ...target, source: "target" }))
+      };
+      contexts.set(externalUserId, nextContext);
+      return nextContext;
+    },
+
+    selectTarget(externalUserId, target) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const reference = targetReference({ ...target, source: "target" });
+      const nextContext = {
+        ...context,
+        currentTarget: reference,
+        currentCluster: reference.type === "kubernetes" ? clusterReference(target) : null,
+        currentVm: reference.type === "virtual_machine" ? vmReference(target) : null,
+        currentSession: null,
+        chatActive: false,
+        latestRun: null
       };
       contexts.set(externalUserId, nextContext);
       return nextContext;
@@ -41,11 +71,15 @@ export function createInMemoryCommandContextStore() {
 
     selectCluster(externalUserId, cluster) {
       const context = contexts.get(externalUserId) ?? emptyContext();
+      const target = targetReference({ ...cluster, targetType: "kubernetes", source: "cluster" });
       const nextContext = {
         ...context,
         currentCluster: clusterReference(cluster),
         currentVm: null,
-        currentSession: null
+        currentTarget: target,
+        currentSession: null,
+        chatActive: false,
+        latestRun: null
       };
       contexts.set(externalUserId, nextContext);
       return nextContext;
@@ -63,11 +97,15 @@ export function createInMemoryCommandContextStore() {
 
     selectVirtualMachine(externalUserId, vm) {
       const context = contexts.get(externalUserId) ?? emptyContext();
+      const target = targetReference({ ...vm, targetType: "virtual_machine", source: "vm" });
       const nextContext = {
         ...context,
         currentVm: vmReference(vm),
         currentCluster: null,
-        currentSession: null
+        currentTarget: target,
+        currentSession: null,
+        chatActive: false,
+        latestRun: null
       };
       contexts.set(externalUserId, nextContext);
       return nextContext;
@@ -88,6 +126,85 @@ export function createInMemoryCommandContextStore() {
       const nextContext = {
         ...context,
         currentSession: sessionReference(session)
+      };
+      contexts.set(externalUserId, nextContext);
+      return nextContext;
+    },
+
+    startChat(externalUserId, session) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const nextContext = {
+        ...context,
+        currentSession: sessionReference(session),
+        chatActive: true,
+        latestRun: null
+      };
+      contexts.set(externalUserId, nextContext);
+      return nextContext;
+    },
+
+    pauseChat(externalUserId) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const nextContext = {
+        ...context,
+        chatActive: false
+      };
+      contexts.set(externalUserId, nextContext);
+      return nextContext;
+    },
+
+    resumeChat(externalUserId) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const nextContext = {
+        ...context,
+        chatActive: Boolean(context.currentSession)
+      };
+      contexts.set(externalUserId, nextContext);
+      return nextContext;
+    },
+
+    endChat(externalUserId) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const nextContext = {
+        ...context,
+        currentSession: null,
+        chatActive: false,
+        latestRun: null,
+        activeRun: null
+      };
+      contexts.set(externalUserId, nextContext);
+      return nextContext;
+    },
+
+    rememberLatestRun(externalUserId, run) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const nextContext = {
+        ...context,
+        latestRun: runReference(run)
+      };
+      contexts.set(externalUserId, nextContext);
+      return nextContext;
+    },
+
+    rememberActiveRun(externalUserId, run) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const nextContext = {
+        ...context,
+        activeRun: runReference(run)
+      };
+      contexts.set(externalUserId, nextContext);
+      return nextContext;
+    },
+
+    clearActiveRun(externalUserId, runId = "") {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      if (runId && context.activeRun?.id && context.activeRun.id !== runId) {
+        return context;
+      }
+
+      const nextContext = {
+        ...context,
+        activeRun: null
       };
       contexts.set(externalUserId, nextContext);
       return nextContext;
@@ -112,6 +229,21 @@ export function createNullCommandContextStore() {
         currentWorkspace: workspaceReference(workspace)
       };
     },
+    rememberTargets(_externalUserId, targets) {
+      return {
+        ...emptyContext(),
+        targets: targets.map((target) => targetReference({ ...target, source: "target" }))
+      };
+    },
+    selectTarget(_externalUserId, target) {
+      const reference = targetReference({ ...target, source: "target" });
+      return {
+        ...emptyContext(),
+        currentTarget: reference,
+        currentCluster: reference.type === "kubernetes" ? clusterReference(target) : null,
+        currentVm: reference.type === "virtual_machine" ? vmReference(target) : null
+      };
+    },
     rememberClusters(_externalUserId, clusters) {
       return {
         ...emptyContext(),
@@ -119,9 +251,11 @@ export function createNullCommandContextStore() {
       };
     },
     selectCluster(_externalUserId, cluster) {
+      const target = targetReference({ ...cluster, targetType: "kubernetes", source: "cluster" });
       return {
         ...emptyContext(),
-        currentCluster: clusterReference(cluster)
+        currentCluster: clusterReference(cluster),
+        currentTarget: target
       };
     },
     rememberVirtualMachines(_externalUserId, vms) {
@@ -131,9 +265,11 @@ export function createNullCommandContextStore() {
       };
     },
     selectVirtualMachine(_externalUserId, vm) {
+      const target = targetReference({ ...vm, targetType: "virtual_machine", source: "vm" });
       return {
         ...emptyContext(),
-        currentVm: vmReference(vm)
+        currentVm: vmReference(vm),
+        currentTarget: target
       };
     },
     rememberSessions(_externalUserId, sessions) {
@@ -147,6 +283,37 @@ export function createNullCommandContextStore() {
         ...emptyContext(),
         currentSession: sessionReference(session)
       };
+    },
+    startChat(_externalUserId, session) {
+      return {
+        ...emptyContext(),
+        currentSession: sessionReference(session),
+        chatActive: true
+      };
+    },
+    pauseChat() {
+      return emptyContext();
+    },
+    resumeChat() {
+      return emptyContext();
+    },
+    endChat() {
+      return emptyContext();
+    },
+    rememberLatestRun(_externalUserId, run) {
+      return {
+        ...emptyContext(),
+        latestRun: runReference(run)
+      };
+    },
+    rememberActiveRun(_externalUserId, run) {
+      return {
+        ...emptyContext(),
+        activeRun: runReference(run)
+      };
+    },
+    clearActiveRun() {
+      return emptyContext();
     }
   };
 }
@@ -168,6 +335,10 @@ export function resolveClusterReference(reference, context) {
   return resolveReference(reference, context.currentCluster, context.clusters, clusterReference);
 }
 
+export function resolveTargetReference(reference, context) {
+  return resolveReference(reference, context.currentTarget, context.targets, targetReference);
+}
+
 export function resolveVirtualMachineReference(reference, context) {
   return resolveReference(reference, context.currentVm, context.virtualMachines, vmReference);
 }
@@ -182,10 +353,15 @@ function emptyContext() {
     currentWorkspace: null,
     clusters: [],
     currentCluster: null,
+    targets: [],
+    currentTarget: null,
     virtualMachines: [],
     currentVm: null,
     sessions: [],
-    currentSession: null
+    currentSession: null,
+    chatActive: false,
+    latestRun: null,
+    activeRun: null
   };
 }
 
@@ -210,10 +386,28 @@ function vmReference(vm) {
   };
 }
 
+function targetReference(target) {
+  const type = normalizeTargetType(target.targetType ?? target.type);
+  return {
+    id: target.id ?? target.targetId ?? target.clusterId ?? target.vmId ?? "",
+    name: target.name ?? target.displayName ?? target.hostname ?? target.clusterName ?? "",
+    type,
+    source: target.source ?? "target"
+  };
+}
+
 function sessionReference(session) {
   return {
     id: session.id ?? session.sessionId ?? "",
     name: session.title ?? session.name ?? ""
+  };
+}
+
+function runReference(run) {
+  return {
+    id: run.id ?? run.runId ?? run.run_id ?? "",
+    status: run.status ?? "",
+    sessionId: run.sessionId ?? run.session_id ?? ""
   };
 }
 
@@ -228,4 +422,16 @@ function resolveReference(reference, current, remembered, referenceFactory) {
   }
 
   return referenceFactory({ id: reference, name: "" });
+}
+
+function normalizeTargetType(type) {
+  if (type === "vm") {
+    return "virtual_machine";
+  }
+
+  if (type === "cluster") {
+    return "kubernetes";
+  }
+
+  return type ?? "";
 }

@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { DEFAULT_MATTERMOST_BOT_USERNAME } from "./config.js";
 import {
   createNullCommandContextStore,
   resolveClusterReference,
   resolveSessionReference,
+  resolveTargetReference,
   resolveVirtualMachineReference,
   resolveWorkspaceReference
 } from "./command-context.js";
@@ -14,29 +16,65 @@ import {
   parseMentions
 } from "./message-utils.js";
 
+const commandReferenceUrl = "https://github.com/acornops/mattermost-bot/wiki/Mattermost-Bot-Commands";
+
 const helpText = [
-  "AcornOps bot commands:",
-  "- `help` shows this help.",
-  "- `login` creates an AcornOps account-link URL.",
-  "- `status` checks whether this external chat account is linked to AcornOps.",
-  "- `workspaces` lists AcornOps workspaces available to your linked account.",
-  "- `workspaces 1` shows details for a workspace.",
-  "- `workspace` shows details for the current workspace.",
-  "- `workspace 1` changes the current workspace.",
-  "- `clusters` lists clusters in the current workspace.",
-  "- `clusters 1` shows details for a cluster.",
-  "- `cluster 1` changes the current cluster.",
-  "- `resources` lists resources for the selected cluster or VM.",
-  "- `findings` lists findings for the selected cluster or VM.",
-  "- `investigations` lists investigations in the current workspace.",
-  "- `vms` lists VMs in the current workspace.",
-  "- `vm 1` changes the current VM.",
-  "- `sessions` lists sessions for the selected cluster or VM.",
-  "- `session new` creates a read-only troubleshooting session.",
-  "- `session 1` changes the current session.",
-  "- `messages` lists messages in the current session.",
-  "- `ask <question>` sends a read-only assistant message."
+  "AcornOps commands:",
+  "Flow: `login` -> `workspaces` -> `workspace 1` -> `targets` -> `target 1` -> `chat new`.",
+  "",
+  "Common commands:",
+  "- `login` connects your Mattermost account to AcornOps.",
+  "- `status` shows account and current context.",
+  "- `workspaces` lists workspaces; `workspace 1` selects one.",
+  "- `targets` lists Kubernetes and VM targets; `target 1` selects one.",
+  "- `resources`, `findings`, and `investigations` inspect the selected context.",
+  "- `chat new` starts a read-only AcornOps chat for the selected target.",
+  "- `chat pause`, `chat resume`, and `chat end` control chat mode.",
+  "- `help filters` shows common filters.",
+  "",
+  `More commands, filters, and examples: ${commandReferenceUrl}`
 ].join("\n");
+
+const filterHelpText = [
+  "AcornOps filter examples:",
+  "- `workspaces q=platform`",
+  "- `targets q=prod targetType=kubernetes`",
+  "- `resources kind=Pod namespace=payments health=attention`",
+  "- `findings severity=critical namespace=payments`",
+  "- `investigations severity=warning clusterId=cluster-id namespace=default`",
+  "",
+  "Supported filters:",
+  "- `workspaces`: `q`",
+  "- `targets`: `q`, `targetType=kubernetes|virtual_machine`",
+  "- `resources`: `q`, `kind`, `family=workloads|network|storage|cluster`, `namespace`, `health=healthy|attention`",
+  "- `findings`: `q`, `severity=critical|warning|info`, `namespace`",
+  "- `investigations`: `q`, `severity=critical|warning|info`, `clusterId`, `namespace`",
+  "",
+  `Full reference: ${commandReferenceUrl}`
+].join("\n");
+
+const knownActions = new Set([
+  "help",
+  "filters",
+  "login",
+  "status",
+  "workspaces",
+  "workspace",
+  "targets",
+  "target",
+  "clusters",
+  "cluster",
+  "resources",
+  "findings",
+  "investigations",
+  "vms",
+  "vm",
+  "chat",
+  "sessions",
+  "session",
+  "messages",
+  "ask"
+]);
 
 const nullCommandContextStore = createNullCommandContextStore();
 
@@ -66,7 +104,15 @@ export function shouldRespondToPost({
   return new RegExp(`(^|\\s)@${escapeRegExp(botUsername)}\\b`, "i").test(post.message ?? "");
 }
 
-export async function handleBotMessage({
+export async function handleBotMessage(options) {
+  return botResponseText(await handleBotMessageResult(options));
+}
+
+export function botResponseText(result) {
+  return typeof result === "string" ? result : result.message;
+}
+
+export async function handleBotMessageResult({
   text,
   userId = "",
   userName = "",
@@ -74,7 +120,7 @@ export async function handleBotMessage({
   channelType = "",
   acornOpsClient = null,
   commandContextStore = nullCommandContextStore,
-  mattermostIdentity = null
+  sourceMessageId = ""
 }) {
   const normalizedText = normalizeBotText(text, botUsername);
   const action = firstCommandWord(normalizedText) || "help";
@@ -84,8 +130,34 @@ export async function handleBotMessage({
     return "Commands do not use `/`. Try the command again without the slash, for example `clusters`.";
   }
 
+  const chatModeRoute = activeChatModeRoute({
+    action,
+    commandArgs,
+    normalizedText,
+    userId,
+    commandContextStore
+  });
+  if (chatModeRoute.asQuestion) {
+    return handleChatQuestion({
+      question: normalizedText,
+      userId,
+      userName,
+      channelType,
+      acornOpsClient,
+      commandContextStore,
+      sourceMessageId
+    });
+  }
+
   if (action === "help") {
+    if (commandArgs[0] === "filters") {
+      return filterHelpText;
+    }
     return helpText;
+  }
+
+  if (action === "filters") {
+    return filterHelpText;
   }
 
   if (action === "login") {
@@ -93,11 +165,16 @@ export async function handleBotMessage({
       return `For account login, send me a direct message with \`login\`.`;
     }
 
-    return handleLogin({ userId, userName, acornOpsClient, mattermostIdentity });
+    return handleLogin({ userId, userName, acornOpsClient });
   }
 
   if (action === "status") {
-    return handleStatus({ userId, userName, acornOpsClient, mattermostIdentity });
+    return handleStatus({
+      userId,
+      userName,
+      acornOpsClient,
+      commandContextStore,
+    });
   }
 
   if (action === "workspaces") {
@@ -108,7 +185,6 @@ export async function handleBotMessage({
       channelType,
       acornOpsClient,
       commandContextStore,
-      mattermostIdentity
     });
   }
 
@@ -120,7 +196,28 @@ export async function handleBotMessage({
       channelType,
       acornOpsClient,
       commandContextStore,
-      mattermostIdentity
+    });
+  }
+
+  if (action === "targets") {
+    return handleTargets({
+      commandArgs,
+      userId,
+      userName,
+      channelType,
+      acornOpsClient,
+      commandContextStore,
+    });
+  }
+
+  if (action === "target") {
+    return handleTarget({
+      commandArgs,
+      userId,
+      userName,
+      channelType,
+      acornOpsClient,
+      commandContextStore,
     });
   }
 
@@ -132,7 +229,6 @@ export async function handleBotMessage({
       channelType,
       acornOpsClient,
       commandContextStore,
-      mattermostIdentity
     });
   }
 
@@ -144,7 +240,6 @@ export async function handleBotMessage({
       channelType,
       acornOpsClient,
       commandContextStore,
-      mattermostIdentity
     });
   }
 
@@ -156,7 +251,6 @@ export async function handleBotMessage({
       channelType,
       acornOpsClient,
       commandContextStore,
-      mattermostIdentity
     });
   }
 
@@ -168,7 +262,6 @@ export async function handleBotMessage({
       channelType,
       acornOpsClient,
       commandContextStore,
-      mattermostIdentity
     });
   }
 
@@ -180,7 +273,6 @@ export async function handleBotMessage({
       channelType,
       acornOpsClient,
       commandContextStore,
-      mattermostIdentity
     });
   }
 
@@ -192,7 +284,6 @@ export async function handleBotMessage({
       channelType,
       acornOpsClient,
       commandContextStore,
-      mattermostIdentity
     });
   }
 
@@ -204,7 +295,6 @@ export async function handleBotMessage({
       channelType,
       acornOpsClient,
       commandContextStore,
-      mattermostIdentity
     });
   }
 
@@ -216,7 +306,6 @@ export async function handleBotMessage({
       channelType,
       acornOpsClient,
       commandContextStore,
-      mattermostIdentity
     });
   }
 
@@ -228,7 +317,17 @@ export async function handleBotMessage({
       channelType,
       acornOpsClient,
       commandContextStore,
-      mattermostIdentity
+    });
+  }
+
+  if (action === "chat") {
+    return handleChat({
+      commandArgs,
+      userId,
+      userName,
+      channelType,
+      acornOpsClient,
+      commandContextStore,
     });
   }
 
@@ -240,32 +339,29 @@ export async function handleBotMessage({
       channelType,
       acornOpsClient,
       commandContextStore,
-      mattermostIdentity
     });
   }
 
   if (action === "ask") {
-    return handleAsk({
-      commandArgs,
-      rawText: normalizedText,
+    return handleChatQuestion({
+      question: normalizedText.replace(/^ask\s+/i, "").trim(),
       userId,
       userName,
       channelType,
       acornOpsClient,
       commandContextStore,
-      mattermostIdentity
     });
   }
 
   return `Unknown AcornOps bot command: ${action}\n\n${helpText}`;
 }
 
-async function handleLogin({ userId, userName, acornOpsClient, mattermostIdentity }) {
+async function handleLogin({ userId, userName, acornOpsClient }) {
   if (!isAcornOpsChatAuthConfigured(acornOpsClient)) {
     return "AcornOps login is not configured. Set `ACORNOPS_API_BASE_URL` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN`, then restart the bot.";
   }
 
-  const identity = normalizeMattermostIdentity({ mattermostIdentity, userId });
+  const identity = externalIdentityForUserId(userId);
   if (!identity) {
     return missingIdentityText();
   }
@@ -281,17 +377,18 @@ async function handleLogin({ userId, userName, acornOpsClient, mattermostIdentit
   ].join("\n");
 }
 
-async function handleStatus({ userId, userName, acornOpsClient, mattermostIdentity }) {
+async function handleStatus({ userId, userName, acornOpsClient, commandContextStore }) {
   if (!isAcornOpsChatAuthConfigured(acornOpsClient)) {
     return "AcornOps status is not configured. Set `ACORNOPS_API_BASE_URL` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN`, then restart the bot.";
   }
 
-  const identity = normalizeMattermostIdentity({ mattermostIdentity, userId });
+  const identity = externalIdentityForUserId(userId);
   if (!identity) {
     return missingIdentityText();
   }
 
   const result = await acornOpsClient.resolveExternalIntegrationLink(identity);
+  const context = commandContextStore.get(identity.externalUserId);
   if (result.status === "linked") {
     const user = result.user ?? {};
     const linkedUser = [user.displayName, user.email, user.id].filter(Boolean).join(" / ");
@@ -299,7 +396,9 @@ async function handleStatus({ userId, userName, acornOpsClient, mattermostIdenti
       "AcornOps bot status:",
       `- Mattermost user: ${identityLabel({ userId, userName })}`,
       `- Backend authentication: linked to AcornOps${linkedUser ? ` as ${linkedUser}` : ""}`,
-      "- Cluster access: not loaded"
+      `- Workspace: ${formatReference(context.currentWorkspace)}`,
+      `- Target: ${formatReference(context.currentTarget ?? context.currentCluster ?? context.currentVm)}`,
+      `- Chat: ${context.currentSession ? `${formatReference(context.currentSession)} (${context.chatActive ? "active" : "paused"})` : "none"}`
     ].join("\n");
   }
 
@@ -327,16 +426,15 @@ async function handleWorkspaces({
   channelType,
   acornOpsClient,
   commandContextStore,
-  mattermostIdentity
 }) {
-  if (commandArgs.length > 1) {
-    return "`workspaces` accepts at most one workspace number or id.";
+  const parsedArgs = parseListArgs(commandArgs, ["q"]);
+  if (parsedArgs.error) {
+    return parsedArgs.error;
   }
 
   const auth = requireExternalDataCommand({
     channelType,
     acornOpsClient,
-    mattermostIdentity,
     userId,
     commandLabel: "workspaces"
   });
@@ -344,9 +442,9 @@ async function handleWorkspaces({
     return auth.response;
   }
 
-  if (commandArgs.length === 1) {
+  if (parsedArgs.reference) {
     return handleWorkspaceDetail({
-      reference: commandArgs[0],
+      reference: parsedArgs.reference,
       userId,
       userName,
       identity: auth.identity,
@@ -357,7 +455,7 @@ async function handleWorkspaces({
   }
 
   try {
-    const page = await acornOpsClient.listWorkspaces(auth.identity);
+    const page = await acornOpsClient.listWorkspaces(auth.identity, parsedArgs.filters);
     commandContextStore.rememberWorkspaces(auth.identity.externalUserId, page.items ?? []);
     return formatWorkspacePage({
       page,
@@ -370,6 +468,135 @@ async function handleWorkspaces({
   }
 }
 
+async function handleTargets({
+  commandArgs,
+  userId,
+  userName,
+  channelType,
+  acornOpsClient,
+  commandContextStore,
+}) {
+  const parsedArgs = parseListArgs(commandArgs, ["q", "targetType"]);
+  if (parsedArgs.error) {
+    return parsedArgs.error;
+  }
+
+  const auth = requireExternalDataCommand({
+    channelType,
+    acornOpsClient,
+    userId,
+    commandLabel: "targets"
+  });
+  if (auth.response) {
+    return auth.response;
+  }
+
+  if (parsedArgs.reference) {
+    return handleTargetDetail({
+      reference: parsedArgs.reference,
+      userId,
+      userName,
+      identity: auth.identity,
+      acornOpsClient,
+      commandContextStore,
+      selectCurrent: false
+    });
+  }
+
+  const context = commandContextStore.get(auth.identity.externalUserId);
+  if (!context.currentWorkspace) {
+    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
+  }
+
+  try {
+    const page = await acornOpsClient.listTargets(
+      auth.identity,
+      context.currentWorkspace.id,
+      parsedArgs.filters
+    );
+    commandContextStore.rememberTargets(auth.identity.externalUserId, page.items ?? []);
+    return formatTargetPage({
+      page,
+      context: commandContextStore.get(auth.identity.externalUserId),
+      userId,
+      userName
+    });
+  } catch (error) {
+    return dataErrorText(error, "targets");
+  }
+}
+
+async function handleTarget({
+  commandArgs,
+  userId,
+  userName,
+  channelType,
+  acornOpsClient,
+  commandContextStore,
+}) {
+  if (commandArgs.length !== 1) {
+    return "`target` requires exactly one target number or id.";
+  }
+
+  const auth = requireExternalDataCommand({
+    channelType,
+    acornOpsClient,
+    userId,
+    commandLabel: "target"
+  });
+  if (auth.response) {
+    return auth.response;
+  }
+
+  return handleTargetDetail({
+    reference: commandArgs[0],
+    userId,
+    userName,
+    identity: auth.identity,
+    acornOpsClient,
+    commandContextStore,
+    selectCurrent: true
+  });
+}
+
+async function handleTargetDetail({
+  reference,
+  userId,
+  userName,
+  identity,
+  acornOpsClient,
+  commandContextStore,
+  selectCurrent
+}) {
+  const context = commandContextStore.get(identity.externalUserId);
+  const workspace = context.currentWorkspace;
+  if (!workspace) {
+    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
+  }
+
+  const target = resolveTargetReference(reference, context);
+  if (!target) {
+    return "I do not have that target number yet. Send `targets` first, or use a target id.";
+  }
+
+  try {
+    const detail = await acornOpsClient.getTarget(identity, workspace.id, target.id);
+    if (selectCurrent) {
+      commandContextStore.selectTarget(identity.externalUserId, detail);
+    }
+    return formatTargetDetail({
+      target: detail,
+      context: commandContextStore.get(identity.externalUserId),
+      fallbackWorkspace: workspace,
+      userId,
+      userName,
+      selectCurrent
+    });
+  } catch (error) {
+    return dataErrorText(error, "target");
+  }
+}
+
 async function handleWorkspace({
   commandArgs,
   userId,
@@ -377,7 +604,6 @@ async function handleWorkspace({
   channelType,
   acornOpsClient,
   commandContextStore,
-  mattermostIdentity
 }) {
   if (commandArgs.length > 1) {
     return "`workspace` accepts at most one workspace number or id.";
@@ -386,7 +612,6 @@ async function handleWorkspace({
   const auth = requireExternalDataCommand({
     channelType,
     acornOpsClient,
-    mattermostIdentity,
     userId,
     commandLabel: "workspace"
   });
@@ -397,7 +622,7 @@ async function handleWorkspace({
   if (commandArgs.length === 0) {
     const currentWorkspace = commandContextStore.get(auth.identity.externalUserId).currentWorkspace;
     if (!currentWorkspace) {
-      return "No current workspace is selected. Send `workspaces`, then `workspace 1`.";
+      return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
     }
 
     return handleWorkspaceDetail({
@@ -467,7 +692,6 @@ async function handleClusters({
   channelType,
   acornOpsClient,
   commandContextStore,
-  mattermostIdentity
 }) {
   if (commandArgs.length > 1) {
     return "`clusters` accepts at most one cluster number or id.";
@@ -476,7 +700,6 @@ async function handleClusters({
   const auth = requireExternalDataCommand({
     channelType,
     acornOpsClient,
-    mattermostIdentity,
     userId,
     commandLabel: "clusters"
   });
@@ -502,7 +725,7 @@ async function handleClusters({
     commandContextStore
   });
   if (!workspace) {
-    return "No current workspace is selected. Send `workspaces`, then `workspace 1`.";
+    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
   }
 
   try {
@@ -524,7 +747,6 @@ async function handleCluster({
   channelType,
   acornOpsClient,
   commandContextStore,
-  mattermostIdentity
 }) {
   if (commandArgs.length !== 1) {
     return "`cluster` requires exactly one cluster number or id.";
@@ -533,7 +755,6 @@ async function handleCluster({
   const auth = requireExternalDataCommand({
     channelType,
     acornOpsClient,
-    mattermostIdentity,
     userId,
     commandLabel: "cluster"
   });
@@ -564,7 +785,7 @@ async function handleClusterDetail({
   const context = commandContextStore.get(identity.externalUserId);
   const workspace = context.currentWorkspace;
   if (!workspace) {
-    return "No current workspace is selected. Send `workspaces`, then `workspace 1`.";
+    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
   }
 
   const cluster = resolveClusterReference(reference, context);
@@ -597,16 +818,15 @@ async function handleResources({
   channelType,
   acornOpsClient,
   commandContextStore,
-  mattermostIdentity
 }) {
-  if (commandArgs.length > 1) {
-    return "`resources` accepts at most one target hint: `cluster` or `vm`.";
+  const parsedArgs = parseTargetFilterArgs(commandArgs, ["q", "kind", "family", "namespace", "health"]);
+  if (parsedArgs.error) {
+    return parsedArgs.error;
   }
 
   const auth = requireExternalDataCommand({
     channelType,
     acornOpsClient,
-    mattermostIdentity,
     userId,
     commandLabel: "resources"
   });
@@ -615,7 +835,7 @@ async function handleResources({
   }
 
   const context = commandContextStore.get(auth.identity.externalUserId);
-  const target = selectedTarget(context, commandArgs[0]);
+  const target = selectedTarget(context, parsedArgs.hint);
   if (target.response) {
     return target.response;
   }
@@ -625,10 +845,11 @@ async function handleResources({
       const page = await acornOpsClient.listKubernetesClusterResources(
         auth.identity,
         context.currentWorkspace.id,
-        target.reference.id
+        target.reference.id,
+        parsedArgs.filters
       );
       return formatResourcePage({
-        title: "AcornOps cluster resources:",
+        title: "AcornOps resources:",
         page,
         context,
         userId,
@@ -642,7 +863,7 @@ async function handleResources({
       target.reference.id
     );
     return formatResourcePage({
-      title: "AcornOps VM resources:",
+      title: "AcornOps resources:",
       page: normalizeListResponse(resources),
       context,
       userId,
@@ -660,16 +881,15 @@ async function handleFindings({
   channelType,
   acornOpsClient,
   commandContextStore,
-  mattermostIdentity
 }) {
-  if (commandArgs.length > 1) {
-    return "`findings` accepts at most one target hint: `cluster` or `vm`.";
+  const parsedArgs = parseTargetFilterArgs(commandArgs, ["q", "severity", "namespace"]);
+  if (parsedArgs.error) {
+    return parsedArgs.error;
   }
 
   const auth = requireExternalDataCommand({
     channelType,
     acornOpsClient,
-    mattermostIdentity,
     userId,
     commandLabel: "findings"
   });
@@ -678,7 +898,7 @@ async function handleFindings({
   }
 
   const context = commandContextStore.get(auth.identity.externalUserId);
-  const target = selectedTarget(context, commandArgs[0]);
+  const target = selectedTarget(context, parsedArgs.hint);
   if (target.response) {
     return target.response;
   }
@@ -688,10 +908,11 @@ async function handleFindings({
       const page = await acornOpsClient.listKubernetesClusterFindings(
         auth.identity,
         context.currentWorkspace.id,
-        target.reference.id
+        target.reference.id,
+        parsedArgs.filters
       );
       return formatFindingPage({
-        title: "AcornOps cluster findings:",
+        title: "AcornOps findings:",
         page,
         context,
         userId,
@@ -705,7 +926,7 @@ async function handleFindings({
       target.reference.id
     );
     return formatFindingPage({
-      title: "AcornOps VM findings:",
+      title: "AcornOps findings:",
       page: normalizeListResponse(findings),
       context,
       userId,
@@ -723,16 +944,17 @@ async function handleInvestigations({
   channelType,
   acornOpsClient,
   commandContextStore,
-  mattermostIdentity
 }) {
-  if (commandArgs.length > 0) {
-    return "`investigations` does not accept arguments yet.";
+  const parsedArgs = parseListArgs(commandArgs, ["q", "severity", "clusterId", "namespace"], {
+    allowReference: false
+  });
+  if (parsedArgs.error) {
+    return parsedArgs.error;
   }
 
   const auth = requireExternalDataCommand({
     channelType,
     acornOpsClient,
-    mattermostIdentity,
     userId,
     commandLabel: "investigations"
   });
@@ -742,11 +964,15 @@ async function handleInvestigations({
 
   const context = commandContextStore.get(auth.identity.externalUserId);
   if (!context.currentWorkspace) {
-    return "No current workspace is selected. Send `workspaces`, then `workspace 1`.";
+    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
   }
 
   try {
-    const page = await acornOpsClient.listWorkspaceInvestigations(auth.identity, context.currentWorkspace.id);
+    const page = await acornOpsClient.listWorkspaceInvestigations(
+      auth.identity,
+      context.currentWorkspace.id,
+      parsedArgs.filters
+    );
     return formatFindingPage({
       title: "AcornOps investigations:",
       page,
@@ -766,7 +992,6 @@ async function handleVirtualMachines({
   channelType,
   acornOpsClient,
   commandContextStore,
-  mattermostIdentity
 }) {
   if (commandArgs.length > 1) {
     return "`vms` accepts at most one VM number or id.";
@@ -775,7 +1000,6 @@ async function handleVirtualMachines({
   const auth = requireExternalDataCommand({
     channelType,
     acornOpsClient,
-    mattermostIdentity,
     userId,
     commandLabel: "vms"
   });
@@ -785,7 +1009,7 @@ async function handleVirtualMachines({
 
   const context = commandContextStore.get(auth.identity.externalUserId);
   if (!context.currentWorkspace) {
-    return "No current workspace is selected. Send `workspaces`, then `workspace 1`.";
+    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
   }
 
   if (commandArgs.length === 1) {
@@ -821,7 +1045,6 @@ async function handleVirtualMachine({
   channelType,
   acornOpsClient,
   commandContextStore,
-  mattermostIdentity
 }) {
   if (commandArgs.length !== 1) {
     return "`vm` requires exactly one VM number or id.";
@@ -830,7 +1053,6 @@ async function handleVirtualMachine({
   const auth = requireExternalDataCommand({
     channelType,
     acornOpsClient,
-    mattermostIdentity,
     userId,
     commandLabel: "vm"
   });
@@ -861,7 +1083,7 @@ async function handleVirtualMachineDetail({
   const context = commandContextStore.get(identity.externalUserId);
   const workspace = context.currentWorkspace;
   if (!workspace) {
-    return "No current workspace is selected. Send `workspaces`, then `workspace 1`.";
+    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
   }
 
   const vm = resolveVirtualMachineReference(reference, context);
@@ -894,7 +1116,6 @@ async function handleSessions({
   channelType,
   acornOpsClient,
   commandContextStore,
-  mattermostIdentity
 }) {
   if (commandArgs.length > 0) {
     return "`sessions` does not accept arguments yet.";
@@ -903,7 +1124,6 @@ async function handleSessions({
   const auth = requireExternalDataCommand({
     channelType,
     acornOpsClient,
-    mattermostIdentity,
     userId,
     commandLabel: "sessions"
   });
@@ -948,12 +1168,10 @@ async function handleSession({
   channelType,
   acornOpsClient,
   commandContextStore,
-  mattermostIdentity
 }) {
   const auth = requireExternalDataCommand({
     channelType,
     acornOpsClient,
-    mattermostIdentity,
     userId,
     commandLabel: "session"
   });
@@ -1032,7 +1250,6 @@ async function handleMessages({
   channelType,
   acornOpsClient,
   commandContextStore,
-  mattermostIdentity
 }) {
   if (commandArgs.length > 1) {
     return "`messages` accepts at most one session number or id.";
@@ -1041,7 +1258,6 @@ async function handleMessages({
   const auth = requireExternalDataCommand({
     channelType,
     acornOpsClient,
-    mattermostIdentity,
     userId,
     commandLabel: "messages"
   });
@@ -1068,32 +1284,135 @@ async function handleMessages({
   }
 }
 
-async function handleAsk({
+async function handleChat({
   commandArgs,
-  rawText,
   userId,
   userName,
   channelType,
   acornOpsClient,
   commandContextStore,
-  mattermostIdentity
 }) {
-  if (commandArgs.length === 0) {
-    return "`ask` requires a question.";
+  const subcommand = commandArgs[0] ?? "";
+  const identity = externalIdentityForUserId(userId);
+  if (!identity) {
+    return missingIdentityText();
+  }
+
+  if (!subcommand) {
+    const context = commandContextStore.get(identity.externalUserId);
+    return formatChatStatus({ context, userId, userName });
+  }
+
+  if (subcommand === "pause") {
+    const context = commandContextStore.get(identity.externalUserId);
+    if (!context.currentSession) {
+      return "No chat session is selected. Use `chat new` after choosing a workspace and target.";
+    }
+    commandContextStore.pauseChat(identity.externalUserId);
+    return [
+      "Chat paused.",
+      "You can run inspection commands now. Use `chat resume` to continue this chat."
+    ].join("\n");
+  }
+
+  if (subcommand === "resume") {
+    const context = commandContextStore.get(identity.externalUserId);
+    if (!context.currentSession) {
+      return "No paused chat is available. Use `chat new` after choosing a workspace and target.";
+    }
+    commandContextStore.resumeChat(identity.externalUserId);
+    return [
+      ...formatContextLines(commandContextStore.get(identity.externalUserId), { userId, userName }),
+      "Chat resumed. Send a question, or use `chat pause` to leave chat mode."
+    ].join("\n");
+  }
+
+  if (subcommand === "end") {
+    commandContextStore.endChat(identity.externalUserId);
+    return {
+      message: "Chat ended. The AcornOps session remains available in the AcornOps UI.",
+      effects: [
+        {
+          type: "abortActiveRun",
+          externalUserId: identity.externalUserId
+        }
+      ]
+    };
+  }
+
+  if (subcommand !== "new") {
+    return "`chat` supports `new`, `pause`, `resume`, and `end`.";
   }
 
   const auth = requireExternalDataCommand({
     channelType,
     acornOpsClient,
-    mattermostIdentity,
     userId,
-    commandLabel: "ask"
+    commandLabel: "chat"
+  });
+  if (auth.response) {
+    return auth.response;
+  }
+
+  const title = commandArgs.slice(1).join(" ").trim();
+  const previousContext = commandContextStore.get(auth.identity.externalUserId);
+  if (previousContext.activeRun) {
+    return activeRunResponseText();
+  }
+
+  try {
+    const { session } = await createSessionForSelectedTarget({
+      identity: auth.identity,
+      acornOpsClient,
+      commandContextStore,
+      title
+    });
+    commandContextStore.startChat(auth.identity.externalUserId, session);
+    const lines = [
+      ...formatContextLines(commandContextStore.get(auth.identity.externalUserId), { userId, userName }),
+      "Chat started in read-only mode.",
+      "Send a question. Use `chat pause` before running bot commands like `status`, `resources`, or `findings`."
+    ];
+    if (previousContext.chatActive) {
+      lines.push("Previous chat is no longer resumable from Mattermost; use the AcornOps UI if you need it.");
+    }
+    return lines.join("\n");
+  } catch (error) {
+    if (error instanceof CommandResponseError) {
+      return error.message;
+    }
+    return dataErrorText(error, "chat session");
+  }
+}
+
+async function handleChatQuestion({
+  question,
+  userId,
+  userName,
+  channelType,
+  acornOpsClient,
+  commandContextStore,
+  sourceMessageId = ""
+}) {
+  if (!question) {
+    return "Send a question, or use `chat pause` to leave chat mode.";
+  }
+
+  const auth = requireExternalDataCommand({
+    channelType,
+    acornOpsClient,
+    userId,
+    commandLabel: "chat"
   });
   if (auth.response) {
     return auth.response;
   }
 
   let context = commandContextStore.get(auth.identity.externalUserId);
+  if (context.activeRun) {
+    return activeRunResponseText();
+  }
+
   let session = context.currentSession;
   if (!session) {
     try {
@@ -1103,54 +1422,97 @@ async function handleAsk({
         commandContextStore
       });
       session = created.session;
+      commandContextStore.startChat(auth.identity.externalUserId, session);
       context = commandContextStore.get(auth.identity.externalUserId);
     } catch (error) {
       if (error instanceof CommandResponseError) {
-        return error.message;
+        return `${error.message}\nStart with \`chat new\` after choosing a target.`;
       }
-      return dataErrorText(error, "session");
+      return dataErrorText(error, "chat session");
     }
   }
 
-  const question = rawText.replace(/^ask\s+/i, "").trim();
   try {
+    const clientMessageId = chatClientMessageId({
+      sourceMessageId
+    });
     const result = await acornOpsClient.postSessionMessage(auth.identity, session.id, {
       content: question,
-      clientMessageId: `${auth.identity.externalUserId}:${hashText(question)}`
+      clientMessageId
     });
-    return [
-      ...formatContextLines(context, { userId, userName }),
-      "AcornOps assistant run:",
-      `- Session: ${formatReference(session)}`,
-      `- Message id: ${result.message_id ?? result.messageId ?? "unknown"}`,
-      `- Run id: ${result.run_id ?? result.runId ?? "unknown"}`,
-      "- Tool access: read_only"
-    ].join("\n");
+    const runId = result.run_id ?? result.runId ?? "";
+    const messageId = result.message_id ?? result.messageId ?? "";
+    if (runId) {
+      commandContextStore.rememberLatestRun(auth.identity.externalUserId, {
+        id: runId,
+        sessionId: session.id,
+        status: "accepted"
+      });
+    }
+    const followed = await followRunForAnswer({
+      acornOpsClient,
+      identity: auth.identity,
+      session,
+      runId,
+      messageId
+    });
+    if (runId && followed.status) {
+      commandContextStore.rememberLatestRun(auth.identity.externalUserId, {
+        id: runId,
+        sessionId: session.id,
+        status: followed.status
+      });
+    }
+    if (followed.answer) {
+      return followed.answer;
+    }
+
+    if (runId) {
+      commandContextStore.rememberActiveRun?.(auth.identity.externalUserId, {
+        id: runId,
+        sessionId: session.id,
+        status: followed.status || "streaming"
+      });
+      return {
+        message: formatChatPendingResponse(followed.status),
+        effects: [
+          {
+            type: "followRun",
+            identity: auth.identity,
+            sessionId: session.id,
+            runId,
+            messageId
+          }
+        ]
+      };
+    }
+
+    return formatChatPendingResponse(followed.status);
   } catch (error) {
-    return dataErrorText(error, "assistant run");
+    return chatMessageErrorText(error);
   }
 }
 
-async function createSessionForSelectedTarget({ identity, acornOpsClient, commandContextStore }) {
+async function createSessionForSelectedTarget({ identity, acornOpsClient, commandContextStore, title = "" }) {
   const context = commandContextStore.get(identity.externalUserId);
   const target = selectedTarget(context);
   if (target.response) {
     throw new CommandResponseError(target.response);
   }
 
-  const title = `Investigate ${target.reference.name || target.reference.id}`;
-  const session = target.type === "cluster"
+  const sessionTitle = title || `Investigate ${target.reference.name || target.reference.id}`;
+  const session = target.source === "cluster"
     ? await acornOpsClient.createKubernetesClusterSession(
       identity,
       context.currentWorkspace.id,
       target.reference.id,
-      { title }
+      { title: sessionTitle }
     )
     : await acornOpsClient.createTargetSession(
       identity,
       context.currentWorkspace.id,
       target.reference.id,
-      { title }
+      { title: sessionTitle }
     );
 
   commandContextStore.selectSession(identity.externalUserId, session);
@@ -1214,11 +1576,11 @@ function formatWorkspaceDetail({ workspace, context, userId, userName, selectCur
   }
 
   if (selectCurrent) {
-    lines.push("Current workspace updated. Use `clusters` to list clusters here.");
+    lines.push("Current workspace updated. Use `targets` to choose what to inspect.");
   } else if (!currentPrefix) {
     lines.push("Use `workspace 1` to make this the current workspace.");
   } else {
-    lines.push("Use `clusters` to list clusters in this workspace.");
+    lines.push("Use `targets` to choose what to inspect in this workspace.");
   }
   return lines.join("\n");
 }
@@ -1328,9 +1690,9 @@ function formatClusterDetail({ cluster, context, fallbackWorkspace, userId, user
   }
 
   if (selectCurrent) {
-    lines.push("Current cluster updated. Current VM and session cleared.");
+    lines.push("Current target updated. Use `chat new`, `resources`, or `findings`.");
   } else {
-    lines.push("Use `cluster 1` to make this the current cluster.");
+    lines.push("Use `target 1` or `cluster 1` to make this the current target.");
   }
 
   return lines.join("\n");
@@ -1401,9 +1763,9 @@ function formatVirtualMachineDetail({ vm, context, fallbackWorkspace, userId, us
   }
 
   if (selectCurrent) {
-    lines.push("Current VM updated. Current cluster and session cleared.");
+    lines.push("Current target updated. Use `chat new`, `resources`, or `findings`.");
   } else {
-    lines.push("Use `vm 1` to make this the current VM.");
+    lines.push("Use `target 1` or `vm 1` to make this the current target.");
   }
 
   return lines.join("\n");
@@ -1598,6 +1960,74 @@ function formatQuotaValue(label, quota) {
   return `${label} ${used}/${limit}`;
 }
 
+function formatTargetPage({ page, context, userId, userName }) {
+  const items = Array.isArray(page?.items) ? page.items : [];
+  const lines = [
+    ...formatContextLines(context, { userId, userName }),
+    "AcornOps targets:"
+  ];
+
+  if (items.length === 0) {
+    lines.push("- No targets are available in this workspace.");
+    return lines.join("\n");
+  }
+
+  for (const [index, target] of items.entries()) {
+    lines.push(`${index + 1}. ${formatTargetSummary(target)}`);
+  }
+
+  if (page.nextCursor) {
+    lines.push("More targets are available. Use filters to narrow the list.");
+  }
+
+  lines.push("Next: `target 1`, then `chat new`.");
+  return lines.join("\n");
+}
+
+function formatTargetDetail({ target, context, fallbackWorkspace, userId, userName, selectCurrent }) {
+  const displayContext = {
+    ...context,
+    currentWorkspace: context.currentWorkspace ?? fallbackWorkspace
+  };
+  const lines = [
+    ...formatContextLines(displayContext, { userId, userName }),
+    "AcornOps target:",
+    `- Name: ${target.name ?? target.displayName ?? target.hostname ?? target.clusterName ?? "Unnamed target"}`,
+    `- ID: ${target.id ?? target.targetId ?? target.clusterId ?? target.vmId ?? "unknown"}`
+  ];
+
+  for (const detail of [
+    formatField("Type", displayTargetType(target.targetType ?? target.type)),
+    formatField("Status", target.status),
+    formatField("Hostname", target.hostname),
+    formatField("Updated", target.updatedAt)
+  ]) {
+    if (detail) {
+      lines.push(`- ${detail}`);
+    }
+  }
+
+  if (selectCurrent) {
+    lines.push("Current target updated. Use `chat new`, `resources`, or `findings`.");
+  } else {
+    lines.push("Use `target 1` to make this the current target.");
+  }
+
+  return lines.join("\n");
+}
+
+function formatTargetSummary(target) {
+  const name = target.name ?? target.displayName ?? target.hostname ?? target.clusterName ?? target.id ?? target.targetId ?? "Unnamed target";
+  const id = target.id ?? target.targetId ?? target.clusterId ?? target.vmId;
+  const displayId = id && id !== name ? ` (${id})` : "";
+  const details = [
+    displayTargetType(target.targetType ?? target.type),
+    formatField("status", target.status)
+  ].filter(Boolean);
+
+  return details.length > 0 ? `${name}${displayId} - ${details.join(", ")}` : `${name}${displayId}`;
+}
+
 function workspaceErrorText(error) {
   const status = httpStatusFromError(error);
   if (status === 401) {
@@ -1644,6 +2074,32 @@ function httpStatusFromError(error) {
   return match ? Number(match[1]) : null;
 }
 
+function acornOpsErrorDetails(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const match = /\bfailed with \d{3}:\s*([\s\S]*)$/.exec(message);
+  if (!match) {
+    return {};
+  }
+
+  const text = match[1].trim();
+  if (!text) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(text);
+    const detail = parsed.error && typeof parsed.error === "object" ? parsed.error : parsed;
+    return {
+      code: singleLine(detail.code ?? ""),
+      message: singleLine(detail.message ?? "")
+    };
+  } catch {
+    return {
+      message: singleLine(text)
+    };
+  }
+}
+
 function dataErrorText(error, label) {
   const status = httpStatusFromError(error);
   if (status === 401) {
@@ -1668,6 +2124,26 @@ function dataErrorText(error, label) {
   return `AcornOps ${label} could not be loaded. Try again later or check the bot logs.`;
 }
 
+function activeChatModeRoute({
+  action,
+  commandArgs,
+  normalizedText,
+  userId,
+  commandContextStore
+}) {
+  const identity = externalIdentityForUserId(userId);
+  const context = identity ? commandContextStore.get(identity.externalUserId) : null;
+  if (!context?.chatActive) {
+    return { asQuestion: false };
+  }
+
+  if (action === "chat" && ["pause", "end", "resume", "new"].includes(commandArgs[0] ?? "")) {
+    return { asQuestion: false };
+  }
+
+  return { asQuestion: Boolean(normalizedText.trim()) };
+}
+
 function missingIdentityText() {
   return [
     "AcornOps account linking is unavailable because Mattermost did not provide the required identity context.",
@@ -1684,16 +2160,14 @@ function commandArguments(text) {
   return trimmed.split(/\s+/).slice(1);
 }
 
-function normalizeMattermostIdentity({ mattermostIdentity, userId }) {
-  const identity = {
-    externalUserId: mattermostIdentity?.externalUserId ?? userId
-  };
-
-  if (!identity.externalUserId) {
+function externalIdentityForUserId(userId) {
+  if (!userId) {
     return null;
   }
 
-  return identity;
+  return {
+    externalUserId: userId
+  };
 }
 
 function linkIdentityForUser(identity, userName) {
@@ -1710,7 +2184,6 @@ function linkIdentityForUser(identity, userName) {
 
 function requireExternalDataCommand({
   acornOpsClient,
-  mattermostIdentity,
   userId,
   commandLabel
 }) {
@@ -1721,7 +2194,7 @@ function requireExternalDataCommand({
     };
   }
 
-  const identity = normalizeMattermostIdentity({ mattermostIdentity, userId });
+  const identity = externalIdentityForUserId(userId);
   if (!identity) {
     return {
       response: missingIdentityText()
@@ -1739,7 +2212,7 @@ function resolveWorkspaceForUser({ reference, identity, commandContextStore }) {
 function selectedTarget(context, hint = "") {
   if (!context.currentWorkspace) {
     return {
-      response: "No current workspace is selected. Send `workspaces`, then `workspace 1`."
+      response: "Choose a workspace first: send `workspaces`, then `workspace 1`."
     };
   }
 
@@ -1767,16 +2240,34 @@ function selectedTarget(context, hint = "") {
     return { type: "vm", reference: context.currentVm };
   }
 
+  if (context.currentTarget) {
+    const type = normalizeTargetType(context.currentTarget.type);
+    if (type === "kubernetes") {
+      return {
+        type: "cluster",
+        reference: context.currentTarget,
+        source: context.currentTarget.source ?? "target"
+      };
+    }
+    if (type === "virtual_machine") {
+      return {
+        type: "vm",
+        reference: context.currentTarget,
+        source: context.currentTarget.source ?? "target"
+      };
+    }
+  }
+
   if (context.currentCluster) {
-    return { type: "cluster", reference: context.currentCluster };
+    return { type: "cluster", reference: context.currentCluster, source: "cluster" };
   }
 
   if (context.currentVm) {
-    return { type: "vm", reference: context.currentVm };
+    return { type: "vm", reference: context.currentVm, source: "vm" };
   }
 
   return {
-    response: "No current cluster or VM is selected. Send `clusters`, then `cluster 1`, or send `vms`, then `vm 1`."
+    response: "Choose a target first: send `targets`, then `target 1`."
   };
 }
 
@@ -1799,16 +2290,19 @@ function formatContextLines(context, { userId, userName } = {}) {
     `- Workspace: ${formatReference(context?.currentWorkspace)}`
   ];
 
-  if (context?.currentCluster) {
-    lines.push(`- Cluster: ${formatReference(context.currentCluster)}`);
+  if (context?.currentTarget) {
+    lines.push(`- Target: ${formatReference(context.currentTarget)}`);
+  } else if (context?.currentCluster) {
+    lines.push(`- Target: ${formatReference(context.currentCluster)}`);
   } else if (context?.currentVm) {
-    lines.push(`- VM: ${formatReference(context.currentVm)}`);
+    lines.push(`- Target: ${formatReference(context.currentVm)}`);
   } else {
     lines.push("- Target: none");
   }
 
   if (context?.currentSession) {
-    lines.push(`- Session: ${formatReference(context.currentSession)}`);
+    const mode = context.chatActive ? "active" : "paused";
+    lines.push(`- Chat: ${formatReference(context.currentSession)} (${mode})`);
   }
 
   return lines;
@@ -1843,12 +2337,257 @@ function singleLine(value) {
   return text.replace(/\s+/g, " ").trim().slice(0, 240);
 }
 
-function hashText(value) {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (Math.imul(31, hash) + value.charCodeAt(index)) | 0;
+function chatClientMessageId({ sourceMessageId }) {
+  const postPart = safeClientMessageIdPart(sourceMessageId);
+  if (postPart) {
+    return `mm-post-${postPart}`;
   }
-  return Math.abs(hash).toString(36);
+
+  return `mm-local-${localMessageIdPart()}`;
+}
+
+function localMessageIdPart() {
+  try {
+    return randomUUID();
+  } catch {
+    return safeClientMessageIdPart(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  }
+}
+
+function safeClientMessageIdPart(value) {
+  return String(value ?? "")
+    .replace(/[^A-Za-z0-9._~-]/g, "-")
+    .slice(0, 120);
+}
+
+function chatMessageErrorText(error) {
+  const status = httpStatusFromError(error);
+  if (status === 400) {
+    const details = acornOpsErrorDetails(error);
+    const reason = [details.code, details.message].filter(Boolean).join(": ");
+    if (reason) {
+      return `AcornOps could not start the read-only chat run (${reason}). Use \`chat pause\` before running bot commands like \`status\`, \`resources\`, or \`findings\`.`;
+    }
+
+    return "AcornOps could not start the read-only chat run (HTTP 400). Use `chat pause` before running bot commands like `status`, `resources`, or `findings`; check the AcornOps logs for the rejected request reason.";
+  }
+
+  return dataErrorText(error, "chat message");
+}
+
+function parseListArgs(commandArgs, allowedFilters, { allowReference = true } = {}) {
+  const filters = {};
+  const bare = [];
+
+  for (const arg of commandArgs) {
+    const separatorIndex = arg.indexOf("=");
+    if (separatorIndex === -1) {
+      bare.push(arg);
+      continue;
+    }
+
+    const key = arg.slice(0, separatorIndex);
+    const value = arg.slice(separatorIndex + 1);
+    if (!allowedFilters.includes(key)) {
+      return { error: `Unsupported filter \`${key}\`. Send \`help filters\` for supported filters.` };
+    }
+    filters[key] = value;
+  }
+
+  if (bare.length > 1) {
+    filters.q = bare.join(" ");
+    return { filters };
+  }
+
+  if (bare.length === 1) {
+    if (!allowReference) {
+      filters.q = bare[0];
+      return { filters };
+    }
+
+    if (/^\d+$/.test(bare[0])) {
+      return { filters, reference: bare[0] };
+    }
+
+    filters.q = bare[0];
+  }
+
+  return { filters };
+}
+
+function parseTargetFilterArgs(commandArgs, allowedFilters) {
+  const args = [...commandArgs];
+  let hint = "";
+  if (args[0] === "cluster" || args[0] === "vm") {
+    hint = args.shift();
+  }
+
+  const parsed = parseListArgs(args, allowedFilters, { allowReference: false });
+  if (parsed.error) {
+    return parsed;
+  }
+
+  return {
+    hint,
+    filters: parsed.filters
+  };
+}
+
+async function followRunForAnswer({ acornOpsClient, identity, session, runId, messageId }) {
+  if (!runId || typeof acornOpsClient.getRun !== "function") {
+    return {};
+  }
+
+  let status = "";
+  const attempts = chatRunPollAttempts();
+  const pollIntervalMs = chatRunPollIntervalMs();
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    let run;
+    try {
+      run = await acornOpsClient.getRun(identity, runId);
+    } catch {
+      return status ? { status } : {};
+    }
+
+    status = run?.status ?? "";
+    if (status === "completed") {
+      const runMessageId = run?.messageId ?? run?.message_id ?? "";
+      if (messageId && runMessageId && runMessageId !== messageId) {
+        return { status };
+      }
+
+      const runAnswer = assistantMessageContent(run?.assistantMessage?.content ?? run?.assistant_message?.content ?? "");
+      if (runAnswer) {
+        return { status, answer: runAnswer };
+      }
+
+      if (typeof acornOpsClient.listSessionMessages !== "function") {
+        return { status };
+      }
+
+      try {
+        const page = await acornOpsClient.listSessionMessages(identity, session.id);
+        const answer = newestAssistantMessage(page, runId);
+        return { status, answer };
+      } catch {
+        return { status };
+      }
+    }
+
+    if (isTerminalRunStatus(status)) {
+      return { status };
+    }
+
+    if (attempt < attempts - 1 && pollIntervalMs > 0) {
+      await sleep(pollIntervalMs);
+    }
+  }
+
+  return status ? { status } : {};
+}
+
+function newestAssistantMessage(page, runId) {
+  const items = Array.isArray(page?.items) ? page.items : [];
+  const matching = items.filter((message) => {
+    const role = message.role ?? message.kind;
+    const messageRunId = message.runId ?? message.run_id;
+    return role === "assistant" && messageRunId === runId;
+  });
+  const message = matching.at(-1);
+  return assistantMessageContent(message?.content ?? "");
+}
+
+function assistantMessageContent(value) {
+  return String(value).trim().slice(0, 3900);
+}
+
+function formatChatPendingResponse(status) {
+  if (status === "completed") {
+    return [
+      "AcornOps finished, but I could not load the assistant reply yet.",
+      "I will keep this chat active here. Use `chat pause` before running bot commands like `status`, `resources`, or `findings`."
+    ].join("\n");
+  }
+
+  if (status === "failed" || status === "cancelled") {
+    return [
+      `AcornOps could not complete that response (${status}).`,
+      "I will keep this chat active here. Use `chat pause` before running bot commands like `status`, `resources`, or `findings`."
+    ].join("\n");
+  }
+
+  return [
+    "I'm checking that now. I'll post the answer here when it's ready.",
+    "Use `chat pause` before running bot commands like `status`, `resources`, or `findings`."
+  ].join("\n");
+}
+
+function activeRunResponseText() {
+  return "AcornOps is still responding. Wait for that answer, or use `chat end` to stop following it.";
+}
+
+function isTerminalRunStatus(status) {
+  return ["completed", "failed", "cancelled"].includes(status);
+}
+
+function chatRunPollAttempts() {
+  return positiveIntegerFromEnv("CSIT_CHAT_RUN_POLL_ATTEMPTS", 15);
+}
+
+function chatRunPollIntervalMs() {
+  return positiveIntegerFromEnv("CSIT_CHAT_RUN_POLL_INTERVAL_MS", 1000, { allowZero: true });
+}
+
+function positiveIntegerFromEnv(name, fallback, { allowZero = false } = {}) {
+  const value = Number.parseInt(process.env[name] ?? "", 10);
+  if (Number.isInteger(value) && (value > 0 || (allowZero && value === 0))) {
+    return value;
+  }
+  return fallback;
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+function formatChatStatus({ context, userId, userName }) {
+  const lines = [
+    ...formatContextLines(context, { userId, userName }),
+    context.chatActive ? "Chat mode is active." : "Chat mode is paused."
+  ];
+
+  if (!context.currentSession) {
+    lines.push("No chat session is selected. Use `chat new` after choosing a target.");
+  } else if (context.chatActive) {
+    lines.push("Send a question. Use `chat pause` before running bot commands like `status`, `resources`, or `findings`.");
+  } else {
+    lines.push("Use `chat resume` to continue, or `chat end` to clear it.");
+  }
+
+  return lines.join("\n");
+}
+
+function displayTargetType(type) {
+  const normalized = normalizeTargetType(type);
+  if (normalized === "kubernetes") {
+    return "Kubernetes";
+  }
+  if (normalized === "virtual_machine") {
+    return "VM";
+  }
+  return normalized;
+}
+
+function normalizeTargetType(type) {
+  if (type === "cluster") {
+    return "kubernetes";
+  }
+  if (type === "vm") {
+    return "virtual_machine";
+  }
+  return type ?? "";
 }
 
 function isAcornOpsChatAuthConfigured(acornOpsClient) {

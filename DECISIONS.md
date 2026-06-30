@@ -6,6 +6,30 @@
 - Reason: The repository remote is `acornops/mattermost-bot`, the AcornOps external integration contract is implemented, and the user directed that this is part of the official AcornOps offering rather than a learning repo.
 - Consequence: README and current-state artifacts should follow the AcornOps multi-repo README pattern: explicit ownership, contract boundary, deployment boundary, production notes, and validation. Historical learning docs may remain for traceability, but new work should treat this as production service code and coordinate cross-repo changes through `acornops-workspace`.
 
+## 2026-06-26: Prefer context-plus-chat mode over explicit assistant session commands
+
+- Decision: The user-facing Mattermost UX should be: choose workspace, choose target, run `chat new`, then ask AcornOps follow-up questions as plain messages while chat mode is active.
+- Reason: Explicit `sessions`, `messages`, `ask`, run ids, and session switching make chat history hard for users to reason about. A single active/paused chat pointer per Mattermost user keeps the bot predictable while preserving AcornOps UI access to older sessions.
+- Consequence: `help` shows only the common workflow and links to `docs/wiki-mattermost-bot-commands.md` for filters, aliases, shortcuts, and compatibility commands. `targets`/`target 1` become the primary target UX, while `clusters`/`vms`, `sessions`, `messages`, and `ask` stay available outside the short help surface. Chat mode state remains process-local until shared TTL context is introduced.
+
+## 2026-06-29: Treat active chat mode as assistant input except chat controls
+
+- Decision: In active chat mode, normal text and command-looking text such as `status`, `resources`, and `findings` are sent to the AcornOps assistant as user input. The user must send `chat pause` before running normal bot commands. Chat controls such as `chat pause` and `chat end` remain available so the user can leave or clear the mode.
+- Reason: After `chat new`, the experience should feel like directly talking to the AcornOps assistant. Letting ordinary commands bypass the assistant makes the mode ambiguous and weakens the user's mental model.
+- Consequence: Assistant replies should hide session/message/run ids by default. The bot briefly polls the read-only run and returns the assistant reply when available. If the run is still active, failed, or the reply cannot be loaded within the response window, the bot returns a non-technical status message and keeps the chat context intact. `chat pause` is the explicit transition back to command mode.
+
+## 2026-06-30: Follow long-running chat answers with SSE
+
+- Decision: When a chat-mode question does not complete inside the brief same-response polling window, the Mattermost bot follows `GET /api/v1/runs/{runId}/stream` with external integration service auth and posts the final assistant answer back to the same Mattermost channel.
+- Reason: Chat mode should feel like an AcornOps assistant conversation even when read-only runs take longer than Mattermost's immediate response window.
+- Consequence: The bot follows only one active streamed run per external user in v1. `chat pause` leaves the stream active and still posts the final answer; `chat end` aborts the stream and suppresses any later result. Stream state is process-local and is lost on bot restart, so multi-replica or restart-resilient deployments still need shared TTL-backed run-following state.
+
+## 2026-06-30: Retire K3s readiness from the active bot harness
+
+- Decision: Remove the repo-local K3s readiness script from the active production bot harness.
+- Reason: K3s verification belonged to the completed local learning stage. Current work is the AcornOps Mattermost bot integration, whose standard restart path is harness and bot verification.
+- Consequence: K3s notes remain as historical learning traceability, but `./init.sh`, `AGENTS.md`, and current handoff docs no longer direct agents to run a K3s readiness command.
+
 ## 2026-05-25: Start with a harness initializer phase
 
 - Decision: Build repository-local harness infrastructure before product feature work.

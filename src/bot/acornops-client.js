@@ -84,6 +84,25 @@ export class AcornOpsClient {
     );
   }
 
+  async listTargets(
+    identity,
+    workspaceId,
+    { limit = 50, cursor = "", q = "", targetType = "" } = {}
+  ) {
+    return this.getExternalPage(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/targets`,
+      { limit, cursor, q, targetType }
+    );
+  }
+
+  async getTarget(identity, workspaceId, targetId) {
+    return this.getExternalResource(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/targets/${encodeURIComponent(targetId)}`
+    );
+  }
+
   async listKubernetesClusters(
     identity,
     workspaceId,
@@ -253,6 +272,30 @@ export class AcornOpsClient {
     return this.getExternalResource(identity, `/api/v1/runs/${encodeURIComponent(runId)}`);
   }
 
+  async streamRun(identity, runId, { signal } = {}) {
+    this.requireExternalIntegrationAuth();
+
+    const response = await this.request(
+      "GET",
+      `/api/v1/runs/${encodeURIComponent(runId)}/stream`,
+      undefined,
+      {
+        serviceAuth: true,
+        signal,
+        headers: {
+          ...this.externalUserHeaders(identity),
+          accept: "text/event-stream"
+        }
+      }
+    );
+
+    return parseServerSentEvents(response.body);
+  }
+
+  async listRunEvents(identity, runId) {
+    return this.getExternalResource(identity, `/api/v1/runs/${encodeURIComponent(runId)}/events`);
+  }
+
   async getExternalPage(identity, path, query = {}) {
     this.requireExternalIntegrationAuth();
 
@@ -332,5 +375,104 @@ export class AcornOpsClient {
     return {
       "x-acornops-external-user-id": identity.externalUserId
     };
+  }
+}
+
+export async function* parseServerSentEvents(body) {
+  if (!body) {
+    return;
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for await (const chunk of body) {
+    buffer += decodeSseChunk(chunk, decoder, true);
+    let boundary = eventBoundary(buffer);
+    while (boundary) {
+      const frame = buffer.slice(0, boundary.index);
+      buffer = buffer.slice(boundary.index + boundary.length);
+      const event = parseSseFrame(frame);
+      if (event) {
+        yield event;
+      }
+      boundary = eventBoundary(buffer);
+    }
+  }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    const event = parseSseFrame(buffer);
+    if (event) {
+      yield event;
+    }
+  }
+}
+
+function decodeSseChunk(chunk, decoder, stream) {
+  if (typeof chunk === "string") {
+    return chunk;
+  }
+
+  return decoder.decode(chunk, { stream });
+}
+
+function eventBoundary(value) {
+  const lf = value.indexOf("\n\n");
+  const crlf = value.indexOf("\r\n\r\n");
+  if (lf === -1 && crlf === -1) {
+    return null;
+  }
+
+  if (lf === -1 || (crlf !== -1 && crlf < lf)) {
+    return { index: crlf, length: 4 };
+  }
+
+  return { index: lf, length: 2 };
+}
+
+function parseSseFrame(frame) {
+  let event = "message";
+  const dataLines = [];
+  let hasField = false;
+
+  for (const rawLine of frame.split(/\r?\n/)) {
+    if (!rawLine || rawLine.startsWith(":")) {
+      continue;
+    }
+
+    hasField = true;
+    const separatorIndex = rawLine.indexOf(":");
+    const field = separatorIndex === -1 ? rawLine : rawLine.slice(0, separatorIndex);
+    const value = separatorIndex === -1
+      ? ""
+      : rawLine.slice(separatorIndex + 1).replace(/^ /, "");
+
+    if (field === "event") {
+      event = value || "message";
+    } else if (field === "data") {
+      dataLines.push(value);
+    }
+  }
+
+  if (!hasField) {
+    return null;
+  }
+
+  const dataText = dataLines.join("\n");
+  return {
+    event,
+    data: parseSseData(dataText)
+  };
+}
+
+function parseSseData(dataText) {
+  if (!dataText) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(dataText);
+  } catch {
+    return dataText;
   }
 }

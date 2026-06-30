@@ -1,6 +1,7 @@
 import { DEFAULT_MATTERMOST_BOT_USERNAME } from "./config.js";
 import { createInMemoryCommandContextStore } from "./command-context.js";
-import { handleBotMessage, shouldRespondToPost } from "./message.js";
+import { botResponseText, handleBotMessageResult, shouldRespondToPost } from "./message.js";
+import { createRunFollowerRegistry } from "./run-follower.js";
 
 export function createMattermostBotRunner({
   client,
@@ -8,8 +9,18 @@ export function createMattermostBotRunner({
   websocketFactory,
   logger = console,
   botUsername = DEFAULT_MATTERMOST_BOT_USERNAME,
-  commandContextStore = createInMemoryCommandContextStore()
+  commandContextStore = createInMemoryCommandContextStore(),
+  runFollowerRegistry = null
 }) {
+  const followers = runFollowerRegistry ?? createRunFollowerRegistry({
+    acornOpsClient,
+    commandContextStore,
+    postFollowUp: async ({ channelId, message }) => {
+      await client.createPost({ channelId, message });
+    },
+    logger
+  });
+
   return {
     async start() {
       const botUser = await client.getMe();
@@ -37,6 +48,7 @@ export function createMattermostBotRunner({
               botUser,
               botUsername,
               commandContextStore,
+              runFollowerRegistry: followers,
               logger
             });
           }
@@ -75,6 +87,7 @@ export async function handlePostedEvent({
   botUser,
   botUsername = DEFAULT_MATTERMOST_BOT_USERNAME,
   commandContextStore = createInMemoryCommandContextStore(),
+  runFollowerRegistry = null,
   logger = console
 }) {
   const post = parsePostedPost(event);
@@ -92,7 +105,7 @@ export async function handlePostedEvent({
     return null;
   }
 
-  const response = await handleBotMessage({
+  const result = await handleBotMessageResult({
     text: post.message ?? "",
     userId: post.user_id,
     userName: event.data?.sender_name ?? "",
@@ -100,20 +113,41 @@ export async function handlePostedEvent({
     botUsername,
     acornOpsClient,
     commandContextStore,
-    mattermostIdentity: extractMattermostIdentity({ post })
+    sourceMessageId: post.id ?? ""
+  });
+  const response = botResponseText(result);
+  const effects = typeof result === "string" ? [] : result.effects ?? [];
+  const followers = runFollowerRegistry ?? createRunFollowerRegistry({
+    acornOpsClient,
+    commandContextStore,
+    postFollowUp: async ({ channelId, message }) => {
+      await client.createPost({ channelId, message });
+    },
+    logger
   });
 
+  for (const effect of effects) {
+    if (effect.type === "abortActiveRun") {
+      followers.abort(effect.externalUserId);
+    }
+  }
+
   logger.log(`Responding to Mattermost post ${post.id} in channel ${post.channel_id}.`);
-  return await client.createPost({
+  const created = await client.createPost({
     channelId: post.channel_id,
     message: response
   });
-}
 
-export function extractMattermostIdentity({ post }) {
-  return {
-    externalUserId: post.user_id ?? ""
-  };
+  for (const effect of effects) {
+    if (effect.type === "followRun") {
+      followers.start({
+        ...effect,
+        channelId: post.channel_id
+      });
+    }
+  }
+
+  return created;
 }
 
 function parsePostedPost(event) {

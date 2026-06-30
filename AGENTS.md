@@ -25,10 +25,9 @@ If baseline verification is already failing, fix that first. Do not stack new fe
 - Harness verification: `./scripts/verify-harness.sh`
 - Bot verification: `./scripts/verify-bot.sh`
 - Mattermost readiness: `./scripts/verify-mattermost.sh`
-- K3s readiness: `./scripts/verify-k3s.sh`
 - Standard initialization: `./init.sh`
 
-`./init.sh` verifies the harness and bot code. It does not start host-level services such as Docker Compose Mattermost or k3d.
+`./init.sh` verifies the harness and bot code. It does not start host-level services such as Docker Compose Mattermost.
 
 ## Required Artifacts
 - `feature_list.json`: source of truth for feature and harness work state.

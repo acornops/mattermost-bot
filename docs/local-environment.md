@@ -1,10 +1,12 @@
 # Local Environment
 
-This project starts by learning the local platform before building the ChatOps bot.
+This project began by learning the local platform before building the ChatOps bot.
 
-Do not make `./init.sh` install K3s or Mattermost automatically yet. K3s changes host-level services, and Mattermost may create persistent Docker volumes. Keep those steps explicit until the team chooses the local topology.
+Do not make `./init.sh` install or start Mattermost automatically. Mattermost may create persistent Docker volumes, so those steps stay explicit.
 
-## K3s First Pass
+## Historical K3s First Pass
+
+K3s was part of the early local learning stage. It is no longer part of the active production bot harness, and the repo-local K3s readiness script has been removed. The notes below remain for traceability only.
 
 Use the official K3s docs as the source of truth before installing:
 
@@ -30,12 +32,6 @@ Create the local learning cluster:
 brew install k3d
 k3d cluster create csit-lab --agents 1
 kubectl config current-context
-```
-
-Read-only K3s verification:
-
-```sh
-./scripts/verify-k3s.sh
 ```
 
 Manual verification once K3s is installed:
@@ -222,7 +218,6 @@ For local services, use the readiness scripts separately:
 
 ```sh
 ./scripts/verify-mattermost.sh
-./scripts/verify-k3s.sh
 ```
 
-`./init.sh` intentionally does not install or start K3s, Mattermost, or Docker containers.
+`./init.sh` intentionally does not install or start Mattermost or Docker containers.

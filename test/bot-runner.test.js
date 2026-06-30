@@ -4,7 +4,6 @@ import { EventEmitter } from "node:events";
 import { createInMemoryCommandContextStore } from "../src/bot/command-context.js";
 import {
   createMattermostBotRunner,
-  extractMattermostIdentity,
   handlePostedEvent
 } from "../src/bot/runner.js";
 
@@ -60,7 +59,7 @@ test("handlePostedEvent responds to direct message posts in the main timeline", 
     client,
     acornOpsClient: {
       async resolveExternalIntegrationLink(input) {
-        assert.deepEqual(input, mattermostIdentity("user-1"));
+        assert.deepEqual(input, externalIdentity("user-1"));
         return { status: "unlinked" };
       }
     },
@@ -181,7 +180,7 @@ test("handlePostedEvent lists workspaces for direct message posts", async () => 
     client,
     acornOpsClient: {
       async listWorkspaces(input) {
-        assert.deepEqual(input, mattermostIdentity("user-1"));
+        assert.deepEqual(input, externalIdentity("user-1"));
         return {
           items: [
             {
@@ -234,7 +233,7 @@ test("handlePostedEvent reuses workspace context across direct message posts", a
   });
   const acornOpsClient = {
     async listWorkspaces(input) {
-      assert.deepEqual(input, mattermostIdentity("user-1"));
+      assert.deepEqual(input, externalIdentity("user-1"));
       return {
         items: [
           {
@@ -245,7 +244,7 @@ test("handlePostedEvent reuses workspace context across direct message posts", a
       };
     },
     async getWorkspace(input, workspaceId) {
-      assert.deepEqual(input, mattermostIdentity("user-1"));
+      assert.deepEqual(input, externalIdentity("user-1"));
       assert.equal(workspaceId, "workspace-1");
       return {
         id: "workspace-1",
@@ -253,7 +252,7 @@ test("handlePostedEvent reuses workspace context across direct message posts", a
       };
     },
     async listKubernetesClusters(input, workspaceId) {
-      assert.deepEqual(input, mattermostIdentity("user-1"));
+      assert.deepEqual(input, externalIdentity("user-1"));
       assert.equal(workspaceId, "workspace-1");
       return {
         items: [
@@ -307,16 +306,127 @@ test("handlePostedEvent reuses workspace context across direct message posts", a
   assert.match(posts[2].message, /Prod \(cluster-1\)/);
 });
 
-test("extractMattermostIdentity reads only observed post author id", () => {
-  assert.deepEqual(extractMattermostIdentity({
-    post: {
-      user_id: "mattermost-user-1",
-      props: {
-        externalUserId: "user-supplied-user-id",
-        mattermostUserId: "legacy-user-supplied-user-id"
+test("handlePostedEvent starts a run follower for pending chat answers", async () => {
+  const previousAttempts = process.env.CSIT_CHAT_RUN_POLL_ATTEMPTS;
+  const previousInterval = process.env.CSIT_CHAT_RUN_POLL_INTERVAL_MS;
+  process.env.CSIT_CHAT_RUN_POLL_ATTEMPTS = "1";
+  process.env.CSIT_CHAT_RUN_POLL_INTERVAL_MS = "0";
+
+  try {
+    const posts = [];
+    const started = [];
+    const commandContextStore = createInMemoryCommandContextStore();
+    commandContextStore.selectWorkspace("user-1", {
+      id: "workspace-1",
+      name: "Platform"
+    });
+    commandContextStore.selectCluster("user-1", {
+      id: "cluster-1",
+      name: "Prod"
+    });
+    commandContextStore.startChat("user-1", {
+      id: "session-1",
+      title: "Investigate Prod"
+    });
+
+    await handlePostedEvent({
+      client: fakeClient({
+        createPost: async (post) => {
+          posts.push(post);
+          return { id: `reply-${posts.length}`, ...post };
+        }
+      }),
+      acornOpsClient: {
+        async postSessionMessage(_input, sessionId) {
+          assert.equal(sessionId, "session-1");
+          return {
+            message_id: "message-1",
+            run_id: "run-1"
+          };
+        },
+        async getRun() {
+          return {
+            id: "run-1",
+            status: "running",
+            sessionId: "session-1"
+          };
+        }
+      },
+      commandContextStore,
+      runFollowerRegistry: {
+        start(options) {
+          started.push(options);
+          return true;
+        },
+        abort() {}
+      },
+      botUser: {
+        id: "bot",
+        username: "acorn-ops-bot"
+      },
+      event: postedEvent("user-1", "why is the pod unhealthy?", { postId: "post-chat-1" }),
+      logger: quietLogger()
+    });
+
+    assert.match(posts[0].message, /I'll post the answer here when it's ready/);
+    assert.deepEqual(started, [
+      {
+        type: "followRun",
+        identity: {
+          externalUserId: "user-1"
+        },
+        sessionId: "session-1",
+        runId: "run-1",
+        messageId: "message-1",
+        channelId: "channel-1"
       }
-    }
-  }), mattermostIdentity());
+    ]);
+  } finally {
+    restoreEnvValue("CSIT_CHAT_RUN_POLL_ATTEMPTS", previousAttempts);
+    restoreEnvValue("CSIT_CHAT_RUN_POLL_INTERVAL_MS", previousInterval);
+  }
+});
+
+test("handlePostedEvent aborts the active run before posting chat end confirmation", async () => {
+  const posts = [];
+  const aborted = [];
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.startChat("user-1", {
+    id: "session-1",
+    title: "Investigate Prod"
+  });
+  commandContextStore.rememberActiveRun("user-1", {
+    id: "run-1",
+    sessionId: "session-1",
+    status: "streaming"
+  });
+
+  await handlePostedEvent({
+    client: fakeClient({
+      createPost: async (post) => {
+        posts.push(post);
+        return { id: "reply-1", ...post };
+      }
+    }),
+    commandContextStore,
+    runFollowerRegistry: {
+      start() {
+        throw new Error("start should not be called");
+      },
+      abort(externalUserId) {
+        aborted.push(externalUserId);
+      }
+    },
+    botUser: {
+      id: "bot",
+      username: "acorn-ops-bot"
+    },
+    event: postedEvent("user-1", "chat end"),
+    logger: quietLogger()
+  });
+
+  assert.deepEqual(aborted, ["user-1"]);
+  assert.match(posts[0].message, /Chat ended/);
 });
 
 function fakeClient(overrides = {}) {
@@ -331,7 +441,7 @@ function fakeClient(overrides = {}) {
   };
 }
 
-function mattermostIdentity(externalUserId = "mattermost-user-1") {
+function externalIdentity(externalUserId = "mattermost-user-1") {
   return {
     externalUserId
   };
@@ -339,7 +449,7 @@ function mattermostIdentity(externalUserId = "mattermost-user-1") {
 
 function linkIdentity(externalUserId = "mattermost-user-1") {
   return {
-    ...mattermostIdentity(externalUserId),
+    ...externalIdentity(externalUserId),
     externalDisplayName: "alice"
   };
 }
@@ -351,14 +461,22 @@ function quietLogger() {
   };
 }
 
-function postedEvent(userId, message) {
+function restoreEnvValue(name, previousValue) {
+  if (previousValue === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = previousValue;
+  }
+}
+
+function postedEvent(userId, message, { postId = `post-${message}` } = {}) {
   return {
     event: "posted",
     data: {
       channel_type: "D",
       sender_name: "alice",
       post: JSON.stringify({
-        id: `post-${message}`,
+        id: postId,
         channel_id: "channel-1",
         user_id: userId,
         message

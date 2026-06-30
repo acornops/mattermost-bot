@@ -10,7 +10,7 @@
 - Application tests present: yes
 - Mattermost local readiness: verified on 2026-05-28 with `./scripts/verify-mattermost.sh`
 - AcornOps account-link smoke: user reported `login` and `status` working on 2026-06-10 after the user-id-only contract update; the 2026-06-18 externalUserId contract rename is covered by automated tests and still needs live smoke
-- K3s local readiness: previously verified, but not reachable during the 2026-05-28 docs audit because the saved `k3d-csit-lab` API port refused connections
+- K3s local readiness: historical learning stage only; the active production bot harness no longer includes a K3s readiness script
 
 ## Start Commands
 
@@ -28,7 +28,7 @@
 - [x] Product goal is documented.
 - [x] Initial local learning stack is documented.
 - [x] Bot implementation stack and versions are documented.
-- [x] K3s install or access path is verified.
+- [x] K3s install or access path was verified during the historical learning stage.
 - [x] Mattermost local setup path is verified.
 - [x] Application install command is documented.
 - [x] Application test command is documented and verified through `./init.sh`.

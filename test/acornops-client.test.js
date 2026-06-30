@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AcornOpsClient } from "../src/bot/acornops-client.js";
+import { AcornOpsClient, parseServerSentEvents } from "../src/bot/acornops-client.js";
 
 test("createExternalIntegrationLink posts the AcornOps external integration identity contract", async () => {
   const requests = [];
@@ -52,14 +52,14 @@ test("resolveExternalIntegrationLink asks AcornOps for durable link state", asyn
     }
   });
 
-  const response = await client.resolveExternalIntegrationLink(mattermostIdentity());
+  const response = await client.resolveExternalIntegrationLink(externalIdentity());
 
   assert.equal(response.status, "linked");
   assert.equal(response.user.id, "acorn-user-1");
   assert.equal(requests[0].url, "http://acornops/api/v1/auth/external-integrations/resolve");
   assert.equal(requests[0].init.method, "POST");
   assert.equal(requests[0].init.headers.authorization, "Bearer chat-token");
-  assert.deepEqual(JSON.parse(requests[0].init.body), mattermostIdentity());
+  assert.deepEqual(JSON.parse(requests[0].init.body), externalIdentity());
 });
 
 test("listWorkspaces uses service auth and external user header", async () => {
@@ -93,7 +93,7 @@ test("listWorkspaces uses service auth and external user header", async () => {
     }
   });
 
-  const response = await client.listWorkspaces(mattermostIdentity());
+  const response = await client.listWorkspaces(externalIdentity());
 
   assert.equal(response.items[0].id, "workspace-1");
   assert.equal(response.nextCursor, "cursor-2");
@@ -121,7 +121,7 @@ test("getWorkspace uses service auth and external user header", async () => {
     }
   });
 
-  const response = await client.getWorkspace(mattermostIdentity(), "workspace-1");
+  const response = await client.getWorkspace(externalIdentity(), "workspace-1");
 
   assert.equal(response.id, "workspace-1");
   assert.equal(requests[0].url, "http://acornops/api/v1/workspaces/workspace-1");
@@ -153,7 +153,7 @@ test("listKubernetesClusters uses workspace path query and external user header"
     }
   });
 
-  const response = await client.listKubernetesClusters(mattermostIdentity(), "workspace-1", {
+  const response = await client.listKubernetesClusters(externalIdentity(), "workspace-1", {
     q: "prod",
     status: "ready",
     agentState: "connected"
@@ -184,28 +184,35 @@ test("allowed external bot read endpoints use service auth and external user hea
     }
   });
 
-  await client.getKubernetesCluster(mattermostIdentity(), "workspace-1", "cluster-1");
-  await client.listKubernetesClusterResources(mattermostIdentity(), "workspace-1", "cluster-1", {
+  await client.getKubernetesCluster(externalIdentity(), "workspace-1", "cluster-1");
+  await client.listKubernetesClusterResources(externalIdentity(), "workspace-1", "cluster-1", {
     namespace: "default"
   });
-  await client.listKubernetesClusterFindings(mattermostIdentity(), "workspace-1", "cluster-1", {
+  await client.listKubernetesClusterFindings(externalIdentity(), "workspace-1", "cluster-1", {
     severity: "warning"
   });
-  await client.listWorkspaceInvestigations(mattermostIdentity(), "workspace-1", {
+  await client.listWorkspaceInvestigations(externalIdentity(), "workspace-1", {
     clusterId: "cluster-1"
   });
-  await client.listVirtualMachines(mattermostIdentity(), "workspace-1", {
+  await client.listTargets(externalIdentity(), "workspace-1", {
+    q: "prod",
+    targetType: "kubernetes"
+  });
+  await client.getTarget(externalIdentity(), "workspace-1", "target-1");
+  await client.listVirtualMachines(externalIdentity(), "workspace-1", {
     status: "online"
   });
-  await client.getVirtualMachine(mattermostIdentity(), "workspace-1", "vm-1");
-  await client.listVirtualMachineResources(mattermostIdentity(), "workspace-1", "vm-1");
-  await client.listVirtualMachineFindings(mattermostIdentity(), "workspace-1", "vm-1");
+  await client.getVirtualMachine(externalIdentity(), "workspace-1", "vm-1");
+  await client.listVirtualMachineResources(externalIdentity(), "workspace-1", "vm-1");
+  await client.listVirtualMachineFindings(externalIdentity(), "workspace-1", "vm-1");
 
   assert.deepEqual(requests.map((request) => request.url), [
     "http://acornops/api/v1/workspaces/workspace-1/kubernetes-clusters/cluster-1",
     "http://acornops/api/v1/workspaces/workspace-1/kubernetes-clusters/cluster-1/resources?limit=100&namespace=default",
     "http://acornops/api/v1/workspaces/workspace-1/kubernetes-clusters/cluster-1/findings?limit=50&severity=warning",
     "http://acornops/api/v1/workspaces/workspace-1/investigations?limit=50&clusterId=cluster-1",
+    "http://acornops/api/v1/workspaces/workspace-1/targets?limit=50&q=prod&targetType=kubernetes",
+    "http://acornops/api/v1/workspaces/workspace-1/targets/target-1",
     "http://acornops/api/v1/workspaces/workspace-1/virtual-machines?limit=50&status=online",
     "http://acornops/api/v1/workspaces/workspace-1/virtual-machines/vm-1",
     "http://acornops/api/v1/workspaces/workspace-1/virtual-machines/vm-1/resources",
@@ -236,21 +243,22 @@ test("assistant session endpoints always post read-only runs", async () => {
     }
   });
 
-  await client.createKubernetesClusterSession(mattermostIdentity(), "workspace-1", "cluster-1", {
+  await client.createKubernetesClusterSession(externalIdentity(), "workspace-1", "cluster-1", {
     title: "Investigate Prod"
   });
-  await client.createTargetSession(mattermostIdentity(), "workspace-1", "vm-1", {
+  await client.createTargetSession(externalIdentity(), "workspace-1", "vm-1", {
     title: "Investigate VM"
   });
-  await client.listKubernetesClusterSessions(mattermostIdentity(), "workspace-1", "cluster-1");
-  await client.listTargetSessions(mattermostIdentity(), "workspace-1", "vm-1");
-  await client.getSession(mattermostIdentity(), "session-1");
-  await client.listSessionMessages(mattermostIdentity(), "session-1");
-  await client.postSessionMessage(mattermostIdentity(), "session-1", {
+  await client.listKubernetesClusterSessions(externalIdentity(), "workspace-1", "cluster-1");
+  await client.listTargetSessions(externalIdentity(), "workspace-1", "vm-1");
+  await client.getSession(externalIdentity(), "session-1");
+  await client.listSessionMessages(externalIdentity(), "session-1");
+  await client.postSessionMessage(externalIdentity(), "session-1", {
     content: "Check health",
     clientMessageId: "message-key"
   });
-  await client.getRun(mattermostIdentity(), "run-1");
+  await client.getRun(externalIdentity(), "run-1");
+  await client.listRunEvents(externalIdentity(), "run-1");
 
   assert.deepEqual(requests.map((request) => request.url), [
     "http://acornops/api/v1/workspaces/workspace-1/kubernetes-clusters/cluster-1/sessions",
@@ -260,13 +268,104 @@ test("assistant session endpoints always post read-only runs", async () => {
     "http://acornops/api/v1/sessions/session-1",
     "http://acornops/api/v1/sessions/session-1/messages?limit=100",
     "http://acornops/api/v1/sessions/session-1/messages",
-    "http://acornops/api/v1/runs/run-1"
+    "http://acornops/api/v1/runs/run-1",
+    "http://acornops/api/v1/runs/run-1/events"
   ]);
   assert.deepEqual(JSON.parse(requests[6].init.body), {
     content: "Check health",
     toolAccessMode: "read_only",
     clientMessageId: "message-key"
   });
+});
+
+test("parseServerSentEvents parses event/data pairs and heartbeat comments", async () => {
+  const chunks = [
+    ": heartbeat\n\n",
+    "event: run_started\n",
+    "data: {\"status\":\"running\"}\n\n",
+    "event: run_completed\n",
+    "data: {\"status\":\"completed\"}\n\n"
+  ];
+
+  const events = [];
+  for await (const event of parseServerSentEvents(chunks)) {
+    events.push(event);
+  }
+
+  assert.deepEqual(events, [
+    {
+      event: "run_started",
+      data: {
+        status: "running"
+      }
+    },
+    {
+      event: "run_completed",
+      data: {
+        status: "completed"
+      }
+    }
+  ]);
+});
+
+test("parseServerSentEvents handles multiple events in byte chunks", async () => {
+  const encoder = new TextEncoder();
+  const chunks = [
+    encoder.encode("event: run_failed\ndata: {\"code\":\"oops\"}\n\nevent: run_cancelled\n"),
+    encoder.encode("data: plain text\n\n")
+  ];
+
+  const events = [];
+  for await (const event of parseServerSentEvents(chunks)) {
+    events.push(event);
+  }
+
+  assert.deepEqual(events, [
+    {
+      event: "run_failed",
+      data: {
+        code: "oops"
+      }
+    },
+    {
+      event: "run_cancelled",
+      data: "plain text"
+    }
+  ]);
+});
+
+test("streamRun uses SSE endpoint and headers", async () => {
+  const requests = [];
+  const client = new AcornOpsClient({
+    baseUrl: "http://acornops/",
+    externalIntegrationToken: "chat-token",
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return new Response("event: run_completed\ndata: {\"status\":\"completed\"}\n\n", {
+        status: 200,
+        headers: { "content-type": "text/event-stream" }
+      });
+    }
+  });
+
+  const events = [];
+  for await (const event of await client.streamRun(externalIdentity(), "run-1")) {
+    events.push(event);
+  }
+
+  assert.equal(requests[0].url, "http://acornops/api/v1/runs/run-1/stream");
+  assert.equal(requests[0].init.method, "GET");
+  assert.equal(requests[0].init.headers.authorization, "Bearer chat-token");
+  assert.equal(requests[0].init.headers["x-acornops-external-user-id"], "mattermost-user-1");
+  assert.equal(requests[0].init.headers.accept, "text/event-stream");
+  assert.deepEqual(events, [
+    {
+      event: "run_completed",
+      data: {
+        status: "completed"
+      }
+    }
+  ]);
 });
 
 test("external integration auth requires the service token", async () => {
@@ -278,27 +377,27 @@ test("external integration auth requires the service token", async () => {
   });
 
   await assert.rejects(
-    client.createExternalIntegrationLink(mattermostIdentity()),
+    client.createExternalIntegrationLink(externalIdentity()),
     /EXTERNAL_INTEGRATION_SERVICE_TOKEN/
   );
 
   await assert.rejects(
-    client.listWorkspaces(mattermostIdentity()),
+    client.listWorkspaces(externalIdentity()),
     /EXTERNAL_INTEGRATION_SERVICE_TOKEN/
   );
 
   await assert.rejects(
-    client.getWorkspace(mattermostIdentity(), "workspace-1"),
+    client.getWorkspace(externalIdentity(), "workspace-1"),
     /EXTERNAL_INTEGRATION_SERVICE_TOKEN/
   );
 
   await assert.rejects(
-    client.listKubernetesClusters(mattermostIdentity(), "workspace-1"),
+    client.listKubernetesClusters(externalIdentity(), "workspace-1"),
     /EXTERNAL_INTEGRATION_SERVICE_TOKEN/
   );
 });
 
-function mattermostIdentity() {
+function externalIdentity() {
   return {
     externalUserId: "mattermost-user-1"
   };
@@ -306,7 +405,7 @@ function mattermostIdentity() {
 
 function linkIdentity() {
   return {
-    ...mattermostIdentity(),
+    ...externalIdentity(),
     externalDisplayName: "Alice"
   };
 }

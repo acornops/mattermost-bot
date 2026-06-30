@@ -32,7 +32,8 @@ export class JsonHttpClient {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body)
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: options.signal
     });
 
     if (!response.ok) {
