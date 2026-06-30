@@ -7,7 +7,7 @@ import {
   resolveTargetReference,
   resolveVirtualMachineReference,
   resolveWorkspaceReference
-} from "../src/bot/command-context.js";
+} from "../src/bot/commands/context.js";
 
 test("command context remembers numbered workspaces per external user", () => {
   const store = createInMemoryCommandContextStore();

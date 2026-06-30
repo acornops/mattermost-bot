@@ -1,4 +1,4 @@
-import { identityLabel } from "./message-utils.js";
+import { identityLabel } from "../message-utils.js";
 
 export function formatWorkspacePage({ page, context, userId, userName }) {
   const items = Array.isArray(page?.items) ? page.items : [];

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createInMemoryCommandContextStore } from "../src/bot/command-context.js";
-import { createRunFollowerRegistry } from "../src/bot/run-follower.js";
+import { createInMemoryCommandContextStore } from "../src/bot/commands/context.js";
+import { createRunFollowerRegistry } from "../src/bot/chat/follower.js";
 
 test("run follower posts the assistant answer on SSE completion", async () => {
   const commandContextStore = createInMemoryCommandContextStore();

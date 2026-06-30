@@ -1,7 +1,7 @@
 import { DEFAULT_MATTERMOST_BOT_USERNAME } from "./config.js";
-import { createInMemoryCommandContextStore } from "./command-context.js";
+import { createInMemoryCommandContextStore } from "./commands/context.js";
 import { botResponseText, handleBotMessageResult, shouldRespondToPost } from "./message.js";
-import { createRunFollowerRegistry } from "./run-follower.js";
+import { createRunFollowerRegistry } from "./chat/follower.js";
 
 export function createMattermostBotRunner({
   client,

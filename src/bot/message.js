@@ -6,7 +6,7 @@ import {
   resolveTargetReference,
   resolveVirtualMachineReference,
   resolveWorkspaceReference
-} from "./command-context.js";
+} from "./commands/context.js";
 import {
   escapeRegExp,
   firstCommandWord,
@@ -33,23 +33,23 @@ import {
   formatWorkspacePage,
   normalizeListResponse,
   normalizeTargetType,
-} from "./command-formatters.js";
+} from "./commands/formatters.js";
 import {
   commandArguments,
   parseListArgs,
   parseTargetFilterArgs
-} from "./command-args.js";
+} from "./commands/args.js";
 import {
   chatMessageErrorText,
   dataErrorText,
   workspaceErrorText
-} from "./command-errors.js";
+} from "./commands/errors.js";
 import {
   activeRunResponseText,
   chatClientMessageId,
   followRunForAnswer,
   formatChatPendingResponse
-} from "./chat-runs.js";
+} from "./chat/runs.js";
 
 const commandReferenceUrl = "https://github.com/acornops/mattermost-bot/wiki/Mattermost-Bot-Commands";
 

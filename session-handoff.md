@@ -2,7 +2,7 @@
 
 ## Currently Verified
 
-- Final `./init.sh` passed after the bot command module refactor, with harness verification, lint, build, and 92 tests. `npm test` also passed with 92 tests during the refactor.
+- Final `./init.sh` passed after the bot command module refactor and domain-folder follow-up, with harness verification, lint, build, and 92 tests. `npm test` also passed with 92 tests during the refactor and after the folder move.
 - Final review verification after the generic target session-routing fix passed: focused `node --test test/command-context.test.js test/bot-message.test.js test/bot-runner.test.js test/run-follower.test.js test/acornops-client.test.js` with 80 tests, full `npm test` with 92 tests, and final `./init.sh` with harness verification, lint, build, and 92 tests.
 - Final `./init.sh` passed after removing the obsolete K3s readiness script from the active harness, with harness verification, lint, build, and 92 tests.
 - Final `./init.sh` passed after SSE follow-up delivery with harness verification, lint, build, and 91 tests. Full `npm test` passed with 91 tests. Focused `node --test test/acornops-client.test.js test/command-context.test.js test/bot-message.test.js test/bot-runner.test.js test/run-follower.test.js` passed with 79 tests.
@@ -56,12 +56,12 @@
 - Runtime defaults live in `src/bot/config.js`; change the bot mention name with `CSIT_MATTERMOST_BOT_USERNAME`.
 - Mattermost and AcornOps API clients share JSON fetch/error handling through `src/bot/http-client.js`.
 - The bot no longer uses `src/bot/auth-store.js`, bot-side login state, transaction polling, plain OIDC link construction, or AcornOps `dev-login` for command login.
-- The bot uses `src/bot/command-context.js` for process-local command memory. It stores only lightweight ids/names for workspaces, targets, clusters, VMs, sessions, active/paused chat state, latest run reference, and one active streamed run pointer; it resets on restart.
+- The bot uses `src/bot/commands/context.js` for process-local command memory. It stores only lightweight ids/names for workspaces, targets, clusters, VMs, sessions, active/paused chat state, latest run reference, and one active streamed run pointer; it resets on restart.
 - `B05` authenticated workspace command, `B06` authenticated workspace detail/cluster commands, and `B07` expanded external integration read/assistant commands are implemented with automated tests passing.
 
 ## Changes This Session
 
-- Refactored the oversized `src/bot/message.js` command handler into focused modules: `src/bot/command-formatters.js` for response rendering, `src/bot/command-args.js` for command/filter parsing, `src/bot/command-errors.js` for AcornOps error copy, and `src/bot/chat-runs.js` for chat client-message ids and short run polling.
+- Refactored the oversized `src/bot/message.js` command handler into focused modules under domain folders: `src/bot/commands/formatters.js` for response rendering, `src/bot/commands/args.js` for command/filter parsing, `src/bot/commands/errors.js` for AcornOps error copy, `src/bot/commands/context.js` for process-local command memory, `src/bot/chat/runs.js` for chat client-message ids and short run polling, and `src/bot/chat/follower.js` for SSE follow-up delivery.
 - Kept `src/bot/message.js` responsible for routing and command side effects while importing the extracted policies.
 - Added `R01` to `feature_list.json` as a passing structure-only refactor with verification evidence.
 - Reviewed AcornOps public repository READMEs excluding this repository: `acornops-workspace`, `control-plane`, `management-console`, `docs-website`, `acornops-deployment`, `execution-engine`, `llm-gateway`, `k8s-agent`, and `vm-agent`; confirmed `acornops/.github` has no README.
@@ -97,7 +97,7 @@
 - After live testing still returned HTTP 400, added structured AcornOps error parsing so chat-message 400 responses show the safe backend `error.code` and `error.message` instead of telling the user to rephrase without evidence.
 - Changed active chat questions to poll the read-only run briefly and return the assistant reply directly when available. The fallback now hides session/message/run ids and says AcornOps is still working. Active chat mode is modal: command-looking text such as `status`, `resources`, and `findings` is sent to the assistant until the user sends `chat pause`; chat controls such as `chat pause` and `chat end` remain available.
 - Repointed local command-reference links to `docs/wiki-mattermost-bot-commands.md`.
-- Added SSE follow-up delivery for long-running chat answers: AcornOpsClient.streamRun(), SSE parser coverage, process-local active run context, src/bot/run-follower.js with reconnect and polling fallback, runner follow-up effects, one active streamed run per external user, chat pause keeps following, and chat end aborts following.
+- Added SSE follow-up delivery for long-running chat answers: AcornOpsClient.streamRun(), SSE parser coverage, process-local active run context, src/bot/chat/follower.js with reconnect and polling fallback, runner follow-up effects, one active streamed run per external user, chat pause keeps following, and chat end aborts following.
 - Review fix: generic Kubernetes targets selected through `target 1` now create chat sessions through `/api/v1/workspaces/{workspaceId}/targets/{targetId}/sessions` instead of the compatibility Kubernetes cluster session endpoint.
 - Removed the historical K3s readiness script from the active harness and updated current docs to keep K3s as learning-stage traceability only.
 

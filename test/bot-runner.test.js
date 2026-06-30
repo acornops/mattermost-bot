@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EventEmitter } from "node:events";
-import { createInMemoryCommandContextStore } from "../src/bot/command-context.js";
+import { createInMemoryCommandContextStore } from "../src/bot/commands/context.js";
 import {
   createMattermostBotRunner,
   handlePostedEvent

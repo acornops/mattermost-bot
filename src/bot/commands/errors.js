@@ -1,4 +1,4 @@
-import { singleLine } from "./command-formatters.js";
+import { singleLine } from "./formatters.js";
 
 export function workspaceErrorText(error) {
   const status = httpStatusFromError(error);

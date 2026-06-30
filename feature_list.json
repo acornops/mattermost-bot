@@ -330,7 +330,7 @@
           "Run ./init.sh."
         ]
       },
-      "evidence": "On 2026-06-30, split src/bot/message.js into focused modules: src/bot/command-formatters.js, src/bot/command-args.js, src/bot/command-errors.js, and src/bot/chat-runs.js. The message dispatcher now imports these helpers instead of owning formatting, parsing, error translation, and chat run polling internals. Baseline ./init.sh passed before the refactor with harness verification, lint, build, and 92 tests. During the refactor, npm test passed with 92 tests after the formatter extraction and again after the parser/error/chat-run extraction. Final ./init.sh passed with harness verification, lint, build, and 92 tests.",
+      "evidence": "On 2026-06-30, split src/bot/message.js into focused modules under src/bot/commands/ and src/bot/chat/: commands/formatters.js, commands/args.js, commands/errors.js, commands/context.js, chat/runs.js, and chat/follower.js. The message dispatcher now imports these helpers instead of owning formatting, parsing, error translation, and chat run polling internals. Baseline ./init.sh passed before the refactor with harness verification, lint, build, and 92 tests. During the refactor, npm test passed with 92 tests after the formatter extraction, after the parser/error/chat-run extraction, and after moving the helpers into domain folders. Final ./init.sh passed with harness verification, lint, build, and 92 tests.",
       "notes": "This is a structure-only refactor. Live Mattermost/AcornOps smoke was not rerun because no runtime behavior was intentionally changed. test/bot-message.test.js remains large and is a good future candidate for splitting by command area."
     }
   ]
