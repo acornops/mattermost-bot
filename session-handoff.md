@@ -2,6 +2,7 @@
 
 ## Currently Verified
 
+- Final `./init.sh` passed after the bot command module refactor, with harness verification, lint, build, and 92 tests. `npm test` also passed with 92 tests during the refactor.
 - Final review verification after the generic target session-routing fix passed: focused `node --test test/command-context.test.js test/bot-message.test.js test/bot-runner.test.js test/run-follower.test.js test/acornops-client.test.js` with 80 tests, full `npm test` with 92 tests, and final `./init.sh` with harness verification, lint, build, and 92 tests.
 - Final `./init.sh` passed after removing the obsolete K3s readiness script from the active harness, with harness verification, lint, build, and 92 tests.
 - Final `./init.sh` passed after SSE follow-up delivery with harness verification, lint, build, and 91 tests. Full `npm test` passed with 91 tests. Focused `node --test test/acornops-client.test.js test/command-context.test.js test/bot-message.test.js test/bot-runner.test.js test/run-follower.test.js` passed with 79 tests.
@@ -60,6 +61,9 @@
 
 ## Changes This Session
 
+- Refactored the oversized `src/bot/message.js` command handler into focused modules: `src/bot/command-formatters.js` for response rendering, `src/bot/command-args.js` for command/filter parsing, `src/bot/command-errors.js` for AcornOps error copy, and `src/bot/chat-runs.js` for chat client-message ids and short run polling.
+- Kept `src/bot/message.js` responsible for routing and command side effects while importing the extracted policies.
+- Added `R01` to `feature_list.json` as a passing structure-only refactor with verification evidence.
 - Reviewed AcornOps public repository READMEs excluding this repository: `acornops-workspace`, `control-plane`, `management-console`, `docs-website`, `acornops-deployment`, `execution-engine`, `llm-gateway`, `k8s-agent`, and `vm-agent`; confirmed `acornops/.github` has no README.
 - Replaced the README with an AcornOps-style production service README for the Mattermost bot integration.
 - Updated current-state artifacts and startup output to describe the repository as the official AcornOps Mattermost bot integration.
@@ -103,6 +107,7 @@
 - Live Mattermost/AcornOps smoke for the June 23 external-integrations endpoint move and the June 26/29/30 context-plus-chat command surface still needs to rerun. For `chat new` followed by a quick question, expect a direct assistant answer when the run completes within the polling window. For a longer run, expect an acknowledgement followed by a later Mattermost post with the final assistant answer.
 - `./scripts/verify-mattermost.sh` failed on 2026-06-30 because `localhost:8065` was not listening.
 - The current workspace context and active streamed run following are process-local. Use shared TTL storage later if multi-replica or restart-resilient command context/run following becomes necessary.
+- `test/bot-message.test.js` remains large and should be split by command area during a future test-structure refactor.
 - The local Mattermost bot token must stay outside committed files.
 
 ## Next Best Action

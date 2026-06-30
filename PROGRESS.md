@@ -31,6 +31,7 @@
 - `B06`: Wire authenticated workspace detail and cluster commands.
 - `B07`: Wire expanded external integration read and assistant commands.
 - `B08`: Redesign Mattermost bot UX around context and chat mode.
+- `R01`: Refactor bot command handling modules.
 
 ## In Progress
 
@@ -74,6 +75,14 @@
 ## Session Log
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
+
+### 2026-06-30 - Bot command module refactor
+
+- Goal: Refactor the oversized bot command message handler into focused modules for readability and maintainability without changing user-facing behavior.
+- Completed: Split pure response formatting into `src/bot/command-formatters.js`, command argument parsing into `src/bot/command-args.js`, AcornOps error-to-user-message handling into `src/bot/command-errors.js`, and chat client-message-id/run polling helpers into `src/bot/chat-runs.js`. `src/bot/message.js` now stays focused on command routing and command side effects.
+- Verification run: Baseline `./init.sh` passed before the refactor with harness verification, lint, build, and 92 tests. During the refactor, `npm test` passed with 92 tests after the formatter extraction and again after the parser/error/chat-run extraction. Final `./init.sh` passed with harness verification, lint, build, and 92 tests.
+- Known risks: This was intentionally structure-only; live Mattermost/AcornOps smoke was not rerun because no runtime behavior was intended to change. `test/bot-message.test.js` remains large and is a good future candidate for splitting by command area.
+- Next best action: live-smoke the existing workspace, target, resource, finding, chat-mode, and SSE follow-up flows against the local stack when available.
 
 ### 2026-06-30 - K3s readiness removed from active harness
 
