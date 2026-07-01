@@ -6,12 +6,12 @@ export class MattermostClient {
       baseUrl,
       fetchImpl,
       serviceName: "Mattermost",
-      missingBaseUrlMessage: "CSIT_MATTERMOST_URL is required."
+      missingBaseUrlMessage: "MATTERMOST_URL is required."
     });
     this.token = token;
 
     if (!this.token) {
-      throw new Error("CSIT_MATTERMOST_TOKEN is required.");
+      throw new Error("MATTERMOST_BOT_TOKEN is required.");
     }
   }
 

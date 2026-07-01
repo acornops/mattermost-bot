@@ -307,10 +307,10 @@ test("handlePostedEvent reuses workspace context across direct message posts", a
 });
 
 test("handlePostedEvent starts a run follower for pending chat answers", async () => {
-  const previousAttempts = process.env.CSIT_CHAT_RUN_POLL_ATTEMPTS;
-  const previousInterval = process.env.CSIT_CHAT_RUN_POLL_INTERVAL_MS;
-  process.env.CSIT_CHAT_RUN_POLL_ATTEMPTS = "1";
-  process.env.CSIT_CHAT_RUN_POLL_INTERVAL_MS = "0";
+  const previousAttempts = process.env.CHAT_RUN_POLL_ATTEMPTS;
+  const previousInterval = process.env.CHAT_RUN_POLL_INTERVAL_MS;
+  process.env.CHAT_RUN_POLL_ATTEMPTS = "1";
+  process.env.CHAT_RUN_POLL_INTERVAL_MS = "0";
 
   try {
     const posts = [];
@@ -382,8 +382,8 @@ test("handlePostedEvent starts a run follower for pending chat answers", async (
       }
     ]);
   } finally {
-    restoreEnvValue("CSIT_CHAT_RUN_POLL_ATTEMPTS", previousAttempts);
-    restoreEnvValue("CSIT_CHAT_RUN_POLL_INTERVAL_MS", previousInterval);
+    restoreEnvValue("CHAT_RUN_POLL_ATTEMPTS", previousAttempts);
+    restoreEnvValue("CHAT_RUN_POLL_INTERVAL_MS", previousInterval);
   }
 });
 

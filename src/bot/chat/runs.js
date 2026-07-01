@@ -121,11 +121,11 @@ function isTerminalRunStatus(status) {
 }
 
 function chatRunPollAttempts() {
-  return positiveIntegerFromEnv("CSIT_CHAT_RUN_POLL_ATTEMPTS", 15);
+  return positiveIntegerFromEnv("CHAT_RUN_POLL_ATTEMPTS", 15);
 }
 
 function chatRunPollIntervalMs() {
-  return positiveIntegerFromEnv("CSIT_CHAT_RUN_POLL_INTERVAL_MS", 1000, { allowZero: true });
+  return positiveIntegerFromEnv("CHAT_RUN_POLL_INTERVAL_MS", 1000, { allowZero: true });
 }
 
 function positiveIntegerFromEnv(name, fallback, { allowZero = false } = {}) {

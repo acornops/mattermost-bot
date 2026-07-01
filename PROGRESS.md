@@ -12,6 +12,7 @@
 - Standard verification path: `./scripts/verify-harness.sh`
 - Mattermost readiness verification path: `./scripts/verify-mattermost.sh`
 - Bot verification path: `./scripts/verify-bot.sh`
+- Docker image verification path: `./scripts/verify-docker.sh`
 - Highest priority unfinished feature: none recorded.
 - Current blocker: live Mattermost/AcornOps smoke for the expanded external integration command surface still requires local services.
 
@@ -32,6 +33,7 @@
 - `B07`: Wire expanded external integration read and assistant commands.
 - `B08`: Redesign Mattermost bot UX around context and chat mode.
 - `R01`: Refactor bot command handling modules.
+- `D01`: Dockerise the bot runtime image.
 
 ## In Progress
 
@@ -59,7 +61,11 @@
 - `help` shows the common workflow only. `help filters` shows supported filter names and finite values. `docs/wiki-mattermost-bot-commands.md` records advanced filters, aliases, shortcuts, and compatibility commands.
 - AcornOps moved account-link endpoints on 2026-06-23 to `/auth/external-integrations/`; bot tests now assert the current link and resolve URLs.
 - AcornOps updated the account-link contract on 2026-06-18 to require `externalUserId`; the Mattermost adapter supplies the observed post author's Mattermost user id as that external id.
-- Bot runtime defaults now live in `src/bot/config.js`; `CSIT_MATTERMOST_BOT_USERNAME` is the runtime source for changing the bot mention name, with `acorn-ops-bot` as the single code fallback.
+- Bot runtime defaults now live in `src/bot/config.js`; `MATTERMOST_BOT_USERNAME` is the runtime source for changing the bot mention name, with `acorn-ops-bot` as the single code fallback.
+- Runtime Mattermost environment variables are `MATTERMOST_URL`, `MATTERMOST_BOT_TOKEN`, and `MATTERMOST_BOT_USERNAME`. The previous prefixed Mattermost names are not accepted.
+- Chat timing environment variables are `CHAT_RUN_POLL_ATTEMPTS`, `CHAT_RUN_POLL_INTERVAL_MS`, `RUN_STREAM_RECONNECT_ATTEMPTS`, `RUN_STREAM_RECONNECT_DELAY_MS`, `RUN_STREAM_FALLBACK_POLL_INTERVAL_MS`, and `RUN_STREAM_FALLBACK_POLL_MAX_MS`.
+- Docker image build lives in `Dockerfile`. The image installs dependencies inside Docker from `package*.json`, does not copy host `node_modules`, runs as the non-root `node` user, and exposes no port because the bot connects outbound to Mattermost and AcornOps.
+- `docker-compose.yml` runs only the bot service and defaults host-local Mattermost and AcornOps URLs to `http://host.docker.internal:8065` and `http://host.docker.internal:8081`; deployment orchestration still belongs in `acornops-deployment`.
 - The most recent live account-link smoke passed after the earlier user-id-only update; the 2026-06-23 external-integrations endpoint move is covered by automated tests but still needs live smoke.
 - The bot remembers only lightweight command context in memory: numbered workspaces, targets, clusters, VMs, sessions, current workspace, one selected target, active/paused chat state, latest run reference, and one active streamed run pointer. It does not store AcornOps browser sessions, cookies, tokens, or link URLs. The context and active run follows reset when the bot process restarts.
 - K3s was a completed local learning stage. Its repo-local readiness script has been removed from the active production bot harness; historical K3s notes remain for traceability.
@@ -70,11 +76,19 @@
 
 1. Run live Mattermost/AcornOps smoke for `login`, `status`, `workspaces`, `workspace 1`, `targets`, `target 1`, `resources`, `findings`, `chat new`, a plain chat question, `chat pause`, `chat resume`, another question, and `chat end` when the local stack is available.
 2. Add repeatable live-smoke notes for `login`, `status`, workspace, target, filters, and chat-mode commands if local service command output becomes available.
-3. Decide whether process-local command context and active run following are enough or whether shared TTL storage is needed before any multi-replica bot deployment.
+3. Coordinate image publishing, environment templates, and orchestration manifests in `acornops-deployment`.
+4. Decide whether process-local command context and active run following are enough or whether shared TTL storage is needed before any multi-replica bot deployment.
 
 ## Session Log
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
+
+### 2026-07-01 - Docker image packaging
+
+- Goal: Rename CSIT-prefixed runtime Mattermost environment variables and add production Docker image packaging for the bot.
+- Completed: Renamed runtime config to `MATTERMOST_URL`, `MATTERMOST_BOT_TOKEN`, and `MATTERMOST_BOT_USERNAME`, and renamed active chat timing knobs to non-CSIT names. Added `Dockerfile`, `.dockerignore`, `docker-compose.yml`, and `scripts/verify-docker.sh`. The Docker verifier explicitly builds the `verify` target, which runs `npm run verify:bot` inside `node:22-bookworm-slim`, then builds the final runtime image `acornops-mattermost-bot:local`. The runtime image installs dependencies inside Docker from `package*.json`, copies only `src/` for runtime, runs as the non-root `node` user, and exposes no port. Compose defaults host-local Mattermost and AcornOps URLs to `host.docker.internal`.
+- Verification run: Baseline `./init.sh` passed before changes with harness verification, lint, build, and 92 tests. After the env rename, `npm test` passed with 93 tests. Initial forced Docker verification exposed a container portability issue in `test/env.test.js` because it hard-coded `/private/tmp`; the test now uses `os.tmpdir()`. Final `npm test` passed with 93 tests. Final `./scripts/verify-docker.sh` passed: the Docker verify target ran lint, build, and 93 tests inside the image, then the runtime image built as `acornops-mattermost-bot:local`.
+- Known risks: Live Mattermost/AcornOps smoke was not run because local services are still not confirmed available. Full deployment wiring, image publishing, and orchestration remain owned by `acornops-deployment`. The bot remains a single-active-replica deployment until shared TTL command context and run-following state are added.
 
 ### 2026-06-30 - Bot command module refactor
 
@@ -304,7 +318,7 @@ Session log entries are historical. Superseded risks and decisions are corrected
 ### 2026-06-12 - Pre-B05 bot refactor
 
 - Goal: Reduce bot technical debt before starting authenticated cluster command work.
-- Completed: Added `src/bot/http-client.js` so Mattermost and AcornOps clients share base URL trimming, JSON body serialization, raw-response support, and API error text. Added `src/bot/config.js` so runtime defaults and `CSIT_MATTERMOST_BOT_USERNAME` handling are centralized. Added `src/bot/message-utils.js` for command parsing, mention parsing, regex escaping, and user labels. Kept the current account-link behavior unchanged and kept `B05` not started.
+- Completed: Added `src/bot/http-client.js` so Mattermost and AcornOps clients share base URL trimming, JSON body serialization, raw-response support, and API error text. Added `src/bot/config.js` so runtime defaults and `MATTERMOST_BOT_USERNAME` handling are centralized. Added `src/bot/message-utils.js` for command parsing, mention parsing, regex escaping, and user labels. Kept the current account-link behavior unchanged and kept `B05` not started.
 - Verification run: `npm test` passed with 31 tests. `npm run lint` passed. `./init.sh` passed with harness verification, lint, build, and 31 tests.
 - Known risks: No live Mattermost or AcornOps smoke was run for this refactor because it is internal code organization; the automated account-link and runner tests still cover request shapes and message behavior.
 - Next best action: start `B05` for authenticated cluster commands.

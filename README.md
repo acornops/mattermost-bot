@@ -77,11 +77,17 @@ Environment variables:
 
 | Variable | Description | Default |
 | --- | --- | --- |
-| `CSIT_MATTERMOST_URL` | Mattermost site URL. | `http://localhost:8065` |
-| `CSIT_MATTERMOST_TOKEN` | Mattermost bot access token. | Required |
-| `CSIT_MATTERMOST_BOT_USERNAME` | Bot username used for mention detection. | `acorn-ops-bot` |
+| `MATTERMOST_URL` | Mattermost site URL. | `http://localhost:8065` |
+| `MATTERMOST_BOT_TOKEN` | Mattermost bot access token. | Required |
+| `MATTERMOST_BOT_USERNAME` | Bot username used for mention detection. | `acorn-ops-bot` |
 | `ACORNOPS_API_BASE_URL` | AcornOps control-plane base URL. | `http://localhost:8081` |
 | `EXTERNAL_INTEGRATION_SERVICE_TOKEN` | AcornOps service token for this installed external integration. | Required for AcornOps-backed commands |
+| `CHAT_RUN_POLL_ATTEMPTS` | Immediate chat run polling attempts before SSE follow-up. | `15` |
+| `CHAT_RUN_POLL_INTERVAL_MS` | Immediate chat run polling interval in milliseconds. | `1000` |
+| `RUN_STREAM_RECONNECT_ATTEMPTS` | SSE reconnect attempts before fallback polling. | `3` |
+| `RUN_STREAM_RECONNECT_DELAY_MS` | Delay between SSE reconnect attempts in milliseconds. | `1000` |
+| `RUN_STREAM_FALLBACK_POLL_INTERVAL_MS` | Fallback run polling interval in milliseconds. | `3000` |
+| `RUN_STREAM_FALLBACK_POLL_MAX_MS` | Maximum fallback run polling duration in milliseconds. | `180000` |
 
 Local `.env` files are loaded without overriding existing process environment values.
 
@@ -130,6 +136,34 @@ Run in watch mode:
 ```bash
 npm run dev
 ```
+
+Build the container image:
+
+```bash
+docker build -t acornops-mattermost-bot:local .
+```
+
+Verify the container image build:
+
+```bash
+./scripts/verify-docker.sh
+```
+
+Run the container with runtime environment injected at start:
+
+```bash
+docker run --rm --env-file .env acornops-mattermost-bot:local
+```
+
+Run with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+Compose defaults `MATTERMOST_URL` to `http://host.docker.internal:8065` and `ACORNOPS_API_BASE_URL` to `http://host.docker.internal:8081`, which lets the container reach services running on the host through Docker Desktop. Keep `MATTERMOST_BOT_TOKEN` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN` in your local `.env` or shell environment.
+
+The image installs dependencies from `package*.json` inside Docker. It does not copy host `node_modules`, does not bake local `.env` files into the image, and does not expose a port because the bot connects outbound to Mattermost and AcornOps.
 
 The local Mattermost and AcornOps services are not started by this repository. For full-platform local bring-up, use:
 

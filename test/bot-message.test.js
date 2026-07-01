@@ -1006,10 +1006,10 @@ test("handleBotMessage treats free text as a question while chat mode is active"
 });
 
 test("handleBotMessage polls chat run before falling back", async () => {
-  const previousAttempts = process.env.CSIT_CHAT_RUN_POLL_ATTEMPTS;
-  const previousInterval = process.env.CSIT_CHAT_RUN_POLL_INTERVAL_MS;
-  process.env.CSIT_CHAT_RUN_POLL_ATTEMPTS = "3";
-  process.env.CSIT_CHAT_RUN_POLL_INTERVAL_MS = "0";
+  const previousAttempts = process.env.CHAT_RUN_POLL_ATTEMPTS;
+  const previousInterval = process.env.CHAT_RUN_POLL_INTERVAL_MS;
+  process.env.CHAT_RUN_POLL_ATTEMPTS = "3";
+  process.env.CHAT_RUN_POLL_INTERVAL_MS = "0";
 
   try {
     const commandContextStore = selectedClusterContext();
@@ -1062,16 +1062,16 @@ test("handleBotMessage polls chat run before falling back", async () => {
       sessionId: "session-1"
     });
   } finally {
-    restoreEnvValue("CSIT_CHAT_RUN_POLL_ATTEMPTS", previousAttempts);
-    restoreEnvValue("CSIT_CHAT_RUN_POLL_INTERVAL_MS", previousInterval);
+    restoreEnvValue("CHAT_RUN_POLL_ATTEMPTS", previousAttempts);
+    restoreEnvValue("CHAT_RUN_POLL_INTERVAL_MS", previousInterval);
   }
 });
 
 test("handleBotMessage hides run details while chat run is still active", async () => {
-  const previousAttempts = process.env.CSIT_CHAT_RUN_POLL_ATTEMPTS;
-  const previousInterval = process.env.CSIT_CHAT_RUN_POLL_INTERVAL_MS;
-  process.env.CSIT_CHAT_RUN_POLL_ATTEMPTS = "2";
-  process.env.CSIT_CHAT_RUN_POLL_INTERVAL_MS = "0";
+  const previousAttempts = process.env.CHAT_RUN_POLL_ATTEMPTS;
+  const previousInterval = process.env.CHAT_RUN_POLL_INTERVAL_MS;
+  process.env.CHAT_RUN_POLL_ATTEMPTS = "2";
+  process.env.CHAT_RUN_POLL_INTERVAL_MS = "0";
 
   try {
     const commandContextStore = selectedClusterContext();
@@ -1114,16 +1114,16 @@ test("handleBotMessage hides run details while chat run is still active", async 
       sessionId: "session-1"
     });
   } finally {
-    restoreEnvValue("CSIT_CHAT_RUN_POLL_ATTEMPTS", previousAttempts);
-    restoreEnvValue("CSIT_CHAT_RUN_POLL_INTERVAL_MS", previousInterval);
+    restoreEnvValue("CHAT_RUN_POLL_ATTEMPTS", previousAttempts);
+    restoreEnvValue("CHAT_RUN_POLL_INTERVAL_MS", previousInterval);
   }
 });
 
 test("handleBotMessageResult returns follow-up metadata for streamed chat runs", async () => {
-  const previousAttempts = process.env.CSIT_CHAT_RUN_POLL_ATTEMPTS;
-  const previousInterval = process.env.CSIT_CHAT_RUN_POLL_INTERVAL_MS;
-  process.env.CSIT_CHAT_RUN_POLL_ATTEMPTS = "1";
-  process.env.CSIT_CHAT_RUN_POLL_INTERVAL_MS = "0";
+  const previousAttempts = process.env.CHAT_RUN_POLL_ATTEMPTS;
+  const previousInterval = process.env.CHAT_RUN_POLL_INTERVAL_MS;
+  process.env.CHAT_RUN_POLL_ATTEMPTS = "1";
+  process.env.CHAT_RUN_POLL_INTERVAL_MS = "0";
 
   try {
     const commandContextStore = selectedClusterContext();
@@ -1173,8 +1173,8 @@ test("handleBotMessageResult returns follow-up metadata for streamed chat runs",
       sessionId: "session-1"
     });
   } finally {
-    restoreEnvValue("CSIT_CHAT_RUN_POLL_ATTEMPTS", previousAttempts);
-    restoreEnvValue("CSIT_CHAT_RUN_POLL_INTERVAL_MS", previousInterval);
+    restoreEnvValue("CHAT_RUN_POLL_ATTEMPTS", previousAttempts);
+    restoreEnvValue("CHAT_RUN_POLL_INTERVAL_MS", previousInterval);
   }
 });
 
@@ -1206,10 +1206,10 @@ test("handleBotMessage blocks a second chat question while a streamed run is act
 });
 
 test("handleBotMessage uses the Mattermost post id as the chat idempotency key", async () => {
-  const previousAttempts = process.env.CSIT_CHAT_RUN_POLL_ATTEMPTS;
-  const previousInterval = process.env.CSIT_CHAT_RUN_POLL_INTERVAL_MS;
-  process.env.CSIT_CHAT_RUN_POLL_ATTEMPTS = "1";
-  process.env.CSIT_CHAT_RUN_POLL_INTERVAL_MS = "0";
+  const previousAttempts = process.env.CHAT_RUN_POLL_ATTEMPTS;
+  const previousInterval = process.env.CHAT_RUN_POLL_INTERVAL_MS;
+  process.env.CHAT_RUN_POLL_ATTEMPTS = "1";
+  process.env.CHAT_RUN_POLL_INTERVAL_MS = "0";
 
   try {
     const commandContextStore = selectedClusterContext();
@@ -1261,8 +1261,8 @@ test("handleBotMessage uses the Mattermost post id as the chat idempotency key",
     assert.notEqual(clientMessageIds[0], clientMessageIds[1]);
     assert.equal(clientMessageIds[0], clientMessageIds[2]);
   } finally {
-    restoreEnvValue("CSIT_CHAT_RUN_POLL_ATTEMPTS", previousAttempts);
-    restoreEnvValue("CSIT_CHAT_RUN_POLL_INTERVAL_MS", previousInterval);
+    restoreEnvValue("CHAT_RUN_POLL_ATTEMPTS", previousAttempts);
+    restoreEnvValue("CHAT_RUN_POLL_INTERVAL_MS", previousInterval);
   }
 });
 

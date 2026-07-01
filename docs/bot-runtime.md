@@ -49,20 +49,61 @@ npm start
 The bot automatically loads `.env` from the repository root before reading environment variables. A local `.env` file is ignored by Git and should contain:
 
 ```env
-CSIT_MATTERMOST_URL=http://localhost:8065
-CSIT_MATTERMOST_TOKEN=replace-with-bot-token
-CSIT_MATTERMOST_BOT_USERNAME=acorn-ops-bot
+MATTERMOST_URL=http://localhost:8065
+MATTERMOST_BOT_TOKEN=replace-with-bot-token
+MATTERMOST_BOT_USERNAME=acorn-ops-bot
 
 ACORNOPS_API_BASE_URL=http://localhost:8081
 EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-acornops-external-integration-token
 ```
 
+Optional chat timing controls:
+
+```env
+CHAT_RUN_POLL_ATTEMPTS=15
+CHAT_RUN_POLL_INTERVAL_MS=1000
+RUN_STREAM_RECONNECT_ATTEMPTS=3
+RUN_STREAM_RECONNECT_DELAY_MS=1000
+RUN_STREAM_FALLBACK_POLL_INTERVAL_MS=3000
+RUN_STREAM_FALLBACK_POLL_MAX_MS=180000
+```
+
+## Container Image
+
+Build the production image:
+
+```sh
+docker build -t acornops-mattermost-bot:local .
+```
+
+Verify the image build:
+
+```sh
+./scripts/verify-docker.sh
+```
+
+Run the image with environment injected at startup:
+
+```sh
+docker run --rm --env-file .env acornops-mattermost-bot:local
+```
+
+Run with Docker Compose:
+
+```sh
+docker compose up --build
+```
+
+`docker-compose.yml` defaults `MATTERMOST_URL` to `http://host.docker.internal:8065` and `ACORNOPS_API_BASE_URL` to `http://host.docker.internal:8081` so a container can reach Mattermost and AcornOps services running on the host through Docker Desktop. Provide `MATTERMOST_BOT_TOKEN` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN` through your local `.env` file or shell environment.
+
+The Dockerfile installs dependencies inside the image from `package*.json`; host `node_modules` is ignored. The verification stage runs `npm run verify:bot`, and the runtime stage copies only `package*.json` and `src/`. The image runs as the non-root `node` user and exposes no port because the bot uses outbound Mattermost WebSocket and REST connections.
+
 ## Current Behavior
 
-- The bot authenticates to Mattermost as a bot account using `CSIT_MATTERMOST_TOKEN`.
+- The bot authenticates to Mattermost as a bot account using `MATTERMOST_BOT_TOKEN`.
 - The bot opens Mattermost's WebSocket endpoint and authenticates after connecting.
 - The bot responds to direct messages and channel posts that mention `@acorn-ops-bot`.
-- The bot username defaults to `acorn-ops-bot`, and can be changed in one place at runtime with `CSIT_MATTERMOST_BOT_USERNAME`.
+- The bot username defaults to `acorn-ops-bot`, and can be changed in one place at runtime with `MATTERMOST_BOT_USERNAME`.
 - The bot posts responses as normal channel messages instead of threaded replies.
 - The bot ignores messages authored by itself.
 - Commands are accepted without a leading slash only, for example `clusters`. Slash-prefixed commands return guidance to retry without `/`.
@@ -84,11 +125,11 @@ EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-acornops-external-integration-to
 - `chat pause` leaves chat mode while preserving the current session and any active streamed answer, `chat resume` re-enters it, and `chat end` clears the bot's current chat pointer and aborts any active streamed answer. `ask <question>`, `sessions`, `session`, and `messages` remain compatibility commands but are not part of the short help surface.
 - Only `login` is direct-message-only. Authenticated read and read-only assistant commands can run in direct messages or channel mentions.
 - The bot does not keep bot-side login state or AcornOps browser sessions. It keeps only process-local command context containing lightweight ids and names for command convenience.
-- `CSIT_MATTERMOST_URL` defaults to `http://localhost:8065`, and `ACORNOPS_API_BASE_URL` defaults to `http://localhost:8081`, the standalone AcornOps control-plane URL.
+- `MATTERMOST_URL` defaults to `http://localhost:8065`, and `ACORNOPS_API_BASE_URL` defaults to `http://localhost:8081`, the standalone AcornOps control-plane URL.
 
 ## Message Flow
 
-1. `src/bot/index.js` loads `.env`, then asks `src/bot/config.js` for `CSIT_MATTERMOST_URL`, `CSIT_MATTERMOST_TOKEN`, `CSIT_MATTERMOST_BOT_USERNAME`, `ACORNOPS_API_BASE_URL`, and `EXTERNAL_INTEGRATION_SERVICE_TOKEN`.
+1. `src/bot/index.js` loads `.env`, then asks `src/bot/config.js` for `MATTERMOST_URL`, `MATTERMOST_BOT_TOKEN`, `MATTERMOST_BOT_USERNAME`, `ACORNOPS_API_BASE_URL`, and `EXTERNAL_INTEGRATION_SERVICE_TOKEN`.
 2. `src/bot/mattermost-client.js` uses the shared JSON request helper in `src/bot/http-client.js` and verifies the token with `GET /api/v4/users/me`.
 3. `src/bot/runner.js` opens `/api/v4/websocket` and authenticates the WebSocket connection.
 4. Mattermost emits `posted` events for new messages the bot can see.
@@ -102,10 +143,10 @@ EXTERNAL_INTEGRATION_SERVICE_TOKEN=replace-with-acornops-external-integration-to
 12. `targets` uses the current workspace and updates numbered generic target references; `clusters` and `vms` remain shortcuts.
 13. `target 1`, `cluster 1`, and `vm 1` select exactly one current target and clear the previous target plus current chat/session state.
 14. `chat new` creates a read-only troubleshooting session for the selected target. A target chosen through `target 1` uses `POST /api/v1/workspaces/{workspaceId}/targets/{targetId}/sessions`; a Kubernetes cluster chosen through the compatibility `cluster 1` command uses the Kubernetes-cluster session endpoint. While chat mode is active, free-form messages post session messages with `toolAccessMode: "read_only"` and stable `clientMessageId` values derived from the Mattermost source post id when available.
-15. After posting a chat message, the bot polls the read-only run briefly, fetches session messages when the run completes, and renders the newest assistant reply for that run. The default response window is 15 poll attempts with a 1000 ms interval, configured by `CSIT_CHAT_RUN_POLL_ATTEMPTS` and `CSIT_CHAT_RUN_POLL_INTERVAL_MS`.
+15. After posting a chat message, the bot polls the read-only run briefly, fetches session messages when the run completes, and renders the newest assistant reply for that run. The default response window is 15 poll attempts with a 1000 ms interval, configured by `CHAT_RUN_POLL_ATTEMPTS` and `CHAT_RUN_POLL_INTERVAL_MS`.
 16. If the run is still active after the response window, the bot records one active streamed run for that external user, returns a short acknowledgement, and starts `src/bot/run-follower.js` in the background.
 17. The run follower opens `GET /api/v1/runs/{runId}/stream` with `Authorization: Bearer EXTERNAL_INTEGRATION_SERVICE_TOKEN`, `x-acornops-external-user-id`, and `Accept: text/event-stream`. `run_completed` loads the newest assistant message for that run and posts it to Mattermost. `run_failed` and `run_cancelled` post concise terminal messages.
-18. If SSE disconnects before a terminal state, the follower checks `GET /api/v1/runs/{runId}`, reconnects up to 3 times, then falls back to bounded polling. The reconnect and fallback defaults are controlled by `CSIT_RUN_STREAM_RECONNECT_ATTEMPTS`, `CSIT_RUN_STREAM_RECONNECT_DELAY_MS`, `CSIT_RUN_STREAM_FALLBACK_POLL_INTERVAL_MS`, and `CSIT_RUN_STREAM_FALLBACK_POLL_MAX_MS`.
+18. If SSE disconnects before a terminal state, the follower checks `GET /api/v1/runs/{runId}`, reconnects up to 3 times, then falls back to bounded polling. The reconnect and fallback defaults are controlled by `RUN_STREAM_RECONNECT_ATTEMPTS`, `RUN_STREAM_RECONNECT_DELAY_MS`, `RUN_STREAM_FALLBACK_POLL_INTERVAL_MS`, and `RUN_STREAM_FALLBACK_POLL_MAX_MS`.
 19. `src/bot/mattermost-client.js` posts the response with `POST /api/v4/posts` and no `root_id`, so Mattermost renders it in the main timeline instead of a thread.
 
 ## Command Context

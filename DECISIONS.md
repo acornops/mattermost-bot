@@ -1,5 +1,17 @@
 # Decision Log
 
+## 2026-07-01: Package the Mattermost bot as a single-replica Docker image
+
+- Decision: Add Docker image packaging in this repository with `node:22-bookworm-slim`, lockfile-based `npm ci` installs inside Docker, an explicit Docker verification target, and a final runtime image that copies only `src/`, runs as the non-root `node` user, and exposes no port.
+- Reason: This repository owns the bot runtime and repo-local validation, so it should be able to produce a verified deployable image without depending on host `node_modules` or local `.env` files. The bot is an outbound Mattermost WebSocket/REST client, not an inbound HTTP service.
+- Consequence: `scripts/verify-docker.sh` builds the `verify` target before the final image so `npm run verify:bot` runs inside Linux. The repo-local `docker-compose.yml` is only a developer convenience for running the bot against host-local Mattermost and AcornOps via `host.docker.internal`; full image publishing, secrets templates, and production Compose/Kubernetes orchestration stay in `acornops-deployment`. Run one active bot replica until command context and SSE run-following state move out of process memory.
+
+## 2026-07-01: Remove CSIT prefixes from active runtime environment names
+
+- Decision: Replace the active Mattermost runtime variables with `MATTERMOST_URL`, `MATTERMOST_BOT_TOKEN`, and `MATTERMOST_BOT_USERNAME`, and use neutral chat timing variables such as `CHAT_RUN_POLL_ATTEMPTS` and `RUN_STREAM_RECONNECT_ATTEMPTS`.
+- Reason: This repository is now the official AcornOps Mattermost bot, not a CSIT prototype. Runtime configuration should describe the deployed integration directly.
+- Consequence: The previous prefixed Mattermost names are not accepted. Local `.env` files and deployment secrets must use the new names.
+
 ## 2026-06-25: Treat this repository as the official AcornOps Mattermost bot integration
 
 - Decision: Reposition the repository from CSIT/local learning to the production-oriented AcornOps Mattermost bot integration.
@@ -121,7 +133,7 @@
 
 - Decision: Keep runtime defaults in `src/bot/config.js`, including the default Mattermost bot username, and route JSON HTTP behavior for Mattermost and AcornOps through `src/bot/http-client.js`.
 - Reason: The bot username and request/error handling were duplicated across small modules, which would make future command work harder to change safely.
-- Consequence: Renaming the bot should normally require only `CSIT_MATTERMOST_BOT_USERNAME` at runtime, with `DEFAULT_MATTERMOST_BOT_USERNAME` as the single code fallback. New service clients should reuse the shared JSON HTTP helper instead of rebuilding fetch, headers, body serialization, and error text.
+- Consequence: Renaming the bot should normally require only `MATTERMOST_BOT_USERNAME` at runtime, with `DEFAULT_MATTERMOST_BOT_USERNAME` as the single code fallback. New service clients should reuse the shared JSON HTTP helper instead of rebuilding fetch, headers, body serialization, and error text.
 
 ## 2026-06-17: Use AcornOps generic chat integration endpoint prefix
 

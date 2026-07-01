@@ -8,10 +8,10 @@ export function createRunFollowerRegistry({
   commandContextStore,
   postFollowUp,
   logger = console,
-  reconnectAttempts = numberFromEnv("CSIT_RUN_STREAM_RECONNECT_ATTEMPTS", DEFAULT_RECONNECT_ATTEMPTS),
-  reconnectDelayMs = numberFromEnv("CSIT_RUN_STREAM_RECONNECT_DELAY_MS", DEFAULT_RECONNECT_DELAY_MS, { allowZero: true }),
-  fallbackPollIntervalMs = numberFromEnv("CSIT_RUN_STREAM_FALLBACK_POLL_INTERVAL_MS", DEFAULT_FALLBACK_POLL_INTERVAL_MS, { allowZero: true }),
-  fallbackPollMaxMs = numberFromEnv("CSIT_RUN_STREAM_FALLBACK_POLL_MAX_MS", DEFAULT_FALLBACK_POLL_MAX_MS, { allowZero: true })
+  reconnectAttempts = numberFromEnv("RUN_STREAM_RECONNECT_ATTEMPTS", DEFAULT_RECONNECT_ATTEMPTS),
+  reconnectDelayMs = numberFromEnv("RUN_STREAM_RECONNECT_DELAY_MS", DEFAULT_RECONNECT_DELAY_MS, { allowZero: true }),
+  fallbackPollIntervalMs = numberFromEnv("RUN_STREAM_FALLBACK_POLL_INTERVAL_MS", DEFAULT_FALLBACK_POLL_INTERVAL_MS, { allowZero: true }),
+  fallbackPollMaxMs = numberFromEnv("RUN_STREAM_FALLBACK_POLL_MAX_MS", DEFAULT_FALLBACK_POLL_MAX_MS, { allowZero: true })
 }) {
   const active = new Map();
 

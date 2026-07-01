@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Mattermost ChatOps bot prototype for CSIT.",
+  "description": "AcornOps Mattermost ChatOps bot.",
   "engines": {
     "node": ">=22"
   },

@@ -19,10 +19,20 @@ test("readBotConfig applies local development defaults", () => {
 
 test("readBotConfig uses the configured Mattermost bot username", () => {
   const config = readBotConfig({
-    CSIT_MATTERMOST_BOT_USERNAME: "renamed-bot"
+    MATTERMOST_BOT_USERNAME: "renamed-bot"
   });
 
   assert.equal(config.mattermostBotUsername, "renamed-bot");
+});
+
+test("readBotConfig reads Mattermost deployment configuration", () => {
+  const config = readBotConfig({
+    MATTERMOST_URL: "https://mattermost.example.com",
+    MATTERMOST_BOT_TOKEN: "bot-token"
+  });
+
+  assert.equal(config.mattermostUrl, "https://mattermost.example.com");
+  assert.equal(config.mattermostToken, "bot-token");
 });
 
 test("readBotConfig reads only the external integration service token", () => {
