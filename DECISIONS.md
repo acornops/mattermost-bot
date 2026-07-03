@@ -1,10 +1,40 @@
 # Decision Log
 
+## 2026-07-03: Require bang-prefixed Mattermost bot commands
+
+- Decision: Mattermost bot commands require `!` on the command word only, for example `!login`, `!status`, and `!chat new`. Slash-prefixed input is rejected with guidance to use `!`, and unprefixed main-conversation messages nudge users toward `!help`.
+- Reason: The bot-account UX needs an explicit command marker without becoming a Mattermost slash-command integration. Keeping arguments unprefixed preserves the existing command grammar and examples.
+- Consequence: Registered chat-thread replies are the exception: plain text in a known chat thread is treated as AcornOps assistant input without `!`. Documentation and tests must show `!` commands everywhere else.
+
+## 2026-07-03: Use Mattermost threads for multiple concurrent AcornOps chats
+
+- Decision: Replace the single active/paused chat mode with many chat-thread mappings keyed by Mattermost `channel_id + root_id`. `!chat new [title]` creates an AcornOps session and a Mattermost root thread; replies in that thread route to that session, and `!chat end` closes only that thread.
+- Reason: Users need to keep normal bot commands available while running more than one investigation. Mattermost threads provide the clearest user-visible container for each AcornOps session.
+- Consequence: `!chat pause` and `!chat resume` are retired from the main UX. First implementation restricts a chat thread to the Mattermost user who created it. Assistant replies and SSE follow-ups must include the thread `root_id`.
+
+## 2026-07-03: Persist bot command context in Postgres when configured
+
+- Decision: Add a Postgres-backed command-context store behind `BOT_DATABASE_URL`, covering user context, chat threads, active run records, user-level webhook routes, inbound event idempotency, and schema migrations. Keep the in-memory store as the no-URL local/test fallback.
+- Reason: Threaded chats, callback actions, and webhook routing need state that survives normal bot restarts. A database-backed interface also reduces risk before any future multi-replica deployment work.
+- Consequence: The bot still avoids storing AcornOps browser sessions, cookies, OIDC tokens, refresh tokens, raw link tokens, or bot-side AcornOps user ids. Active SSE network followers remain process-local while running; persisted active-run records can support later recovery work.
+
+## 2026-07-03: Add one inbound HTTP listener for actions and webhooks
+
+- Decision: Add a built-in Node HTTP listener with `GET /healthz`, `POST /mattermost/actions`, and `POST /acornops/webhooks`, configured by `BOT_HTTP_HOST`, `BOT_HTTP_PORT`, `BOT_PUBLIC_BASE_URL`, `MATTERMOST_ACTION_SECRET`, and `ACORNOPS_WEBHOOK_SECRET`.
+- Reason: Mattermost interactive messages and AcornOps alerts both need a public callback path. One small listener is enough for the current bot without introducing a web framework.
+- Consequence: Docker now exposes the optional bot HTTP port. Any live deployment must make `BOT_PUBLIC_BASE_URL` reachable by Mattermost for actions and by AcornOps for webhook delivery.
+
+## 2026-07-03: Use user-level routes for AcornOps webhook alerts
+
+- Decision: User-level webhook commands are `!webhook connect`, `!webhook status`, and `!webhook disconnect`. Routes map an AcornOps external user id to a Mattermost channel/thread destination owned by that Mattermost user.
+- Reason: The user confirmed webhook routing should be user-level, not workspace-level or global. Keeping route management in the bot lets AcornOps deliver signed events and lets the bot decide where each user's alert should appear.
+- Consequence: Webhook intake verifies `AcornOps-Timestamp` and `AcornOps-Signature`, deduplicates `AcornOps-Event-Id`, resolves the user route, and posts a concise alert to the stored Mattermost destination. AcornOps-side webhook subscription/registration may still require separate control-plane work.
+
 ## 2026-07-01: Package the Mattermost bot as a single-replica Docker image
 
 - Decision: Add Docker image packaging in this repository with `node:22-bookworm-slim`, lockfile-based `npm ci` installs inside Docker, an explicit Docker verification target, and a final runtime image that copies only `src/`, runs as the non-root `node` user, and exposes no port.
 - Reason: This repository owns the bot runtime and repo-local validation, so it should be able to produce a verified deployable image without depending on host `node_modules` or local `.env` files. The bot is an outbound Mattermost WebSocket/REST client, not an inbound HTTP service.
-- Consequence: `scripts/verify-docker.sh` builds the `verify` target before the final image so `npm run verify:bot` runs inside Linux. The repo-local `docker-compose.yml` is only a developer convenience for running the bot against host-local Mattermost and AcornOps via `host.docker.internal`; full image publishing, secrets templates, and production Compose/Kubernetes orchestration stay in `acornops-deployment`. Run one active bot replica until command context and SSE run-following state move out of process memory.
+- Consequence: Superseded in part on 2026-07-03 by the inbound HTTP listener and Postgres-backed state. `scripts/verify-docker.sh` builds the `verify` target before the final image so `npm run verify:bot` runs inside Linux. The repo-local `docker-compose.yml` is only a developer convenience for running the bot against host-local Mattermost and AcornOps via `host.docker.internal`; full image publishing, secrets templates, and production Compose/Kubernetes orchestration stay in `acornops-deployment`.
 
 ## 2026-07-01: Remove CSIT prefixes from active runtime environment names
 

@@ -49,7 +49,8 @@ test("run follower posts the assistant answer on SSE completion", async () => {
   assert.deepEqual(posts, [
     {
       channelId: "channel-1",
-      message: "The pod is failing readiness checks."
+      message: "The pod is failing readiness checks.",
+      rootId: ""
     }
   ]);
   assert.equal(commandContextStore.get("mattermost-user-1").activeRun, null);

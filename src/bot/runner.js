@@ -10,13 +10,15 @@ export function createMattermostBotRunner({
   logger = console,
   botUsername = DEFAULT_MATTERMOST_BOT_USERNAME,
   commandContextStore = createInMemoryCommandContextStore(),
-  runFollowerRegistry = null
+  runFollowerRegistry = null,
+  botPublicBaseUrl = "",
+  mattermostActionSecret = ""
 }) {
   const followers = runFollowerRegistry ?? createRunFollowerRegistry({
     acornOpsClient,
     commandContextStore,
-    postFollowUp: async ({ channelId, message }) => {
-      await client.createPost({ channelId, message });
+    postFollowUp: async ({ channelId, message, rootId = "" }) => {
+      await client.createPost({ channelId, message, rootId });
     },
     logger
   });
@@ -49,6 +51,8 @@ export function createMattermostBotRunner({
               botUsername,
               commandContextStore,
               runFollowerRegistry: followers,
+              botPublicBaseUrl,
+              mattermostActionSecret,
               logger
             });
           }
@@ -88,15 +92,24 @@ export async function handlePostedEvent({
   botUsername = DEFAULT_MATTERMOST_BOT_USERNAME,
   commandContextStore = createInMemoryCommandContextStore(),
   runFollowerRegistry = null,
+  botPublicBaseUrl = "",
+  mattermostActionSecret = "",
   logger = console
 }) {
   const post = parsePostedPost(event);
   if (!post) {
     return null;
   }
+  if (post.user_id === botUser.id) {
+    return null;
+  }
 
   const channelType = event.data?.channel_type ?? "";
-  if (!shouldRespondToPost({
+  const threadRootId = post.root_id ?? "";
+  const threadChat = threadRootId
+    ? commandContextStore.getChatThread?.(post.channel_id, threadRootId)
+    : null;
+  if (!threadChat && !shouldRespondToPost({
     post,
     botUserId: botUser.id,
     botUsername,
@@ -113,36 +126,63 @@ export async function handlePostedEvent({
     botUsername,
     acornOpsClient,
     commandContextStore,
-    sourceMessageId: post.id ?? ""
+    sourceMessageId: post.id ?? "",
+    threadChat,
+    channelId: post.channel_id,
+    rootId: threadChat?.rootId ?? post.root_id ?? "",
+    botPublicBaseUrl,
+    mattermostActionSecret
   });
   const response = botResponseText(result);
   const effects = typeof result === "string" ? [] : result.effects ?? [];
+  const attachments = typeof result === "string" ? undefined : result.attachments;
   const followers = runFollowerRegistry ?? createRunFollowerRegistry({
     acornOpsClient,
     commandContextStore,
-    postFollowUp: async ({ channelId, message }) => {
-      await client.createPost({ channelId, message });
+    postFollowUp: async ({ channelId, message, rootId = "" }) => {
+      await client.createPost({ channelId, message, rootId });
     },
     logger
   });
 
   for (const effect of effects) {
     if (effect.type === "abortActiveRun") {
-      followers.abort(effect.externalUserId);
+      followers.abort(effect.externalUserId, {
+        channelId: effect.channelId ?? "",
+        rootId: effect.rootId ?? ""
+      });
     }
   }
 
   logger.log(`Responding to Mattermost post ${post.id} in channel ${post.channel_id}.`);
   const created = await client.createPost({
     channelId: post.channel_id,
-    message: response
+    message: response,
+    rootId: threadChat?.rootId ?? "",
+    attachments
   });
 
   for (const effect of effects) {
     if (effect.type === "followRun") {
       followers.start({
         ...effect,
-        channelId: post.channel_id
+        channelId: effect.channelId || post.channel_id,
+        rootId: effect.rootId ?? threadChat?.rootId ?? ""
+      });
+    } else if (effect.type === "createChatThread") {
+      const title = effect.title || effect.session?.title || effect.session?.name || effect.session?.id || "AcornOps chat";
+      const threadRoot = await client.createPost({
+        channelId: post.channel_id,
+        message: `Chat #${effect.number} - ${title}`
+      });
+      commandContextStore.registerChatThread?.(effect.identity.externalUserId, {
+        channelId: post.channel_id,
+        rootId: threadRoot.id,
+        sessionId: effect.session?.id ?? effect.session?.sessionId ?? "",
+        sessionName: effect.session?.title ?? effect.session?.name ?? title,
+        title,
+        number: effect.number,
+        status: "open"
       });
     }
   }

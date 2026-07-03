@@ -1,5 +1,24 @@
-export function createInMemoryCommandContextStore() {
-  const contexts = new Map();
+export function createInMemoryCommandContextStore({ initialState = {} } = {}) {
+  const contexts = new Map(Object.entries(initialState.contexts ?? {}));
+  const chatThreads = new Map(
+    (initialState.chatThreads ?? []).map((thread) => {
+      const record = chatThreadReference(thread);
+      return [chatThreadKey(record.channelId, record.rootId), record];
+    })
+  );
+  const chatCounters = new Map(
+    Object.entries(initialState.chatCounters ?? {}).map(([externalUserId, value]) => [
+      externalUserId,
+      Number.parseInt(value, 10) || 0
+    ])
+  );
+  const webhookRoutes = new Map(
+    (initialState.webhookRoutes ?? []).map((route) => {
+      const record = webhookRouteReference(route);
+      return [record.externalUserId, record];
+    })
+  );
+  const inboundEvents = new Set(initialState.inboundEvents ?? []);
 
   return {
     get(externalUserId) {
@@ -208,6 +227,102 @@ export function createInMemoryCommandContextStore() {
       };
       contexts.set(externalUserId, nextContext);
       return nextContext;
+    },
+
+    nextChatNumber(externalUserId) {
+      const next = (chatCounters.get(externalUserId) ?? 0) + 1;
+      chatCounters.set(externalUserId, next);
+      return next;
+    },
+
+    registerChatThread(externalUserId, thread) {
+      const record = chatThreadReference({
+        ...thread,
+        externalUserId,
+        status: thread.status ?? "open"
+      });
+      chatThreads.set(chatThreadKey(record.channelId, record.rootId), record);
+      return record;
+    },
+
+    getChatThread(channelId, rootId) {
+      return chatThreads.get(chatThreadKey(channelId, rootId)) ?? null;
+    },
+
+    closeChatThread(channelId, rootId, externalUserId = "") {
+      const key = chatThreadKey(channelId, rootId);
+      const record = chatThreads.get(key);
+      if (!record || (externalUserId && record.externalUserId !== externalUserId)) {
+        return null;
+      }
+      const nextRecord = {
+        ...record,
+        status: "closed",
+        activeRun: null
+      };
+      chatThreads.set(key, nextRecord);
+      return nextRecord;
+    },
+
+    rememberActiveRunForChat(channelId, rootId, run) {
+      const key = chatThreadKey(channelId, rootId);
+      const record = chatThreads.get(key);
+      if (!record) {
+        return null;
+      }
+      const nextRecord = {
+        ...record,
+        activeRun: runReference(run)
+      };
+      chatThreads.set(key, nextRecord);
+      return nextRecord;
+    },
+
+    clearActiveRunForChat(channelId, rootId, runId = "") {
+      const key = chatThreadKey(channelId, rootId);
+      const record = chatThreads.get(key);
+      if (!record) {
+        return null;
+      }
+      if (runId && record.activeRun?.id && record.activeRun.id !== runId) {
+        return record;
+      }
+      const nextRecord = {
+        ...record,
+        activeRun: null
+      };
+      chatThreads.set(key, nextRecord);
+      return nextRecord;
+    },
+
+    upsertWebhookRoute(externalUserId, route) {
+      const record = webhookRouteReference({
+        ...route,
+        externalUserId
+      });
+      webhookRoutes.set(externalUserId, record);
+      return record;
+    },
+
+    getWebhookRoute(externalUserId) {
+      return webhookRoutes.get(externalUserId) ?? null;
+    },
+
+    deleteWebhookRoute(externalUserId) {
+      const record = webhookRoutes.get(externalUserId) ?? null;
+      webhookRoutes.delete(externalUserId);
+      return record;
+    },
+
+    rememberInboundEvent(eventId) {
+      if (!eventId) {
+        return false;
+      }
+      if (inboundEvents.has(eventId)) {
+        return false;
+      }
+      inboundEvents.add(eventId);
+      return true;
     }
   };
 }
@@ -314,8 +429,42 @@ export function createNullCommandContextStore() {
     },
     clearActiveRun() {
       return emptyContext();
+    },
+    nextChatNumber() {
+      return 1;
+    },
+    registerChatThread(_externalUserId, thread) {
+      return chatThreadReference(thread);
+    },
+    getChatThread() {
+      return null;
+    },
+    closeChatThread() {
+      return null;
+    },
+    rememberActiveRunForChat() {
+      return null;
+    },
+    clearActiveRunForChat() {
+      return null;
+    },
+    upsertWebhookRoute(_externalUserId, route) {
+      return webhookRouteReference(route);
+    },
+    getWebhookRoute() {
+      return null;
+    },
+    deleteWebhookRoute() {
+      return null;
+    },
+    rememberInboundEvent() {
+      return true;
     }
   };
+}
+
+export function chatThreadKey(channelId, rootId) {
+  return `${channelId ?? ""}:${rootId ?? ""}`;
 }
 
 export function resolveWorkspaceReference(reference, context) {
@@ -408,6 +557,29 @@ function runReference(run) {
     id: run.id ?? run.runId ?? run.run_id ?? "",
     status: run.status ?? "",
     sessionId: run.sessionId ?? run.session_id ?? ""
+  };
+}
+
+function chatThreadReference(thread) {
+  return {
+    externalUserId: thread.externalUserId ?? "",
+    channelId: thread.channelId ?? thread.channel_id ?? "",
+    rootId: thread.rootId ?? thread.root_id ?? "",
+    sessionId: thread.sessionId ?? thread.session_id ?? "",
+    sessionName: thread.sessionName ?? thread.session_name ?? thread.title ?? thread.name ?? "",
+    title: thread.title ?? thread.sessionName ?? thread.session_name ?? thread.name ?? "",
+    number: Number.isInteger(thread.number) ? thread.number : Number.parseInt(thread.number ?? "0", 10) || 0,
+    status: thread.status ?? "open",
+    activeRun: thread.activeRun ? runReference(thread.activeRun) : null
+  };
+}
+
+function webhookRouteReference(route) {
+  return {
+    externalUserId: route.externalUserId ?? "",
+    channelId: route.channelId ?? route.channel_id ?? "",
+    rootId: route.rootId ?? route.root_id ?? "",
+    displayName: route.displayName ?? route.display_name ?? ""
   };
 }
 

@@ -14,5 +14,8 @@
     "lint": "./scripts/lint-bot.sh",
     "build": "./scripts/build-bot.sh",
     "verify:bot": "./scripts/verify-bot.sh"
+  },
+  "dependencies": {
+    "pg": "^8.22.0"
   }
 }

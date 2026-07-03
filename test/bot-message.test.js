@@ -18,7 +18,7 @@ test("shouldRespondToPost ignores bot-authored posts", () => {
   assert.equal(shouldRespondToPost({
     post: {
       user_id: "bot",
-      message: "status"
+      message: "!status"
     },
     botUserId: "bot",
     channelType: "D"
@@ -29,7 +29,7 @@ test("shouldRespondToPost accepts direct messages", () => {
   assert.equal(shouldRespondToPost({
     post: {
       user_id: "user-1",
-      message: "status"
+      message: "!status"
     },
     botUserId: "bot",
     channelType: "D"
@@ -58,7 +58,7 @@ test("handleBotMessage returns help by default", async () => {
 });
 
 test("handleBotMessage returns concise filter help", async () => {
-  const response = await handleBotMessage({ text: "help filters" });
+  const response = await handleBotMessage({ text: "!help filters" });
 
   assert.match(response, /resources.*kind.*family.*namespace.*health/s);
   assert.match(response, /health=healthy\|attention/);
@@ -71,12 +71,12 @@ test("handleBotMessage rejects slash-prefixed commands", async () => {
     text: "/status"
   });
 
-  assert.match(response, /without the slash/);
+  assert.match(response, /with `!`/);
 });
 
 test("handleBotMessage creates an AcornOps account link for direct login", async () => {
   const response = await handleBotMessage({
-    text: "login",
+    text: "!login",
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
@@ -99,7 +99,7 @@ test("handleBotMessage creates an AcornOps account link for direct login", async
 
 test("handleBotMessage refuses login without complete Mattermost identity", async () => {
   const response = await handleBotMessage({
-    text: "login",
+    text: "!login",
     userName: "alice",
     channelType: "D",
     acornOpsClient: {
@@ -115,7 +115,7 @@ test("handleBotMessage refuses login without complete Mattermost identity", asyn
 
 test("handleBotMessage reports login configuration when service token is missing", async () => {
   const response = await handleBotMessage({
-    text: "login",
+    text: "!login",
     userId: "mattermost-user-1",
     channelType: "D",
     acornOpsClient: {
@@ -134,7 +134,7 @@ test("handleBotMessage reports login configuration when service token is missing
 
 test("handleBotMessage keeps login direct-message only", async () => {
   const response = await handleBotMessage({
-    text: "@acorn-ops-bot login",
+    text: "@acorn-ops-bot !login",
     userId: "user-1",
     userName: "alice",
     channelType: "O",
@@ -150,7 +150,7 @@ test("handleBotMessage keeps login direct-message only", async () => {
 
 test("handleBotMessage status reports linked AcornOps identity", async () => {
   const response = await handleBotMessage({
-    text: "status",
+    text: "!status",
     userId: "mattermost-user-1",
     userName: "alice",
     acornOpsClient: {
@@ -177,7 +177,7 @@ test("handleBotMessage status reports linked AcornOps identity", async () => {
 
 test("handleBotMessage status tells unlinked users to run login", async () => {
   const response = await handleBotMessage({
-    text: "status",
+    text: "!status",
     userId: "mattermost-user-1",
     userName: "alice",
     acornOpsClient: {
@@ -195,7 +195,7 @@ test("handleBotMessage status tells unlinked users to run login", async () => {
 
 test("handleBotMessage reports status configuration when service token is missing", async () => {
   const response = await handleBotMessage({
-    text: "status",
+    text: "!status",
     userId: "mattermost-user-1",
     acornOpsClient: {
       canUseExternalIntegrationAuth() {
@@ -214,7 +214,7 @@ test("handleBotMessage reports status configuration when service token is missin
 test("handleBotMessage lists workspaces for a linked direct-message user", async () => {
   const commandContextStore = createInMemoryCommandContextStore();
   const response = await handleBotMessage({
-    text: "workspaces",
+    text: "!workspaces",
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
@@ -261,9 +261,56 @@ test("handleBotMessage lists workspaces for a linked direct-message user", async
   });
 });
 
+test("handleBotMessage adds workspace selection actions when callback URL is configured", async () => {
+  const result = await handleBotMessageResult({
+    text: "!workspaces",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "D",
+    botPublicBaseUrl: "https://bot.example.com/",
+    mattermostActionSecret: "action-secret",
+    acornOpsClient: {
+      async listWorkspaces() {
+        return {
+          items: [
+            {
+              id: "workspace-1",
+              name: "Platform"
+            }
+          ]
+        };
+      }
+    }
+  });
+
+  assert.match(result.message, /AcornOps workspaces:/);
+  assert.deepEqual(result.attachments, [
+    {
+      text: "Choose workspace",
+      actions: [
+        {
+          name: "1",
+          integration: {
+            url: "https://bot.example.com/mattermost/actions",
+            context: {
+              action: "select_workspace",
+              secret: "action-secret",
+              externalUserId: "mattermost-user-1",
+              workspace: {
+                id: "workspace-1",
+                name: "Platform"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]);
+});
+
 test("handleBotMessage reports no available workspaces", async () => {
   const response = await handleBotMessage({
-    text: "workspaces",
+    text: "!workspaces",
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
@@ -279,7 +326,7 @@ test("handleBotMessage reports no available workspaces", async () => {
 
 test("handleBotMessage allows workspace commands from channel mentions", async () => {
   const response = await handleBotMessage({
-    text: "@acorn-ops-bot workspaces",
+    text: "@acorn-ops-bot !workspaces",
     userId: "user-1",
     userName: "alice",
     channelType: "O",
@@ -295,7 +342,7 @@ test("handleBotMessage allows workspace commands from channel mentions", async (
 
 test("handleBotMessage treats bare workspace words as search", async () => {
   const response = await handleBotMessage({
-    text: "workspaces platform prod",
+    text: "!workspaces platform prod",
     userId: "mattermost-user-1",
     channelType: "D",
     acornOpsClient: {
@@ -311,7 +358,7 @@ test("handleBotMessage treats bare workspace words as search", async () => {
 
 test("handleBotMessage reports workspaces configuration when service token is missing", async () => {
   const response = await handleBotMessage({
-    text: "workspaces",
+    text: "!workspaces",
     userId: "mattermost-user-1",
     channelType: "D",
     acornOpsClient: {
@@ -330,7 +377,7 @@ test("handleBotMessage reports workspaces configuration when service token is mi
 
 test("handleBotMessage tells unlinked users to login before workspaces", async () => {
   const response = await handleBotMessage({
-    text: "workspaces",
+    text: "!workspaces",
     userId: "mattermost-user-1",
     channelType: "D",
     acornOpsClient: {
@@ -346,7 +393,7 @@ test("handleBotMessage tells unlinked users to login before workspaces", async (
 
 test("handleBotMessage reports backend workspace errors without leaking response body", async () => {
   const response = await handleBotMessage({
-    text: "workspaces",
+    text: "!workspaces",
     userId: "mattermost-user-1",
     channelType: "D",
     acornOpsClient: {
@@ -367,7 +414,7 @@ test("handleBotMessage shows workspace detail by remembered index without select
   ]);
 
   const response = await handleBotMessage({
-    text: "workspaces 1",
+    text: "!workspaces 1",
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
@@ -411,7 +458,7 @@ test("handleBotMessage selects current workspace with workspace index", async ()
   ]);
 
   const response = await handleBotMessage({
-    text: "workspace 1",
+    text: "!workspace 1",
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
@@ -443,7 +490,7 @@ test("handleBotMessage shows details for current workspace", async () => {
   });
 
   const response = await handleBotMessage({
-    text: "workspace",
+    text: "!workspace",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
@@ -477,7 +524,7 @@ test("handleBotMessage lists and selects generic targets", async () => {
   });
 
   const listResponse = await handleBotMessage({
-    text: "targets q=prod targetType=kubernetes",
+    text: "!targets q=prod targetType=kubernetes",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
@@ -506,7 +553,7 @@ test("handleBotMessage lists and selects generic targets", async () => {
   assert.match(listResponse, /1\. payments-prod \(target-1\) - Kubernetes, status: online/);
 
   const selectResponse = await handleBotMessage({
-    text: "target 1",
+    text: "!target 1",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
@@ -546,7 +593,7 @@ test("handleBotMessage creates chat sessions through generic target endpoint aft
   });
 
   const response = await handleBotMessage({
-    text: "chat new",
+    text: "!chat new",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
@@ -566,13 +613,14 @@ test("handleBotMessage creates chat sessions through generic target endpoint aft
     }
   });
 
-  assert.match(response, /Chat started in read-only mode/);
-  assert.equal(commandContextStore.get("mattermost-user-1").chatActive, true);
+  assert.match(response, /New chat has been started/);
+  assert.match(response, /Reply in the thread below/);
+  assert.equal(commandContextStore.get("mattermost-user-1").chatActive, false);
 });
 
 test("handleBotMessage asks for a workspace before clusters", async () => {
   const response = await handleBotMessage({
-    text: "clusters",
+    text: "!clusters",
     userId: "mattermost-user-1",
     channelType: "D",
     acornOpsClient: {
@@ -593,7 +641,7 @@ test("handleBotMessage lists clusters in the current workspace", async () => {
   });
 
   const response = await handleBotMessage({
-    text: "clusters",
+    text: "!clusters",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
@@ -632,7 +680,7 @@ test("handleBotMessage shows cluster detail by remembered index without selectin
     { id: "cluster-1", name: "Prod" }
   ]);
   const response = await handleBotMessage({
-    text: "clusters 1",
+    text: "!clusters 1",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
@@ -678,7 +726,7 @@ test("handleBotMessage selects a cluster and clears VM and session context", asy
   });
 
   const response = await handleBotMessage({
-    text: "cluster 1",
+    text: "!cluster 1",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
@@ -705,7 +753,7 @@ test("handleBotMessage selects a cluster and clears VM and session context", asy
 test("handleBotMessage lists resources for the selected cluster", async () => {
   const commandContextStore = selectedClusterContext();
   const response = await handleBotMessage({
-    text: "resources",
+    text: "!resources",
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "O",
@@ -738,7 +786,7 @@ test("handleBotMessage lists resources for the selected cluster", async () => {
 test("handleBotMessage lists findings for the selected VM", async () => {
   const commandContextStore = selectedVmContext();
   const response = await handleBotMessage({
-    text: "findings",
+    text: "!findings",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
@@ -771,7 +819,7 @@ test("handleBotMessage lists workspace investigations", async () => {
     name: "Platform"
   });
   const response = await handleBotMessage({
-    text: "investigations",
+    text: "!investigations",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
@@ -805,7 +853,7 @@ test("handleBotMessage lists VMs and selects one", async () => {
   });
 
   const listResponse = await handleBotMessage({
-    text: "vms",
+    text: "!vms",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
@@ -830,7 +878,7 @@ test("handleBotMessage lists VMs and selects one", async () => {
   assert.match(listResponse, /1\. App VM \(vm-1\)/);
 
   const selectResponse = await handleBotMessage({
-    text: "vm 1",
+    text: "!vm 1",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
@@ -858,7 +906,7 @@ test("handleBotMessage lists VMs and selects one", async () => {
 test("handleBotMessage creates session and posts read-only assistant question", async () => {
   const commandContextStore = selectedClusterContext();
   const response = await handleBotMessage({
-    text: "ask why is the pod unhealthy?",
+    text: "!ask why is the pod unhealthy?",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
@@ -918,7 +966,7 @@ test("handleBotMessage creates session and posts read-only assistant question", 
 test("handleBotMessage starts chat mode with chat new", async () => {
   const commandContextStore = selectedClusterContext();
   const response = await handleBotMessage({
-    text: "chat new Investigate API health",
+    text: "!chat new Investigate API health",
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
@@ -938,9 +986,9 @@ test("handleBotMessage starts chat mode with chat new", async () => {
     }
   });
 
-  assert.match(response, /Chat started in read-only mode/);
-  assert.match(response, /Send a question/);
-  assert.equal(commandContextStore.get("mattermost-user-1").chatActive, true);
+  assert.match(response, /New chat has been started/);
+  assert.match(response, /Reply in the thread below/);
+  assert.equal(commandContextStore.get("mattermost-user-1").chatActive, false);
   assert.deepEqual(commandContextStore.get("mattermost-user-1").currentSession, {
     id: "session-1",
     name: "Investigate API health"
@@ -949,10 +997,7 @@ test("handleBotMessage starts chat mode with chat new", async () => {
 
 test("handleBotMessage treats free text as a question while chat mode is active", async () => {
   const commandContextStore = selectedClusterContext();
-  commandContextStore.startChat("mattermost-user-1", {
-    id: "session-1",
-    title: "Investigate Prod"
-  });
+  const threadChat = registerThreadChat(commandContextStore);
 
   const response = await handleBotMessage({
     text: "why is the pod unhealthy?",
@@ -960,6 +1005,7 @@ test("handleBotMessage treats free text as a question while chat mode is active"
     userName: "alice",
     channelType: "D",
     commandContextStore,
+    threadChat,
     acornOpsClient: {
       async postSessionMessage(input, sessionId, body) {
         assert.equal(sessionId, "session-1");
@@ -1013,10 +1059,7 @@ test("handleBotMessage polls chat run before falling back", async () => {
 
   try {
     const commandContextStore = selectedClusterContext();
-    commandContextStore.startChat("mattermost-user-1", {
-      id: "session-1",
-      title: "Investigate Prod"
-    });
+    const threadChat = registerThreadChat(commandContextStore);
     let getRunCalls = 0;
 
     const response = await handleBotMessage({
@@ -1025,6 +1068,7 @@ test("handleBotMessage polls chat run before falling back", async () => {
       userName: "alice",
       channelType: "D",
       commandContextStore,
+      threadChat,
       acornOpsClient: {
         async postSessionMessage() {
           return {
@@ -1075,10 +1119,7 @@ test("handleBotMessage hides run details while chat run is still active", async 
 
   try {
     const commandContextStore = selectedClusterContext();
-    commandContextStore.startChat("mattermost-user-1", {
-      id: "session-1",
-      title: "Investigate Prod"
-    });
+    const threadChat = registerThreadChat(commandContextStore);
 
     const response = await handleBotMessage({
       text: "why is the pod unhealthy?",
@@ -1086,6 +1127,7 @@ test("handleBotMessage hides run details while chat run is still active", async 
       userName: "alice",
       channelType: "D",
       commandContextStore,
+      threadChat,
       acornOpsClient: {
         async postSessionMessage() {
           return {
@@ -1104,7 +1146,7 @@ test("handleBotMessage hides run details while chat run is still active", async 
     });
 
     assert.match(response, /I'll post the answer here when it's ready/);
-    assert.match(response, /Use `chat pause` before running bot commands/);
+    assert.match(response, /Reply in this thread/);
     assert.doesNotMatch(response, /Run id/);
     assert.doesNotMatch(response, /Message id/);
     assert.doesNotMatch(response, /Session:/);
@@ -1127,10 +1169,7 @@ test("handleBotMessageResult returns follow-up metadata for streamed chat runs",
 
   try {
     const commandContextStore = selectedClusterContext();
-    commandContextStore.startChat("mattermost-user-1", {
-      id: "session-1",
-      title: "Investigate Prod"
-    });
+    const threadChat = registerThreadChat(commandContextStore);
 
     const result = await handleBotMessageResult({
       text: "why is the pod unhealthy?",
@@ -1138,6 +1177,7 @@ test("handleBotMessageResult returns follow-up metadata for streamed chat runs",
       channelType: "D",
       sourceMessageId: "mattermost-post-1",
       commandContextStore,
+      threadChat,
       acornOpsClient: {
         async postSessionMessage() {
           return {
@@ -1164,10 +1204,12 @@ test("handleBotMessageResult returns follow-up metadata for streamed chat runs",
         },
         sessionId: "session-1",
         runId: "run-1",
-        messageId: "message-1"
+        messageId: "message-1",
+        channelId: "channel-1",
+        rootId: "root-1"
       }
     ]);
-    assert.deepEqual(commandContextStore.get("mattermost-user-1").activeRun, {
+    assert.deepEqual(commandContextStore.getChatThread("channel-1", "root-1").activeRun, {
       id: "run-1",
       status: "dispatching",
       sessionId: "session-1"
@@ -1180,11 +1222,8 @@ test("handleBotMessageResult returns follow-up metadata for streamed chat runs",
 
 test("handleBotMessage blocks a second chat question while a streamed run is active", async () => {
   const commandContextStore = selectedClusterContext();
-  commandContextStore.startChat("mattermost-user-1", {
-    id: "session-1",
-    title: "Investigate Prod"
-  });
-  commandContextStore.rememberActiveRun("mattermost-user-1", {
+  const threadChat = registerThreadChat(commandContextStore);
+  commandContextStore.rememberActiveRunForChat("channel-1", "root-1", {
     id: "run-1",
     sessionId: "session-1",
     status: "streaming"
@@ -1195,6 +1234,7 @@ test("handleBotMessage blocks a second chat question while a streamed run is act
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
+    threadChat,
     acornOpsClient: {
       async postSessionMessage() {
         throw new Error("postSessionMessage should not be called");
@@ -1213,10 +1253,7 @@ test("handleBotMessage uses the Mattermost post id as the chat idempotency key",
 
   try {
     const commandContextStore = selectedClusterContext();
-    commandContextStore.startChat("mattermost-user-1", {
-      id: "session-1",
-      title: "Investigate Prod"
-    });
+    const threadChat = registerThreadChat(commandContextStore);
     const clientMessageIds = [];
 
     const acornOpsClient = {
@@ -1252,6 +1289,7 @@ test("handleBotMessage uses the Mattermost post id as the chat idempotency key",
         channelType: "D",
         sourceMessageId,
         commandContextStore,
+        threadChat,
         acornOpsClient
       });
     }
@@ -1268,10 +1306,7 @@ test("handleBotMessage uses the Mattermost post id as the chat idempotency key",
 
 test("handleBotMessage correlates assistant replies to the accepted user message", async () => {
   const commandContextStore = selectedClusterContext();
-  commandContextStore.startChat("mattermost-user-1", {
-    id: "session-1",
-    title: "Investigate Prod"
-  });
+  const threadChat = registerThreadChat(commandContextStore);
 
   const response = await handleBotMessage({
     text: "why is the pod unhealthy?",
@@ -1279,6 +1314,7 @@ test("handleBotMessage correlates assistant replies to the accepted user message
     channelType: "D",
     sourceMessageId: "mattermost-post-1",
     commandContextStore,
+    threadChat,
     acornOpsClient: {
       async postSessionMessage() {
         return {
@@ -1317,10 +1353,7 @@ test("handleBotMessage correlates assistant replies to the accepted user message
 
 test("handleBotMessage reports AcornOps chat 400 reasons", async () => {
   const commandContextStore = selectedClusterContext();
-  commandContextStore.startChat("mattermost-user-1", {
-    id: "session-1",
-    title: "Investigate Prod"
-  });
+  const threadChat = registerThreadChat(commandContextStore);
 
   const response = await handleBotMessage({
     text: "why is the pod unhealthy?",
@@ -1328,6 +1361,7 @@ test("handleBotMessage reports AcornOps chat 400 reasons", async () => {
     userName: "alice",
     channelType: "D",
     commandContextStore,
+    threadChat,
     acornOpsClient: {
       async postSessionMessage() {
         throw new Error([
@@ -1348,77 +1382,66 @@ test("handleBotMessage reports AcornOps chat 400 reasons", async () => {
   assert.doesNotMatch(response, /Try rephrasing/);
 });
 
-test("handleBotMessage supports chat pause resume and end", async () => {
+test("handleBotMessage retires user-level chat pause and resume", async () => {
   const commandContextStore = selectedClusterContext();
-  commandContextStore.startChat("mattermost-user-1", {
-    id: "session-1",
-    title: "Investigate Prod"
-  });
 
   const pauseResponse = await handleBotMessage({
-    text: "chat pause",
+    text: "!chat pause",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
   });
-  assert.match(pauseResponse, /Chat paused/);
-  assert.equal(commandContextStore.get("mattermost-user-1").chatActive, false);
+  assert.match(pauseResponse, /do not need pause/);
 
   const resumeResponse = await handleBotMessage({
-    text: "chat resume",
+    text: "!chat resume",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
   });
-  assert.match(resumeResponse, /Chat resumed/);
-  assert.equal(commandContextStore.get("mattermost-user-1").chatActive, true);
+  assert.match(resumeResponse, /do not need resume/);
 
   const endResponse = await handleBotMessage({
-    text: "chat end",
+    text: "!chat end",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
   });
-  assert.match(endResponse, /Chat ended/);
-  assert.equal(commandContextStore.get("mattermost-user-1").chatActive, false);
-  assert.equal(commandContextStore.get("mattermost-user-1").currentSession, null);
+  assert.match(endResponse, /inside the chat thread/);
 });
 
-test("handleBotMessageResult emits an abort effect for chat end", async () => {
+test("handleBotMessageResult emits an abort effect for thread chat end", async () => {
   const commandContextStore = selectedClusterContext();
-  commandContextStore.startChat("mattermost-user-1", {
-    id: "session-1",
-    title: "Investigate Prod"
-  });
-  commandContextStore.rememberActiveRun("mattermost-user-1", {
+  const threadChat = registerThreadChat(commandContextStore);
+  commandContextStore.rememberActiveRunForChat("channel-1", "root-1", {
     id: "run-1",
     sessionId: "session-1",
     status: "streaming"
   });
 
   const result = await handleBotMessageResult({
-    text: "chat end",
+    text: "!chat end",
     userId: "mattermost-user-1",
     channelType: "D",
-    commandContextStore
+    commandContextStore,
+    threadChat
   });
 
-  assert.match(result.message, /Chat ended/);
+  assert.match(result.message, /Chat thread closed/);
   assert.deepEqual(result.effects, [
     {
       type: "abortActiveRun",
-      externalUserId: "mattermost-user-1"
+      externalUserId: "mattermost-user-1",
+      channelId: "channel-1",
+      rootId: "root-1"
     }
   ]);
-  assert.equal(commandContextStore.get("mattermost-user-1").activeRun, null);
+  assert.equal(commandContextStore.getChatThread("channel-1", "root-1").activeRun, null);
 });
 
-test("handleBotMessage treats status as assistant input while chat mode is active", async () => {
+test("handleBotMessage treats plain status as assistant input inside a chat thread", async () => {
   const commandContextStore = selectedClusterContext();
-  commandContextStore.startChat("mattermost-user-1", {
-    id: "session-1",
-    title: "Investigate Prod"
-  });
+  const threadChat = registerThreadChat(commandContextStore);
 
   const response = await handleBotMessage({
     text: "status",
@@ -1426,6 +1449,7 @@ test("handleBotMessage treats status as assistant input while chat mode is activ
     userName: "alice",
     channelType: "D",
     commandContextStore,
+    threadChat,
     acornOpsClient: {
       async postSessionMessage(input, sessionId, body) {
         assert.equal(sessionId, "session-1");
@@ -1454,27 +1478,24 @@ test("handleBotMessage treats status as assistant input while chat mode is activ
         };
       },
       async resolveExternalIntegrationLink() {
-        throw new Error("resolveExternalIntegrationLink should not be called while chat is active");
+        throw new Error("resolveExternalIntegrationLink should not be called inside a chat thread");
       }
     }
   });
 
   assert.equal(response, "Your AcornOps chat session is active.");
-  assert.equal(commandContextStore.get("mattermost-user-1").chatActive, true);
 });
 
-test("handleBotMessage treats resources as assistant input while chat mode is active", async () => {
+test("handleBotMessage treats plain resources as assistant input inside a chat thread", async () => {
   const commandContextStore = selectedClusterContext();
-  commandContextStore.startChat("mattermost-user-1", {
-    id: "session-1",
-    title: "Investigate Prod"
-  });
+  const threadChat = registerThreadChat(commandContextStore);
 
   const response = await handleBotMessage({
     text: "resources kind=Pod",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
+    threadChat,
     acornOpsClient: {
       async postSessionMessage(input, sessionId, body) {
         assert.equal(sessionId, "session-1");
@@ -1503,22 +1524,18 @@ test("handleBotMessage treats resources as assistant input while chat mode is ac
         };
       },
       async listKubernetesClusterResources() {
-        throw new Error("listKubernetesClusterResources should not be called while chat is active");
+        throw new Error("listKubernetesClusterResources should not be called inside a chat thread");
       }
     }
   });
 
   assert.equal(response, "I can inspect the selected target resources from here.");
-  assert.equal(commandContextStore.get("mattermost-user-1").chatActive, true);
 });
 
-test("handleBotMessage runs commands after chat pause", async () => {
+test("handleBotMessage runs main commands while a thread chat has an active run", async () => {
   const commandContextStore = selectedClusterContext();
-  commandContextStore.startChat("mattermost-user-1", {
-    id: "session-1",
-    title: "Investigate Prod"
-  });
-  commandContextStore.rememberActiveRun("mattermost-user-1", {
+  registerThreadChat(commandContextStore);
+  commandContextStore.rememberActiveRunForChat("channel-1", "root-1", {
     id: "run-1",
     sessionId: "session-1",
     status: "streaming"
@@ -1526,7 +1543,7 @@ test("handleBotMessage runs commands after chat pause", async () => {
   commandContextStore.pauseChat("mattermost-user-1");
 
   const response = await handleBotMessage({
-    text: "resources kind=Pod",
+    text: "!resources kind=Pod",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
@@ -1554,26 +1571,23 @@ test("handleBotMessage runs commands after chat pause", async () => {
 
   assert.match(response, /AcornOps resources:/);
   assert.match(response, /payments-api/);
-  assert.equal(commandContextStore.get("mattermost-user-1").chatActive, false);
-  assert.deepEqual(commandContextStore.get("mattermost-user-1").activeRun, {
+  assert.deepEqual(commandContextStore.getChatThread("channel-1", "root-1").activeRun, {
     id: "run-1",
     status: "streaming",
     sessionId: "session-1"
   });
 });
 
-test("handleBotMessage allows chat end while chat mode is active", async () => {
+test("handleBotMessage allows chat end inside a chat thread", async () => {
   const commandContextStore = selectedClusterContext();
-  commandContextStore.startChat("mattermost-user-1", {
-    id: "session-1",
-    title: "Investigate Prod"
-  });
+  const threadChat = registerThreadChat(commandContextStore);
 
   const response = await handleBotMessage({
-    text: "chat end",
+    text: "!chat end",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
+    threadChat,
     acornOpsClient: {
       async postSessionMessage() {
         throw new Error("postSessionMessage should not be called for chat end");
@@ -1581,9 +1595,8 @@ test("handleBotMessage allows chat end while chat mode is active", async () => {
     }
   });
 
-  assert.match(response, /Chat ended/);
-  assert.equal(commandContextStore.get("mattermost-user-1").chatActive, false);
-  assert.equal(commandContextStore.get("mattermost-user-1").currentSession, null);
+  assert.match(response, /Chat thread closed/);
+  assert.equal(commandContextStore.getChatThread("channel-1", "root-1").status, "closed");
 });
 
 function selectedClusterContext() {
@@ -1597,6 +1610,19 @@ function selectedClusterContext() {
     name: "Prod"
   });
   return commandContextStore;
+}
+
+function registerThreadChat(commandContextStore, options = {}) {
+  return commandContextStore.registerChatThread("mattermost-user-1", {
+    channelId: "channel-1",
+    rootId: "root-1",
+    sessionId: "session-1",
+    sessionName: "Investigate Prod",
+    title: "Investigate Prod",
+    number: 1,
+    status: "open",
+    ...options
+  });
 }
 
 function selectedVmContext() {

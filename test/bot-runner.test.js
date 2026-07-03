@@ -76,7 +76,7 @@ test("handlePostedEvent responds to direct message posts in the main timeline", 
           id: "post-1",
           channel_id: "channel-1",
           user_id: "user-1",
-          message: "status"
+          message: "!status"
         })
       }
     },
@@ -85,7 +85,7 @@ test("handlePostedEvent responds to direct message posts in the main timeline", 
 
   assert.equal(result.id, "reply-1");
   assert.equal(posts[0].channelId, "channel-1");
-  assert.equal(posts[0].rootId, undefined);
+  assert.equal(posts[0].rootId, "");
   assert.match(posts[0].message, /alice \(user-1\)/);
   assert.match(posts[0].message, /not linked/);
   assert.match(posts[0].message, /Run `login`/);
@@ -112,7 +112,7 @@ test("handlePostedEvent skips unmentioned channel posts", async () => {
           id: "post-1",
           channel_id: "channel-1",
           user_id: "user-1",
-          message: "status"
+          message: "!status"
         })
       }
     },
@@ -155,7 +155,7 @@ test("handlePostedEvent creates AcornOps account link for direct message login p
           id: "post-1",
           channel_id: "channel-1",
           user_id: "user-1",
-          message: "login"
+          message: "!login"
         })
       }
     },
@@ -210,7 +210,7 @@ test("handlePostedEvent lists workspaces for direct message posts", async () => 
           id: "post-1",
           channel_id: "channel-1",
           user_id: "user-1",
-          message: "workspaces"
+          message: "!workspaces"
         })
       }
     },
@@ -274,7 +274,7 @@ test("handlePostedEvent reuses workspace context across direct message posts", a
       id: "bot",
       username: "acorn-ops-bot"
     },
-    event: postedEvent("user-1", "workspaces"),
+    event: postedEvent("user-1", "!workspaces"),
     logger: quietLogger()
   });
   await handlePostedEvent({
@@ -285,7 +285,7 @@ test("handlePostedEvent reuses workspace context across direct message posts", a
       id: "bot",
       username: "acorn-ops-bot"
     },
-    event: postedEvent("user-1", "workspace 1"),
+    event: postedEvent("user-1", "!workspace 1"),
     logger: quietLogger()
   });
   const result = await handlePostedEvent({
@@ -296,7 +296,7 @@ test("handlePostedEvent reuses workspace context across direct message posts", a
       id: "bot",
       username: "acorn-ops-bot"
     },
-    event: postedEvent("user-1", "clusters"),
+    event: postedEvent("user-1", "!clusters"),
     logger: quietLogger()
   });
 
@@ -324,9 +324,14 @@ test("handlePostedEvent starts a run follower for pending chat answers", async (
       id: "cluster-1",
       name: "Prod"
     });
-    commandContextStore.startChat("user-1", {
-      id: "session-1",
-      title: "Investigate Prod"
+    commandContextStore.registerChatThread("user-1", {
+      channelId: "channel-1",
+      rootId: "root-chat-1",
+      sessionId: "session-1",
+      sessionName: "Investigate Prod",
+      title: "Investigate Prod",
+      number: 1,
+      status: "open"
     });
 
     await handlePostedEvent({
@@ -364,7 +369,10 @@ test("handlePostedEvent starts a run follower for pending chat answers", async (
         id: "bot",
         username: "acorn-ops-bot"
       },
-      event: postedEvent("user-1", "why is the pod unhealthy?", { postId: "post-chat-1" }),
+      event: postedEvent("user-1", "why is the pod unhealthy?", {
+        postId: "post-chat-1",
+        rootId: "root-chat-1"
+      }),
       logger: quietLogger()
     });
 
@@ -378,7 +386,8 @@ test("handlePostedEvent starts a run follower for pending chat answers", async (
         sessionId: "session-1",
         runId: "run-1",
         messageId: "message-1",
-        channelId: "channel-1"
+        channelId: "channel-1",
+        rootId: "root-chat-1"
       }
     ]);
   } finally {
@@ -391,11 +400,16 @@ test("handlePostedEvent aborts the active run before posting chat end confirmati
   const posts = [];
   const aborted = [];
   const commandContextStore = createInMemoryCommandContextStore();
-  commandContextStore.startChat("user-1", {
-    id: "session-1",
-    title: "Investigate Prod"
+  commandContextStore.registerChatThread("user-1", {
+    channelId: "channel-1",
+    rootId: "root-chat-1",
+    sessionId: "session-1",
+    sessionName: "Investigate Prod",
+    title: "Investigate Prod",
+    number: 1,
+    status: "open"
   });
-  commandContextStore.rememberActiveRun("user-1", {
+  commandContextStore.rememberActiveRunForChat("channel-1", "root-chat-1", {
     id: "run-1",
     sessionId: "session-1",
     status: "streaming"
@@ -413,20 +427,26 @@ test("handlePostedEvent aborts the active run before posting chat end confirmati
       start() {
         throw new Error("start should not be called");
       },
-      abort(externalUserId) {
-        aborted.push(externalUserId);
+      abort(externalUserId, options) {
+        aborted.push({ externalUserId, ...options });
       }
     },
     botUser: {
       id: "bot",
       username: "acorn-ops-bot"
     },
-    event: postedEvent("user-1", "chat end"),
+    event: postedEvent("user-1", "!chat end", { rootId: "root-chat-1" }),
     logger: quietLogger()
   });
 
-  assert.deepEqual(aborted, ["user-1"]);
-  assert.match(posts[0].message, /Chat ended/);
+  assert.deepEqual(aborted, [
+    {
+      externalUserId: "user-1",
+      channelId: "channel-1",
+      rootId: "root-chat-1"
+    }
+  ]);
+  assert.match(posts[0].message, /Chat thread closed/);
 });
 
 function fakeClient(overrides = {}) {
@@ -469,7 +489,7 @@ function restoreEnvValue(name, previousValue) {
   }
 }
 
-function postedEvent(userId, message, { postId = `post-${message}` } = {}) {
+function postedEvent(userId, message, { postId = `post-${message}`, rootId = "" } = {}) {
   return {
     event: "posted",
     data: {
@@ -478,6 +498,7 @@ function postedEvent(userId, message, { postId = `post-${message}` } = {}) {
       post: JSON.stringify({
         id: postId,
         channel_id: "channel-1",
+        root_id: rootId,
         user_id: userId,
         message
       })

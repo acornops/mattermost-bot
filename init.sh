@@ -15,5 +15,5 @@ cat <<'MSG'
 Initialization complete.
 
 Project direction: production Mattermost ChatOps bot for authenticating users to AcornOps through external integrations.
-Next action: live-smoke workspace, target, resource, finding, chat-mode, and SSE follow-up flows against the local stack.
+Next action: live-smoke ! commands, workspace buttons, threaded chats, and signed webhook alerts against the local stack.
 MSG

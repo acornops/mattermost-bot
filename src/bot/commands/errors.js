@@ -50,10 +50,10 @@ export function chatMessageErrorText(error) {
     const details = acornOpsErrorDetails(error);
     const reason = [details.code, details.message].filter(Boolean).join(": ");
     if (reason) {
-      return `AcornOps could not start the read-only chat run (${reason}). Use \`chat pause\` before running bot commands like \`status\`, \`resources\`, or \`findings\`.`;
+      return `AcornOps could not start the read-only chat run (${reason}). Reply in this thread to try again, or use \`!chat end\` to close it.`;
     }
 
-    return "AcornOps could not start the read-only chat run (HTTP 400). Use `chat pause` before running bot commands like `status`, `resources`, or `findings`; check the AcornOps logs for the rejected request reason.";
+    return "AcornOps could not start the read-only chat run (HTTP 400). Reply in this thread to try again, or use `!chat end` to close it; check the AcornOps logs for the rejected request reason.";
   }
 
   return dataErrorText(error, "chat message");

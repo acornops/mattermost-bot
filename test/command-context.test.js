@@ -161,3 +161,60 @@ test("command context tracks active and paused chat sessions", () => {
   assert.equal(store.get("user-1").latestRun, null);
   assert.equal(store.get("user-1").activeRun, null);
 });
+
+test("command context tracks chat threads and per-thread active runs", () => {
+  const store = createInMemoryCommandContextStore();
+
+  assert.equal(store.nextChatNumber("user-1"), 1);
+  assert.equal(store.nextChatNumber("user-1"), 2);
+  const thread = store.registerChatThread("user-1", {
+    channelId: "channel-1",
+    rootId: "root-1",
+    sessionId: "session-1",
+    sessionName: "Investigate Prod",
+    title: "Investigate Prod",
+    number: 2
+  });
+
+  assert.deepEqual(thread, {
+    externalUserId: "user-1",
+    channelId: "channel-1",
+    rootId: "root-1",
+    sessionId: "session-1",
+    sessionName: "Investigate Prod",
+    title: "Investigate Prod",
+    number: 2,
+    status: "open",
+    activeRun: null
+  });
+  store.rememberActiveRunForChat("channel-1", "root-1", {
+    id: "run-1",
+    status: "streaming",
+    sessionId: "session-1"
+  });
+  assert.equal(store.getChatThread("channel-1", "root-1").activeRun.id, "run-1");
+  store.clearActiveRunForChat("channel-1", "root-1", "run-1");
+  assert.equal(store.getChatThread("channel-1", "root-1").activeRun, null);
+  store.closeChatThread("channel-1", "root-1", "user-1");
+  assert.equal(store.getChatThread("channel-1", "root-1").status, "closed");
+});
+
+test("command context tracks user-level webhook routes and inbound event ids", () => {
+  const store = createInMemoryCommandContextStore();
+
+  assert.deepEqual(store.upsertWebhookRoute("user-1", {
+    channelId: "channel-1",
+    rootId: "root-1",
+    displayName: "alice"
+  }), {
+    externalUserId: "user-1",
+    channelId: "channel-1",
+    rootId: "root-1",
+    displayName: "alice"
+  });
+  assert.equal(store.getWebhookRoute("user-1").channelId, "channel-1");
+  assert.equal(store.rememberInboundEvent("event-1"), true);
+  assert.equal(store.rememberInboundEvent("event-1"), false);
+  assert.equal(store.deleteWebhookRoute("user-1").channelId, "channel-1");
+  assert.equal(store.getWebhookRoute("user-1"), null);
+});

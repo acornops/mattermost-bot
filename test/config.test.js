@@ -13,7 +13,13 @@ test("readBotConfig applies local development defaults", () => {
     mattermostToken: "",
     mattermostBotUsername: DEFAULT_MATTERMOST_BOT_USERNAME,
     acornOpsUrl: DEFAULT_ACORNOPS_API_BASE_URL,
-    externalIntegrationServiceToken: ""
+    externalIntegrationServiceToken: "",
+    botDatabaseUrl: "",
+    botHttpHost: "0.0.0.0",
+    botHttpPort: 0,
+    botPublicBaseUrl: "",
+    mattermostActionSecret: "",
+    acornOpsWebhookSecret: ""
   });
 });
 
@@ -50,4 +56,22 @@ test("readBotConfig ignores the old Mattermost chat service token name", () => {
   });
 
   assert.equal(config.externalIntegrationServiceToken, "");
+});
+
+test("readBotConfig reads bot persistence and inbound HTTP configuration", () => {
+  const config = readBotConfig({
+    BOT_DATABASE_URL: "postgres://bot:secret@db/acornops_bot",
+    BOT_HTTP_HOST: "127.0.0.1",
+    BOT_HTTP_PORT: "8090",
+    BOT_PUBLIC_BASE_URL: "https://bot.example.com",
+    MATTERMOST_ACTION_SECRET: "mattermost-secret",
+    ACORNOPS_WEBHOOK_SECRET: "webhook-secret"
+  });
+
+  assert.equal(config.botDatabaseUrl, "postgres://bot:secret@db/acornops_bot");
+  assert.equal(config.botHttpHost, "127.0.0.1");
+  assert.equal(config.botHttpPort, 8090);
+  assert.equal(config.botPublicBaseUrl, "https://bot.example.com");
+  assert.equal(config.mattermostActionSecret, "mattermost-secret");
+  assert.equal(config.acornOpsWebhookSecret, "webhook-secret");
 });

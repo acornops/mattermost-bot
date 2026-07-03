@@ -57,6 +57,45 @@ test("createPost calls Mattermost posts API with bot token", async () => {
   });
 });
 
+test("createPost can include props and attachments", async () => {
+  const calls = [];
+  const client = new MattermostClient({
+    baseUrl: "http://mattermost",
+    token: "bot-token",
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return okResponse({ id: "post-1" });
+    }
+  });
+
+  await client.createPost({
+    channelId: "channel-1",
+    message: "choose",
+    props: { from_bot: true },
+    attachments: [
+      {
+        text: "Choose workspace",
+        actions: [{ name: "1" }]
+      }
+    ]
+  });
+
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    channel_id: "channel-1",
+    message: "choose",
+    root_id: "",
+    props: {
+      from_bot: true,
+      attachments: [
+        {
+          text: "Choose workspace",
+          actions: [{ name: "1" }]
+        }
+      ]
+    }
+  });
+});
+
 test("request returns the raw response for non-JSON handling", async () => {
   const response = rawResponse({ status: 202, text: "accepted" });
   const client = new MattermostClient({

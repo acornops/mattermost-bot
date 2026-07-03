@@ -359,6 +359,111 @@
       },
       "evidence": "On 2026-07-01, renamed active Mattermost runtime env vars to MATTERMOST_URL, MATTERMOST_BOT_TOKEN, and MATTERMOST_BOT_USERNAME, and renamed active chat timing knobs to CHAT_RUN_POLL_ATTEMPTS, CHAT_RUN_POLL_INTERVAL_MS, RUN_STREAM_RECONNECT_ATTEMPTS, RUN_STREAM_RECONNECT_DELAY_MS, RUN_STREAM_FALLBACK_POLL_INTERVAL_MS, and RUN_STREAM_FALLBACK_POLL_MAX_MS. Added Dockerfile, .dockerignore, docker-compose.yml, and scripts/verify-docker.sh. Baseline ./init.sh passed before changes with harness verification, lint, build, and 92 tests. npm test passed after changes with 93 tests. Initial Docker verification exposed that test/env.test.js used macOS-specific /private/tmp; the test now uses os.tmpdir(). Final npm test passed with 93 tests. docker-compose.yml provides host-local defaults for MATTERMOST_URL and ACORNOPS_API_BASE_URL through host.docker.internal. Final ./scripts/verify-docker.sh passed after building the verify target, running npm run verify:bot inside node:22-bookworm-slim with 93 tests, and building acornops-mattermost-bot:local.",
       "notes": "Full image publishing, environment templates, Compose, and Kubernetes orchestration remain in acornops-deployment. The bot should run as a single active replica until command context and SSE run-following state move to shared TTL storage. docker-compose.yml is a local developer convenience only; production Compose/Kubernetes orchestration still belongs in acornops-deployment."
+    },
+    {
+      "id": "B09",
+      "priority": 17,
+      "area": "bot",
+      "title": "Require bang-prefixed bot commands",
+      "user_visible_behavior": "A Mattermost user invokes commands as !login, !workspaces, !workspace 1, and !chat new, while command arguments remain unprefixed.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus local command smoke when services are available",
+        "steps": [
+          "Require the first command word to start with ! for normal bot commands.",
+          "Keep command arguments unchanged after the command word, for example !chat new.",
+          "Continue rejecting slash-prefixed input with guidance to use !.",
+          "Return concise guidance for main bot messages that omit !.",
+          "Allow registered chat-thread replies to be sent as assistant questions without !.",
+          "Update tests, help text, docs, and run ./init.sh."
+        ]
+      },
+      "evidence": "On 2026-07-03, changed command parsing so normal bot commands require a ! prefix on the command word only, while arguments remain unchanged. Slash-prefixed input now guides users to use !, and unprefixed main-conversation messages nudge users toward !help. Registered chat-thread replies are routed as assistant questions without requiring !. Added parser, message, runner, and docs coverage. Baseline ./init.sh passed before changes with 93 tests. Final ./init.sh passed with harness verification, lint, build, and 104 tests.",
+      "notes": "This is the first step in the threaded multi-chat and webhook UX roadmap."
+    },
+    {
+      "id": "B10",
+      "priority": 18,
+      "area": "bot",
+      "title": "Add persistent threaded multi-chat routing",
+      "user_visible_behavior": "A Mattermost user can start multiple AcornOps chats, each represented by its own Mattermost thread, and replies in each thread continue the correct AcornOps session.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus local threaded-chat smoke when services are available",
+        "steps": [
+          "Add Postgres-backed bot state using BOT_DATABASE_URL, with in-memory fallback for local tests.",
+          "Persist lightweight user context, remembered command references, chat thread mappings, active runs, user-level webhook routes, and inbound idempotency records.",
+          "Make !chat new create an AcornOps session and a Mattermost thread root.",
+          "Route replies by Mattermost channel_id and root_id to the matching AcornOps session.",
+          "Post assistant replies and SSE follow-ups into the chat thread.",
+          "Make !chat end inside a chat thread close only that chat.",
+          "Add storage and runner tests, then run ./init.sh."
+        ]
+      },
+      "evidence": "On 2026-07-03, added Postgres-backed command context behind BOT_DATABASE_URL with in-memory fallback, schema migrations, user context persistence, chat thread mappings, active run records, user-level webhook routes, and inbound event idempotency. Reworked !chat new to create an AcornOps session plus a Mattermost thread root, route replies by channel_id and root_id, post assistant replies and SSE follow-ups into the correct thread, restrict first-version participation to the creating Mattermost user, and make !chat end close only the current thread. Baseline ./init.sh passed before changes with 93 tests. Final ./init.sh passed with harness verification, lint, build, and 104 tests.",
+      "notes": "Thread participation is restricted to the Mattermost user who created the chat in the first version."
+    },
+    {
+      "id": "B11",
+      "priority": 19,
+      "area": "bot",
+      "title": "Add inbound HTTP server for actions and webhooks",
+      "user_visible_behavior": "The bot can receive Mattermost interactive action callbacks and signed AcornOps webhook deliveries on a single HTTP listener.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus local HTTP smoke when services are available",
+        "steps": [
+          "Add BOT_HTTP_HOST, BOT_HTTP_PORT, BOT_PUBLIC_BASE_URL, MATTERMOST_ACTION_SECRET, and AcornOps webhook signing secret configuration.",
+          "Expose GET /healthz.",
+          "Expose POST /mattermost/actions for interactive buttons and menus.",
+          "Expose POST /acornops/webhooks for signed AcornOps events.",
+          "Update Docker and Compose to expose the optional HTTP port.",
+          "Add HTTP routing, signature, and idempotency tests, then run ./init.sh."
+        ]
+      },
+      "evidence": "On 2026-07-03, added a built-in Node HTTP listener with GET /healthz, POST /mattermost/actions, and POST /acornops/webhooks. Added BOT_HTTP_HOST, BOT_HTTP_PORT, BOT_PUBLIC_BASE_URL, MATTERMOST_ACTION_SECRET, and ACORNOPS_WEBHOOK_SECRET configuration. Updated Docker and Compose to expose the optional bot HTTP port. Added tests for HTTP construction, Mattermost action verification, AcornOps webhook signature checks, stale timestamp rejection, duplicate event handling, route resolution, and alert posting. Baseline ./init.sh passed before changes with 93 tests. Final ./init.sh passed with harness verification, lint, build, and 104 tests.",
+      "notes": "Mattermost and AcornOps must be able to reach BOT_PUBLIC_BASE_URL in deployments that enable callbacks."
+    },
+    {
+      "id": "B12",
+      "priority": 20,
+      "area": "bot",
+      "title": "Add interactive workspace selection",
+      "user_visible_behavior": "A Mattermost user running !workspaces sees numbered workspace text plus Mattermost buttons that can select a workspace without typing !workspace 1.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus local Mattermost button smoke when services are available",
+        "steps": [
+          "Attach workspace selection actions to !workspaces responses for the first practical set of results.",
+          "Verify Mattermost action callbacks with MATTERMOST_ACTION_SECRET.",
+          "Ensure the acting Mattermost user matches the user who requested the workspace list.",
+          "Update the user's current workspace and return an ephemeral confirmation.",
+          "Add action payload and callback tests, then run ./init.sh."
+        ]
+      },
+      "evidence": "On 2026-07-03, !workspaces kept the numbered text list and gained Mattermost workspace selection button attachments when BOT_PUBLIC_BASE_URL is configured. Button callbacks verify MATTERMOST_ACTION_SECRET and the acting Mattermost user, update that user's current workspace, and return an ephemeral confirmation. Added action payload and callback tests. Baseline ./init.sh passed before changes with 93 tests. Final ./init.sh passed with harness verification, lint, build, and 104 tests.",
+      "notes": "This is the first interactive Mattermost UX layer; richer target, chat, and alert actions can follow."
+    },
+    {
+      "id": "B13",
+      "priority": 21,
+      "area": "bot",
+      "title": "Add user-level AcornOps webhook alert routing",
+      "user_visible_behavior": "A linked Mattermost user can configure a personal webhook destination, and signed AcornOps webhook alerts are posted to that user's configured Mattermost destination.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus signed AcornOps webhook smoke when services are available",
+        "steps": [
+          "Add !webhook connect, !webhook status, and !webhook disconnect commands.",
+          "Persist user-level webhook routes in bot state.",
+          "Verify AcornOps-Timestamp and AcornOps-Signature on webhook deliveries.",
+          "Deduplicate AcornOps-Event-Id values.",
+          "Resolve the affected user-level webhook route and post a concise alert message.",
+          "Add command, storage, signature, idempotency, and alert-posting tests, then run ./init.sh."
+        ]
+      },
+      "evidence": "On 2026-07-03, added user-level !webhook connect, !webhook status, and !webhook disconnect commands, persisted webhook routes in bot state, verified AcornOps-Timestamp and AcornOps-Signature for incoming webhook deliveries, deduplicated AcornOps-Event-Id, resolved user-level routes, and posted concise Mattermost alerts. Added command, storage, signature, idempotency, and alert-posting tests. Baseline ./init.sh passed before changes with 93 tests. Final ./init.sh passed with harness verification, lint, build, and 104 tests.",
+      "notes": "AcornOps webhook registration or management may require coordinated control-plane work if external integrations cannot create user-level subscriptions yet."
     }
   ]
 }

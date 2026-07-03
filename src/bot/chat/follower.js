@@ -16,12 +16,13 @@ export function createRunFollowerRegistry({
   const active = new Map();
 
   return {
-    start({ identity, sessionId, runId, messageId = "", channelId }) {
+    start({ identity, sessionId, runId, messageId = "", channelId, rootId = "" }) {
       if (!identity?.externalUserId || !runId || !sessionId || !channelId) {
         return false;
       }
 
-      if (active.has(identity.externalUserId)) {
+      const key = activeKey(identity.externalUserId, channelId, rootId);
+      if (active.has(key)) {
         return false;
       }
 
@@ -32,15 +33,22 @@ export function createRunFollowerRegistry({
         runId,
         messageId,
         channelId,
+        rootId,
+        key,
         controller,
         finalPosted: false
       };
-      active.set(identity.externalUserId, entry);
-      commandContextStore.rememberActiveRun?.(identity.externalUserId, {
+      active.set(key, entry);
+      const activeRun = {
         id: runId,
         sessionId,
         status: "streaming"
-      });
+      };
+      if (rootId) {
+        commandContextStore.rememberActiveRunForChat?.(channelId, rootId, activeRun);
+      } else {
+        commandContextStore.rememberActiveRun?.(identity.externalUserId, activeRun);
+      }
 
       followRun({
         entry,
@@ -62,19 +70,28 @@ export function createRunFollowerRegistry({
       return true;
     },
 
-    abort(externalUserId) {
-      const entry = active.get(externalUserId);
+    abort(externalUserId, { channelId = "", rootId = "" } = {}) {
+      const key = activeKey(externalUserId, channelId, rootId);
+      const entry = active.get(key);
       if (entry) {
         entry.controller.abort();
-        active.delete(externalUserId);
+        active.delete(key);
       }
-      commandContextStore.clearActiveRun?.(externalUserId);
+      if (rootId) {
+        commandContextStore.clearActiveRunForChat?.(channelId, rootId);
+      } else {
+        commandContextStore.clearActiveRun?.(externalUserId);
+      }
     },
 
-    has(externalUserId) {
-      return active.has(externalUserId);
+    has(externalUserId, { channelId = "", rootId = "" } = {}) {
+      return active.has(activeKey(externalUserId, channelId, rootId));
     }
   };
+}
+
+function activeKey(externalUserId, channelId = "", rootId = "") {
+  return rootId ? `${externalUserId}:${channelId}:${rootId}` : externalUserId;
 }
 
 async function followRun({
@@ -158,8 +175,12 @@ async function followRun({
     return;
   }
 
-  active.delete(entry.identity.externalUserId);
-  commandContextStore.clearActiveRun?.(entry.identity.externalUserId, entry.runId);
+  active.delete(entry.key);
+  if (entry.rootId) {
+    commandContextStore.clearActiveRunForChat?.(entry.channelId, entry.rootId, entry.runId);
+  } else {
+    commandContextStore.clearActiveRun?.(entry.identity.externalUserId, entry.runId);
+  }
 }
 
 async function streamUntilTerminal({ acornOpsClient, entry }) {
@@ -235,12 +256,17 @@ async function postTerminalResult({
     if (!entry.controller.signal.aborted && message) {
       await postFollowUp({
         channelId: entry.channelId,
-        message
+        message,
+        rootId: entry.rootId
       });
     }
   } finally {
-    active.delete(entry.identity.externalUserId);
-    commandContextStore.clearActiveRun?.(entry.identity.externalUserId, entry.runId);
+    active.delete(entry.key);
+    if (entry.rootId) {
+      commandContextStore.clearActiveRunForChat?.(entry.channelId, entry.rootId, entry.runId);
+    } else {
+      commandContextStore.clearActiveRun?.(entry.identity.externalUserId, entry.runId);
+    }
   }
 }
 

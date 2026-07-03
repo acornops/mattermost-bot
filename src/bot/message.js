@@ -55,28 +55,28 @@ const commandReferenceUrl = "https://github.com/acornops/mattermost-bot/wiki/Mat
 
 const helpText = [
   "AcornOps commands:",
-  "Flow: `login` -> `workspaces` -> `workspace 1` -> `targets` -> `target 1` -> `chat new`.",
+  "Flow: `!login` -> `!workspaces` -> `!workspace 1` -> `!targets` -> `!target 1` -> `!chat new`.",
   "",
   "Common commands:",
-  "- `login` connects your Mattermost account to AcornOps.",
-  "- `status` shows account and current context.",
-  "- `workspaces` lists workspaces; `workspace 1` selects one.",
-  "- `targets` lists Kubernetes and VM targets; `target 1` selects one.",
-  "- `resources`, `findings`, and `investigations` inspect the selected context.",
-  "- `chat new` starts a read-only AcornOps chat for the selected target.",
-  "- `chat pause`, `chat resume`, and `chat end` control chat mode.",
-  "- `help filters` shows common filters.",
+  "- `!login` connects your Mattermost account to AcornOps.",
+  "- `!status` shows account and current context.",
+  "- `!workspaces` lists workspaces; `!workspace 1` selects one.",
+  "- `!targets` lists Kubernetes and VM targets; `!target 1` selects one.",
+  "- `!resources`, `!findings`, and `!investigations` inspect the selected context.",
+  "- `!chat new` starts a read-only AcornOps chat thread for the selected target.",
+  "- `!chat end` closes the current chat thread when sent inside that thread.",
+  "- `!help filters` shows common filters.",
   "",
   `More commands, filters, and examples: ${commandReferenceUrl}`
 ].join("\n");
 
 const filterHelpText = [
   "AcornOps filter examples:",
-  "- `workspaces q=platform`",
-  "- `targets q=prod targetType=kubernetes`",
-  "- `resources kind=Pod namespace=payments health=attention`",
-  "- `findings severity=critical namespace=payments`",
-  "- `investigations severity=warning clusterId=cluster-id namespace=default`",
+  "- `!workspaces q=platform`",
+  "- `!targets q=prod targetType=kubernetes`",
+  "- `!resources kind=Pod namespace=payments health=attention`",
+  "- `!findings severity=critical namespace=payments`",
+  "- `!investigations severity=warning clusterId=cluster-id namespace=default`",
   "",
   "Supported filters:",
   "- `workspaces`: `q`",
@@ -132,33 +132,46 @@ export async function handleBotMessageResult({
   channelType = "",
   acornOpsClient = null,
   commandContextStore = nullCommandContextStore,
-  sourceMessageId = ""
+  sourceMessageId = "",
+  threadChat = null,
+  channelId = "",
+  rootId = "",
+  botPublicBaseUrl = "",
+  mattermostActionSecret = ""
 }) {
   const normalizedText = normalizeBotText(text, botUsername);
-  const action = firstCommandWord(normalizedText) || "help";
-  const commandArgs = commandArguments(normalizedText);
-
-  if (action.startsWith("/")) {
-    return "Commands do not use `/`. Try the command again without the slash, for example `clusters`.";
-  }
-
-  const chatModeRoute = activeChatModeRoute({
-    action,
-    commandArgs,
-    normalizedText,
-    userId,
-    commandContextStore
-  });
-  if (chatModeRoute.asQuestion) {
-    return handleChatQuestion({
-      question: normalizedText,
+  const rawAction = firstCommandWord(normalizedText);
+  if (threadChat) {
+    return handleThreadChatMessage({
+      normalizedText,
+      rawAction,
       userId,
       userName,
       channelType,
       acornOpsClient,
       commandContextStore,
-      sourceMessageId
+      sourceMessageId,
+      threadChat
     });
+  }
+
+  if (!rawAction) {
+    return helpText;
+  }
+
+  if (rawAction.startsWith("/")) {
+    return "Commands do not use `/`. Try the command again with `!`, for example `!targets`.";
+  }
+
+  if (!rawAction.startsWith("!")) {
+    return "Commands now start with `!`. Try `!help` for the common workflow.";
+  }
+
+  const action = rawAction.slice(1);
+  const commandArgs = commandArguments(normalizedText);
+
+  if (!action) {
+    return "Commands now start with `!`. Try `!help` for the common workflow.";
   }
 
   if (action === "help") {
@@ -197,6 +210,8 @@ export async function handleBotMessageResult({
       channelType,
       acornOpsClient,
       commandContextStore,
+      botPublicBaseUrl,
+      mattermostActionSecret
     });
   }
 
@@ -343,6 +358,17 @@ export async function handleBotMessageResult({
     });
   }
 
+  if (action === "webhook") {
+    return handleWebhook({
+      commandArgs,
+      userId,
+      userName,
+      channelId,
+      rootId,
+      commandContextStore
+    });
+  }
+
   if (action === "messages") {
     return handleMessages({
       commandArgs,
@@ -356,7 +382,7 @@ export async function handleBotMessageResult({
 
   if (action === "ask") {
     return handleChatQuestion({
-      question: normalizedText.replace(/^ask\s+/i, "").trim(),
+      question: normalizedText.replace(/^!ask\s+/i, "").trim(),
       userId,
       userName,
       channelType,
@@ -366,6 +392,70 @@ export async function handleBotMessageResult({
   }
 
   return `Unknown AcornOps bot command: ${action}\n\n${helpText}`;
+}
+
+async function handleThreadChatMessage({
+  normalizedText,
+  rawAction,
+  userId,
+  userName,
+  channelType,
+  acornOpsClient,
+  commandContextStore,
+  sourceMessageId,
+  threadChat
+}) {
+  if (threadChat.externalUserId !== userId) {
+    return "This AcornOps chat thread belongs to another Mattermost user.";
+  }
+
+  if (threadChat.status === "closed") {
+    return "This AcornOps chat thread is closed. Start a new one from the main bot conversation with `!chat new`.";
+  }
+
+  if (!normalizedText.trim()) {
+    return "Reply with a question, or send `!chat end` to close this thread.";
+  }
+
+  if (rawAction?.startsWith("/")) {
+    return "Commands do not use `/`. In this chat thread, reply with a question or send `!chat end`.";
+  }
+
+  if (rawAction?.startsWith("!")) {
+    const action = rawAction.slice(1);
+    const commandArgs = commandArguments(normalizedText);
+    if (action === "chat" && commandArgs[0] === "end") {
+      commandContextStore.closeChatThread(
+        threadChat.channelId,
+        threadChat.rootId,
+        threadChat.externalUserId
+      );
+      return {
+        message: "Chat thread closed. The AcornOps session remains available in the AcornOps UI.",
+        effects: [
+          {
+            type: "abortActiveRun",
+            externalUserId: threadChat.externalUserId,
+            channelId: threadChat.channelId,
+            rootId: threadChat.rootId
+          }
+        ]
+      };
+    }
+
+    return "This chat thread accepts questions or `!chat end`. Run other bot commands in the main bot conversation.";
+  }
+
+  return handleChatQuestion({
+    question: normalizedText,
+    userId,
+    userName,
+    channelType,
+    acornOpsClient,
+    commandContextStore,
+    sourceMessageId,
+    threadChat
+  });
 }
 
 async function handleLogin({ userId, userName, acornOpsClient }) {
@@ -438,6 +528,8 @@ async function handleWorkspaces({
   channelType,
   acornOpsClient,
   commandContextStore,
+  botPublicBaseUrl,
+  mattermostActionSecret
 }) {
   const parsedArgs = parseListArgs(commandArgs, ["q"]);
   if (parsedArgs.error) {
@@ -469,12 +561,25 @@ async function handleWorkspaces({
   try {
     const page = await acornOpsClient.listWorkspaces(auth.identity, parsedArgs.filters);
     commandContextStore.rememberWorkspaces(auth.identity.externalUserId, page.items ?? []);
-    return formatWorkspacePage({
+    const message = formatWorkspacePage({
       page,
       context: commandContextStore.get(auth.identity.externalUserId),
       userId,
       userName
     });
+    const attachments = workspaceSelectionAttachments({
+      page,
+      identity: auth.identity,
+      botPublicBaseUrl,
+      mattermostActionSecret
+    });
+    if (attachments.length > 0) {
+      return {
+        message,
+        attachments
+      };
+    }
+    return message;
   } catch (error) {
     return workspaceErrorText(error);
   }
@@ -536,6 +641,46 @@ async function handleTargets({
   } catch (error) {
     return dataErrorText(error, "targets");
   }
+}
+
+function workspaceSelectionAttachments({
+  page,
+  identity,
+  botPublicBaseUrl,
+  mattermostActionSecret
+}) {
+  const items = Array.isArray(page?.items) ? page.items : [];
+  const actionUrl = botPublicBaseUrl
+    ? `${botPublicBaseUrl.replace(/\/+$/, "")}/mattermost/actions`
+    : "";
+  if (!actionUrl || items.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      text: "Choose workspace",
+      actions: items.slice(0, 5).map((workspace, index) => {
+        const id = workspace.id ?? "";
+        const name = workspace.name ?? workspace.displayName ?? workspace.slug ?? id;
+        return {
+          name: String(index + 1),
+          integration: {
+            url: actionUrl,
+            context: {
+              action: "select_workspace",
+              secret: mattermostActionSecret,
+              externalUserId: identity.externalUserId,
+              workspace: {
+                id,
+                name
+              }
+            }
+          }
+        };
+      })
+    }
+  ];
 }
 
 async function handleTarget({
@@ -1296,6 +1441,61 @@ async function handleMessages({
   }
 }
 
+async function handleWebhook({
+  commandArgs,
+  userId,
+  userName,
+  channelId,
+  rootId,
+  commandContextStore
+}) {
+  const identity = externalIdentityForUserId(userId);
+  if (!identity) {
+    return missingIdentityText();
+  }
+
+  const subcommand = commandArgs[0] ?? "status";
+  if (subcommand === "connect") {
+    if (!channelId) {
+      return "I cannot connect webhooks because Mattermost did not provide the channel id.";
+    }
+    const route = commandContextStore.upsertWebhookRoute?.(identity.externalUserId, {
+      channelId,
+      rootId,
+      displayName: identityLabel({ userId, userName })
+    });
+    return [
+      "Webhook alerts connected.",
+      `- Mattermost user: ${identityLabel({ userId, userName })}`,
+      `- Channel: ${route?.channelId ?? channelId}`,
+      rootId ? `- Thread: ${rootId}` : "- Thread: none"
+    ].join("\n");
+  }
+
+  if (subcommand === "disconnect") {
+    const route = commandContextStore.deleteWebhookRoute?.(identity.externalUserId);
+    if (!route) {
+      return "No webhook alert route is connected for your Mattermost user.";
+    }
+    return "Webhook alerts disconnected for your Mattermost user.";
+  }
+
+  if (subcommand === "status") {
+    const route = commandContextStore.getWebhookRoute?.(identity.externalUserId);
+    if (!route) {
+      return "No webhook alert route is connected. Use `!webhook connect` in the destination channel or thread.";
+    }
+    return [
+      "Webhook alert route:",
+      `- Mattermost user: ${identityLabel({ userId, userName })}`,
+      `- Channel: ${route.channelId}`,
+      route.rootId ? `- Thread: ${route.rootId}` : "- Thread: none"
+    ].join("\n");
+  }
+
+  return "`!webhook` supports `connect`, `status`, and `disconnect`.";
+}
+
 async function handleChat({
   commandArgs,
   userId,
@@ -1316,44 +1516,19 @@ async function handleChat({
   }
 
   if (subcommand === "pause") {
-    const context = commandContextStore.get(identity.externalUserId);
-    if (!context.currentSession) {
-      return "No chat session is selected. Use `chat new` after choosing a workspace and target.";
-    }
-    commandContextStore.pauseChat(identity.externalUserId);
-    return [
-      "Chat paused.",
-      "You can run inspection commands now. Use `chat resume` to continue this chat."
-    ].join("\n");
+    return "Chat threads do not need pause. Run bot commands in the main conversation, or reply in a chat thread to ask AcornOps.";
   }
 
   if (subcommand === "resume") {
-    const context = commandContextStore.get(identity.externalUserId);
-    if (!context.currentSession) {
-      return "No paused chat is available. Use `chat new` after choosing a workspace and target.";
-    }
-    commandContextStore.resumeChat(identity.externalUserId);
-    return [
-      ...formatContextLines(commandContextStore.get(identity.externalUserId), { userId, userName }),
-      "Chat resumed. Send a question, or use `chat pause` to leave chat mode."
-    ].join("\n");
+    return "Chat threads do not need resume. Reply in an open chat thread, or start a new one with `!chat new`.";
   }
 
   if (subcommand === "end") {
-    commandContextStore.endChat(identity.externalUserId);
-    return {
-      message: "Chat ended. The AcornOps session remains available in the AcornOps UI.",
-      effects: [
-        {
-          type: "abortActiveRun",
-          externalUserId: identity.externalUserId
-        }
-      ]
-    };
+    return "Send `!chat end` inside the chat thread you want to close.";
   }
 
   if (subcommand !== "new") {
-    return "`chat` supports `new`, `pause`, `resume`, and `end`.";
+    return "`!chat` supports `new`. Send `!chat end` inside a chat thread to close it.";
   }
 
   const auth = requireExternalDataCommand({
@@ -1379,16 +1554,26 @@ async function handleChat({
       commandContextStore,
       title
     });
-    commandContextStore.startChat(auth.identity.externalUserId, session);
+    const chatNumber = commandContextStore.nextChatNumber?.(auth.identity.externalUserId) ?? 1;
+    const chatTitle = title || `Investigate ${selectedTarget(commandContextStore.get(auth.identity.externalUserId)).reference.name || "target"}`;
     const lines = [
       ...formatContextLines(commandContextStore.get(auth.identity.externalUserId), { userId, userName }),
-      "Chat started in read-only mode.",
-      "Send a question. Use `chat pause` before running bot commands like `status`, `resources`, or `findings`."
+      "New chat has been started.",
+      "Reply in the thread below to send questions to that chat."
     ];
-    if (previousContext.chatActive) {
-      lines.push("Previous chat is no longer resumable from Mattermost; use the AcornOps UI if you need it.");
-    }
-    return lines.join("\n");
+    return {
+      message: lines.join("\n"),
+      effects: [
+        {
+          type: "createChatThread",
+          identity: auth.identity,
+          session,
+          title: chatTitle,
+          number: chatNumber,
+          userId
+        }
+      ]
+    };
   } catch (error) {
     if (error instanceof CommandResponseError) {
       return error.message;
@@ -1404,7 +1589,8 @@ async function handleChatQuestion({
   channelType,
   acornOpsClient,
   commandContextStore,
-  sourceMessageId = ""
+  sourceMessageId = "",
+  threadChat = null
 }) {
   if (!question) {
     return "Send a question, or use `chat pause` to leave chat mode.";
@@ -1421,11 +1607,19 @@ async function handleChatQuestion({
   }
 
   let context = commandContextStore.get(auth.identity.externalUserId);
-  if (context.activeRun) {
+  const currentThreadChat = threadChat
+    ? commandContextStore.getChatThread?.(threadChat.channelId, threadChat.rootId) ?? threadChat
+    : null;
+  if (currentThreadChat?.activeRun || (!currentThreadChat && context.activeRun)) {
     return activeRunResponseText();
   }
 
-  let session = context.currentSession;
+  let session = currentThreadChat
+    ? {
+        id: currentThreadChat.sessionId,
+        name: currentThreadChat.sessionName || currentThreadChat.title
+      }
+    : context.currentSession;
   if (!session) {
     try {
       const created = await createSessionForSelectedTarget({
@@ -1480,11 +1674,20 @@ async function handleChatQuestion({
     }
 
     if (runId) {
-      commandContextStore.rememberActiveRun?.(auth.identity.externalUserId, {
+      const activeRun = {
         id: runId,
         sessionId: session.id,
         status: followed.status || "streaming"
-      });
+      };
+      if (currentThreadChat) {
+        commandContextStore.rememberActiveRunForChat?.(
+          currentThreadChat.channelId,
+          currentThreadChat.rootId,
+          activeRun
+        );
+      } else {
+        commandContextStore.rememberActiveRun?.(auth.identity.externalUserId, activeRun);
+      }
       return {
         message: formatChatPendingResponse(followed.status),
         effects: [
@@ -1493,7 +1696,9 @@ async function handleChatQuestion({
             identity: auth.identity,
             sessionId: session.id,
             runId,
-            messageId
+            messageId,
+            channelId: currentThreadChat?.channelId ?? "",
+            rootId: currentThreadChat?.rootId ?? ""
           }
         ]
       };
@@ -1529,26 +1734,6 @@ async function createSessionForSelectedTarget({ identity, acornOpsClient, comman
 
   commandContextStore.selectSession(identity.externalUserId, session);
   return { session };
-}
-
-function activeChatModeRoute({
-  action,
-  commandArgs,
-  normalizedText,
-  userId,
-  commandContextStore
-}) {
-  const identity = externalIdentityForUserId(userId);
-  const context = identity ? commandContextStore.get(identity.externalUserId) : null;
-  if (!context?.chatActive) {
-    return { asQuestion: false };
-  }
-
-  if (action === "chat" && ["pause", "end", "resume", "new"].includes(commandArgs[0] ?? "")) {
-    return { asQuestion: false };
-  }
-
-  return { asQuestion: Boolean(normalizedText.trim()) };
 }
 
 function missingIdentityText() {

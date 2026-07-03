@@ -25,10 +25,10 @@ The bot is part of the official AcornOps offering. Full-system deployment wiring
 The Mattermost bot gives Mattermost users a chat entry point into AcornOps:
 
 1. Users talk to `@acorn-ops-bot` in a direct message or mention it in a channel.
-2. `login` creates an AcornOps external integration account-link request.
-3. `status` resolves the linked AcornOps identity for the observed Mattermost user.
+2. `!login` creates an AcornOps external integration account-link request.
+3. `!status` resolves the linked AcornOps identity for the observed Mattermost user.
 4. Read commands call AcornOps control-plane APIs with service authentication and `x-acornops-external-user-id`.
-5. Chat mode submits read-only AcornOps assistant messages for the selected workspace and target.
+5. `!chat new` creates a dedicated Mattermost thread for each read-only AcornOps assistant session.
 
 The bot never asks users for AcornOps passwords in Mattermost and does not store AcornOps browser sessions, cookies, OIDC tokens, refresh tokens, or raw link tokens.
 
@@ -37,10 +37,11 @@ The bot never asks users for AcornOps passwords in Mattermost and does not store
 This repository owns:
 
 - Mattermost WebSocket event handling and REST replies
-- plain bot command parsing for `@acorn-ops-bot`
+- `!`-prefixed bot command parsing for `@acorn-ops-bot`
 - external integration link and resolve calls to AcornOps
-- read-only workspace, target, resource, finding, investigation, and chat-mode command surfaces
-- process-local conversational selection state for numbered workspaces, targets, sessions, active/paused chat mode, and one active streamed assistant run per user
+- read-only workspace, target, resource, finding, investigation, and threaded assistant command surfaces
+- persistent command context for numbered workspaces, targets, sessions, chat-thread mappings, active streamed assistant runs, and user-level webhook routes
+- optional inbound HTTP callbacks for Mattermost interactive actions and AcornOps alert webhooks
 - repo-local lint, build, and test verification
 
 This repository does not own:
@@ -82,6 +83,12 @@ Environment variables:
 | `MATTERMOST_BOT_USERNAME` | Bot username used for mention detection. | `acorn-ops-bot` |
 | `ACORNOPS_API_BASE_URL` | AcornOps control-plane base URL. | `http://localhost:8081` |
 | `EXTERNAL_INTEGRATION_SERVICE_TOKEN` | AcornOps service token for this installed external integration. | Required for AcornOps-backed commands |
+| `BOT_DATABASE_URL` | Optional Postgres URL for persistent bot command context, chat threads, active runs, webhook routes, and inbound idempotency. Empty uses in-memory state for local tests. | Empty |
+| `BOT_HTTP_HOST` | Host for the optional inbound bot HTTP listener. | `0.0.0.0` |
+| `BOT_HTTP_PORT` | Port for the inbound bot HTTP listener. `0` disables listening. | `0` |
+| `BOT_PUBLIC_BASE_URL` | Public base URL used in Mattermost interactive action callbacks. Required for workspace buttons. | Empty |
+| `MATTERMOST_ACTION_SECRET` | Shared secret embedded in Mattermost action contexts. | Empty |
+| `ACORNOPS_WEBHOOK_SECRET` | Secret used to verify signed AcornOps webhook deliveries. | Empty |
 | `CHAT_RUN_POLL_ATTEMPTS` | Immediate chat run polling attempts before SSE follow-up. | `15` |
 | `CHAT_RUN_POLL_INTERVAL_MS` | Immediate chat run polling interval in milliseconds. | `1000` |
 | `RUN_STREAM_RECONNECT_ATTEMPTS` | SSE reconnect attempts before fallback polling. | `3` |
@@ -93,29 +100,30 @@ Local `.env` files are loaded without overriding existing process environment va
 
 ## Commands
 
-Commands are plain Mattermost messages, not slash commands. Slash-prefixed input returns guidance to retry without `/`.
+Commands are plain Mattermost messages, not slash commands. Command words require `!`; arguments do not. Slash-prefixed input returns guidance to use `!`.
 
-- `help`: show the short common workflow
-- `help filters`: show supported filters and finite values
-- `login`: create an AcornOps account-link request; direct-message only
-- `status`: show linked or unlinked account state plus current context
-- `workspaces`: list accessible workspaces
-- `workspaces 1`: show workspace details without changing current workspace
-- `workspace 1`: select a workspace
-- `workspace`: show the current workspace
-- `targets`: list Kubernetes and VM targets in the current workspace
-- `target 1`: select a target
-- `resources`: list resources for the selected target
-- `findings`: list findings for the selected target
-- `investigations`: list workspace investigations
-- `chat new`: create a read-only troubleshooting chat for the selected target
-- `chat pause`: leave chat mode while keeping the session resumable
-- `chat resume`: resume the latest paused chat session
-- `chat end`: clear the current chat session pointer
+- `!help`: show the short common workflow
+- `!help filters`: show supported filters and finite values
+- `!login`: create an AcornOps account-link request; direct-message only
+- `!status`: show linked or unlinked account state plus current context
+- `!workspaces`: list accessible workspaces, with selection buttons when callback config is present
+- `!workspaces 1`: show workspace details without changing current workspace
+- `!workspace 1`: select a workspace
+- `!workspace`: show the current workspace
+- `!targets`: list Kubernetes and VM targets in the current workspace
+- `!target 1`: select a target
+- `!resources`: list resources for the selected target
+- `!findings`: list findings for the selected target
+- `!investigations`: list workspace investigations
+- `!chat new [title]`: create a read-only troubleshooting chat for the selected target and post a dedicated Mattermost root thread
+- `!chat end`: inside a chat thread, close only that chat and stop following its active answer
+- `!webhook connect`: route user-level AcornOps webhook alerts to the current Mattermost destination
+- `!webhook status`: show the current user-level webhook route
+- `!webhook disconnect`: remove the current user's webhook route
 
-When chat mode is active, ordinary messages and command-looking text such as `status`, `resources`, and `findings` are sent to AcornOps as read-only assistant questions. The bot briefly polls for fast answers, then follows long-running runs over SSE and posts the final assistant response back to the same Mattermost channel. Use `chat pause` before running normal commands; use `chat end` to stop following an active answer. Advanced filters, shortcuts such as `clusters` and `vms`, and compatibility session commands are documented in [`docs/wiki-mattermost-bot-commands.md`](docs/wiki-mattermost-bot-commands.md).
+After `!chat new`, reply in the generated Mattermost thread to send read-only assistant questions for that specific AcornOps session. Thread replies do not need `!`; assistant replies and long-running SSE follow-ups stay in that thread. The main bot direct message or channel mention remains available for normal `!` commands and additional `!chat new` threads. Advanced filters, shortcuts such as `!clusters` and `!vms`, and compatibility session commands are documented in [`docs/wiki-mattermost-bot-commands.md`](docs/wiki-mattermost-bot-commands.md).
 
-Only `login` is direct-message-only. Authenticated read and read-only assistant commands can run in direct messages or channel mentions.
+Only `!login` is direct-message-only. Authenticated read, threaded assistant, and user webhook routing commands can run in direct messages or channel mentions.
 
 ## Local Development
 
@@ -163,7 +171,7 @@ docker compose up --build
 
 Compose defaults `MATTERMOST_URL` to `http://host.docker.internal:8065` and `ACORNOPS_API_BASE_URL` to `http://host.docker.internal:8081`, which lets the container reach services running on the host through Docker Desktop. Keep `MATTERMOST_BOT_TOKEN` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN` in your local `.env` or shell environment.
 
-The image installs dependencies from `package*.json` inside Docker. It does not copy host `node_modules`, does not bake local `.env` files into the image, and does not expose a port because the bot connects outbound to Mattermost and AcornOps.
+The image installs dependencies from `package*.json` inside Docker. It does not copy host `node_modules` and does not bake local `.env` files into the image. It exposes the optional bot HTTP port for Mattermost actions and AcornOps webhooks; the listener only binds when `BOT_HTTP_PORT` is non-zero.
 
 The local Mattermost and AcornOps services are not started by this repository. For full-platform local bring-up, use:
 
@@ -180,7 +188,8 @@ Do not run overlapping local stacks on the same host ports.
 - Store the Mattermost bot token and AcornOps external integration service token in the deployment secret manager, not in committed files.
 - Keep the external integration token scoped to the installed Mattermost integration.
 - Run behind the deployment topology owned by `acornops-deployment`.
-- The current command context and active SSE run-following registry are process-local. Run a single bot replica or add shared TTL-backed command context and run-following state before deploying multiple active bot replicas.
+- Use Postgres through `BOT_DATABASE_URL` for restart-resilient command context, chat-thread mappings, active run records, user webhook routes, and inbound webhook idempotency.
+- `BOT_PUBLIC_BASE_URL` must be reachable by Mattermost for interactive actions and by AcornOps for webhook deliveries.
 - Treat channel responses as potentially visible to the whole channel. Login remains direct-message-only; read and assistant commands are intentionally channel-capable.
 - Rotate service tokens through AcornOps control-plane procedures and restart the bot runtime after secret updates.
 

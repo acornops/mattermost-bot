@@ -27,12 +27,22 @@ export class MattermostClient {
     return await this.requestJson("GET", "/api/v4/users/me");
   }
 
-  async createPost({ channelId, message, rootId = "" }) {
-    return await this.requestJson("POST", "/api/v4/posts", {
+  async createPost({ channelId, message, rootId = "", props = undefined, attachments = undefined }) {
+    const body = {
       channel_id: channelId,
       message,
       root_id: rootId
-    });
+    };
+    if (props) {
+      body.props = props;
+    }
+    if (attachments) {
+      body.props = {
+        ...body.props,
+        attachments
+      };
+    }
+    return await this.requestJson("POST", "/api/v4/posts", body);
   }
 
   async requestJson(method, path, body, options = {}) {

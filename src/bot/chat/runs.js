@@ -95,25 +95,25 @@ export function formatChatPendingResponse(status) {
   if (status === "completed") {
     return [
       "AcornOps finished, but I could not load the assistant reply yet.",
-      "I will keep this chat active here. Use `chat pause` before running bot commands like `status`, `resources`, or `findings`."
+      "Reply in this thread to keep chatting, or use `!chat end` to close it."
     ].join("\n");
   }
 
   if (status === "failed" || status === "cancelled") {
     return [
       `AcornOps could not complete that response (${status}).`,
-      "I will keep this chat active here. Use `chat pause` before running bot commands like `status`, `resources`, or `findings`."
+      "Reply in this thread to keep chatting, or use `!chat end` to close it."
     ].join("\n");
   }
 
   return [
     "I'm checking that now. I'll post the answer here when it's ready.",
-    "Use `chat pause` before running bot commands like `status`, `resources`, or `findings`."
+    "Reply in this thread to keep chatting, or use `!chat end` to close it."
   ].join("\n");
 }
 
 export function activeRunResponseText() {
-  return "AcornOps is still responding. Wait for that answer, or use `chat end` to stop following it.";
+  return "AcornOps is still responding. Wait for that answer, or use `!chat end` in this thread to stop following it.";
 }
 
 function isTerminalRunStatus(status) {
