@@ -1,3 +1,5 @@
+name: acornops-mattermost-bot
+
 services:
   bot-postgres:
     image: postgres:16-alpine
