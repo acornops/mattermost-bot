@@ -28,6 +28,13 @@ export function createBotHttpServer({
           mattermostActionSecret,
           commandContextStore
         });
+        await postMattermostActionResponse({
+          payload,
+          result,
+          mattermostClient
+        }).catch((error) => {
+          logger.error(error instanceof Error ? error.message : error);
+        });
         sendJson(res, result.status, result.body);
         return;
       }
@@ -166,7 +173,8 @@ function actionSuccess(message) {
     status: 200,
     body: {
       ephemeral_text: message
-    }
+    },
+    message
   };
 }
 
@@ -178,8 +186,34 @@ function actionFailure(message) {
         message
       },
       ephemeral_text: message
-    }
+    },
+    message
   };
+}
+
+export async function postMattermostActionResponse({
+  payload,
+  result,
+  mattermostClient
+}) {
+  const channelId = payload.channel_id ?? payload.channelId ?? "";
+  if (!mattermostClient || !channelId || !result.message) {
+    return;
+  }
+
+  await mattermostClient.createPost({
+    channelId,
+    rootId: actionResponseRootId(payload),
+    message: result.message
+  });
+}
+
+function actionResponseRootId(payload) {
+  return payload.root_id
+    ?? payload.rootId
+    ?? payload.post_id
+    ?? payload.postId
+    ?? "";
 }
 
 export async function handleAcornOpsRouteWebhook({

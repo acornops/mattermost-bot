@@ -492,18 +492,18 @@
       "priority": 23,
       "area": "bot",
       "title": "Add Mattermost target selection buttons",
-      "user_visible_behavior": "The !targets command can include Mattermost buttons that select the current target, and workspace/target button callbacks return clear success or failure messages.",
+      "user_visible_behavior": "The !targets command can include Mattermost buttons that select the current target, and workspace/target button callbacks post clear success or failure messages.",
       "status": "passing",
       "verification": {
         "command": "./init.sh plus live target-button smoke when services are available",
         "steps": [
           "Add target selection button attachments to !targets when BOT_PUBLIC_BASE_URL is configured.",
           "Extend POST /mattermost/actions with a select_target action.",
-          "Return explicit ephemeral success and failure messages for workspace and target button callbacks.",
+          "Return explicit success and failure messages for workspace and target button callbacks and post visible callback result messages.",
           "Add automated tests and run ./init.sh."
         ]
       },
-      "evidence": "Implementation completed on 2026-07-06 after live smoke confirmed Mattermost workspace buttons work once AllowedUntrustedInternalConnections allows host.docker.internal. Focused node --test test/bot-server.test.js test/bot-message.test.js passed with 64 tests after adding target button handling. Final ./init.sh passed with harness verification, lint, build, and 112 tests.",
+      "evidence": "Implementation completed on 2026-07-06 after live smoke confirmed Mattermost workspace buttons work once AllowedUntrustedInternalConnections allows host.docker.internal. Focused node --test test/bot-server.test.js test/bot-message.test.js passed with 64 tests after adding target button handling. Focused node --test test/bot-server.test.js passed with 11 tests after adding visible callback result posts. Final ./init.sh passed with harness verification, lint, build, and 113 tests.",
       "notes": "Mattermost local Docker deployments must allow host.docker.internal through AllowedUntrustedInternalConnections for button callbacks to reach the bot."
     }
   ]

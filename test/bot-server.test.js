@@ -7,6 +7,7 @@ import {
   handleAcornOpsRouteWebhook,
   handleMattermostAction,
   hashSecret,
+  postMattermostActionResponse,
   routeTokenFromPath
 } from "../src/bot/server.js";
 
@@ -51,6 +52,7 @@ test("Mattermost action selects workspace for the requesting user", () => {
     name: "Platform"
   });
   assert.match(result.body.ephemeral_text, /Workspace changed successfully/);
+  assert.match(result.message, /Workspace changed successfully/);
 });
 
 test("Mattermost action selects target for the requesting user", () => {
@@ -81,6 +83,33 @@ test("Mattermost action selects target for the requesting user", () => {
     source: "target"
   });
   assert.match(result.body.ephemeral_text, /Target changed successfully/);
+  assert.match(result.message, /Target changed successfully/);
+});
+
+test("Mattermost action response posts a visible callback message", async () => {
+  const posts = [];
+  await postMattermostActionResponse({
+    payload: {
+      channel_id: "channel-1",
+      post_id: "post-1"
+    },
+    result: {
+      status: 200,
+      body: {
+        ephemeral_text: "Target changed successfully: Prod cluster"
+      },
+      message: "Target changed successfully: Prod cluster"
+    },
+    mattermostClient: fakeMattermostClient(posts)
+  });
+
+  assert.deepEqual(posts, [
+    {
+      channelId: "channel-1",
+      rootId: "post-1",
+      message: "Target changed successfully: Prod cluster"
+    }
+  ]);
 });
 
 test("Mattermost action rejects invalid secrets", () => {
@@ -99,6 +128,7 @@ test("Mattermost action rejects invalid secrets", () => {
   assert.equal(result.status, 200);
   assert.match(result.body.error.message, /not authorized/);
   assert.match(result.body.ephemeral_text, /not authorized/);
+  assert.match(result.message, /not authorized/);
 });
 
 test("Mattermost action returns user-facing failures for invalid selections", () => {

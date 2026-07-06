@@ -2,7 +2,7 @@
 
 ## Currently Verified
 
-- Current implementation has the Mattermost bot UX and alert roadmap plus smoke-test follow-up fixes in place: `!` commands, threaded multi-chat routing, Compose-bundled Postgres state, inbound HTTP callbacks, `!workspaces` and `!targets` selection buttons, and signed per-route AcornOps webhook alert URLs. Final `./init.sh` passed on 2026-07-06 with harness verification, lint, build, and 112 tests.
+- Current implementation has the Mattermost bot UX and alert roadmap plus smoke-test follow-up fixes in place: `!` commands, threaded multi-chat routing, Compose-bundled Postgres state, inbound HTTP callbacks, `!workspaces` and `!targets` selection buttons, and signed per-route AcornOps webhook alert URLs. Final `./init.sh` passed on 2026-07-06 with harness verification, lint, build, and 113 tests.
 - Docker image verification passed on 2026-07-01: `./scripts/verify-docker.sh` built the `verify` target, ran `npm run verify:bot` inside `node:22-bookworm-slim` with 93 passing tests, then built `acornops-mattermost-bot:local`.
 - `npm test` passed on 2026-07-01 with 93 tests after renaming runtime env vars and adding Docker packaging.
 - Final `./init.sh` passed after the bot command module refactor and domain-folder follow-up, with harness verification, lint, build, and 92 tests. `npm test` also passed with 92 tests during the refactor and after the folder move.
@@ -69,7 +69,7 @@
 
 - Implemented the Mattermost bot UX and alert roadmap: `!` command parsing, threaded multi-chat routing, Postgres-backed command context, inbound HTTP server, Mattermost workspace buttons, and user-level AcornOps webhook routes/alert delivery.
 - Fixed the smoke-test follow-ups: workspace button actions now include Mattermost-compatible button type/id payloads and expected action failures return HTTP 200 structured errors; Compose includes a healthy bundled `bot-postgres` database with default bot DB URL; webhook registration now returns signed per-route delivery credentials instead of using the old global signed endpoint.
-- Added target selection buttons for `!targets` using the existing `/mattermost/actions` callback path. Workspace and target actions now return explicit ephemeral success/failure text. Live Mattermost logs confirmed local Docker button callbacks require `AllowedUntrustedInternalConnections=host.docker.internal`.
+- Added target selection buttons for `!targets` using the existing `/mattermost/actions` callback path. Workspace and target actions now return action JSON and also post visible success/failure messages in the source post thread. Live Mattermost logs confirmed local Docker button callbacks require `AllowedUntrustedInternalConnections=host.docker.internal`.
 - Added `pg` as the Postgres client dependency and ignored host `node_modules/`.
 - Added tests for command parsing, thread routing, Mattermost post root/props/attachments, store persistence, HTTP actions, webhook signature/idempotency, and alert posting; `npm test` passed with 104 tests during implementation.
 - Renamed runtime Mattermost env vars to `MATTERMOST_URL`, `MATTERMOST_BOT_TOKEN`, and `MATTERMOST_BOT_USERNAME`.
