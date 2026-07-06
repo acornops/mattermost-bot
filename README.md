@@ -109,7 +109,7 @@ Commands are plain Mattermost messages, not slash commands. Command words requir
 - `!workspaces 1`: show workspace details without changing current workspace
 - `!workspace 1`: select a workspace
 - `!workspace`: show the current workspace
-- `!targets`: list Kubernetes and VM targets in the current workspace
+- `!targets`: list Kubernetes and VM targets in the current workspace, with selection buttons when callback config is present
 - `!target 1`: select a target
 - `!resources`: list resources for the selected target
 - `!findings`: list findings for the selected target

@@ -235,6 +235,8 @@ export async function handleBotMessageResult({
       channelType,
       acornOpsClient,
       commandContextStore,
+      botPublicBaseUrl,
+      mattermostActionSecret
     });
   }
 
@@ -594,6 +596,8 @@ async function handleTargets({
   channelType,
   acornOpsClient,
   commandContextStore,
+  botPublicBaseUrl,
+  mattermostActionSecret
 }) {
   const parsedArgs = parseListArgs(commandArgs, ["q", "targetType"]);
   if (parsedArgs.error) {
@@ -634,12 +638,27 @@ async function handleTargets({
       parsedArgs.filters
     );
     commandContextStore.rememberTargets(auth.identity.externalUserId, page.items ?? []);
-    return formatTargetPage({
+    const currentContext = commandContextStore.get(auth.identity.externalUserId);
+    const message = formatTargetPage({
       page,
-      context: commandContextStore.get(auth.identity.externalUserId),
+      context: currentContext,
       userId,
       userName
     });
+    const attachments = targetSelectionAttachments({
+      page,
+      identity: auth.identity,
+      workspace: currentContext.currentWorkspace,
+      botPublicBaseUrl,
+      mattermostActionSecret
+    });
+    if (attachments.length > 0) {
+      return {
+        message,
+        attachments
+      };
+    }
+    return message;
   } catch (error) {
     return dataErrorText(error, "targets");
   }
@@ -678,6 +697,55 @@ function workspaceSelectionAttachments({
               workspace: {
                 id,
                 name
+              }
+            }
+          }
+        };
+      })
+    }
+  ];
+}
+
+function targetSelectionAttachments({
+  page,
+  identity,
+  workspace,
+  botPublicBaseUrl,
+  mattermostActionSecret
+}) {
+  const items = Array.isArray(page?.items) ? page.items : [];
+  const actionUrl = botPublicBaseUrl
+    ? `${botPublicBaseUrl.replace(/\/+$/, "")}/mattermost/actions`
+    : "";
+  if (!actionUrl || items.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      text: "Choose target",
+      actions: items.slice(0, 5).map((target, index) => {
+        const id = target.id ?? target.targetId ?? target.clusterId ?? target.vmId ?? "";
+        const name = target.name ?? target.displayName ?? target.hostname ?? target.clusterName ?? id;
+        const type = target.targetType ?? target.type ?? "";
+        return {
+          id: `selectTarget${index + 1}`,
+          name: String(index + 1),
+          type: "button",
+          integration: {
+            url: actionUrl,
+            context: {
+              action: "select_target",
+              secret: mattermostActionSecret,
+              externalUserId: identity.externalUserId,
+              workspace: {
+                id: workspace?.id ?? "",
+                name: workspace?.name ?? ""
+              },
+              target: {
+                id,
+                name,
+                type
               }
             }
           }

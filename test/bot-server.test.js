@@ -50,7 +50,37 @@ test("Mattermost action selects workspace for the requesting user", () => {
     id: "workspace-1",
     name: "Platform"
   });
-  assert.match(result.body.ephemeral_text, /Current workspace updated/);
+  assert.match(result.body.ephemeral_text, /Workspace changed successfully/);
+});
+
+test("Mattermost action selects target for the requesting user", () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  const result = handleMattermostAction({
+    payload: {
+      user_id: "user-1",
+      context: {
+        action: "select_target",
+        secret: "action-secret",
+        externalUserId: "user-1",
+        target: {
+          id: "target-1",
+          name: "Prod cluster",
+          type: "kubernetes"
+        }
+      }
+    },
+    mattermostActionSecret: "action-secret",
+    commandContextStore
+  });
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(commandContextStore.get("user-1").currentTarget, {
+    id: "target-1",
+    name: "Prod cluster",
+    type: "kubernetes",
+    source: "target"
+  });
+  assert.match(result.body.ephemeral_text, /Target changed successfully/);
 });
 
 test("Mattermost action rejects invalid secrets", () => {
@@ -68,6 +98,71 @@ test("Mattermost action rejects invalid secrets", () => {
 
   assert.equal(result.status, 200);
   assert.match(result.body.error.message, /not authorized/);
+  assert.match(result.body.ephemeral_text, /not authorized/);
+});
+
+test("Mattermost action returns user-facing failures for invalid selections", () => {
+  const wrongUser = handleMattermostAction({
+    payload: {
+      user_id: "user-2",
+      context: {
+        action: "select_target",
+        externalUserId: "user-1",
+        target: {
+          id: "target-1"
+        }
+      }
+    },
+    commandContextStore: createInMemoryCommandContextStore()
+  });
+  const missingTarget = handleMattermostAction({
+    payload: {
+      user_id: "user-1",
+      context: {
+        action: "select_target",
+        externalUserId: "user-1",
+        target: {}
+      }
+    },
+    commandContextStore: createInMemoryCommandContextStore()
+  });
+
+  assert.equal(wrongUser.status, 200);
+  assert.match(wrongUser.body.ephemeral_text, /Only the Mattermost user/);
+  assert.equal(missingTarget.status, 200);
+  assert.match(missingTarget.body.ephemeral_text, /Target selection failed/);
+});
+
+test("Mattermost action rejects stale target buttons after workspace changes", () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.selectWorkspace("user-1", {
+    id: "workspace-2",
+    name: "Operations"
+  });
+
+  const result = handleMattermostAction({
+    payload: {
+      user_id: "user-1",
+      context: {
+        action: "select_target",
+        externalUserId: "user-1",
+        workspace: {
+          id: "workspace-1",
+          name: "Platform"
+        },
+        target: {
+          id: "target-1",
+          name: "Prod cluster",
+          type: "kubernetes"
+        }
+      }
+    },
+    commandContextStore
+  });
+
+  assert.equal(result.status, 200);
+  assert.match(result.body.ephemeral_text, /current workspace has changed/);
+  assert.equal(commandContextStore.get("user-1").currentTarget, null);
 });
 
 test("AcornOps route webhook verifies signature, deduplicates, and posts to route destination", async () => {

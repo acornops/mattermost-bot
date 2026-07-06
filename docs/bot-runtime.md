@@ -120,7 +120,7 @@ The Dockerfile installs dependencies inside the image from `package*.json`; host
 - Workspace results are numbered. `!workspaces 1` calls AcornOps `GET /api/v1/workspaces/{workspaceId}` for the remembered workspace id and shows details without changing the user's current workspace.
 - `!workspace 1` calls AcornOps `GET /api/v1/workspaces/{workspaceId}` for the remembered workspace id, shows details, and updates the user's current workspace.
 - `!workspace` shows details for the user's current workspace selection.
-- `!targets` calls AcornOps `GET /api/v1/workspaces/{workspaceId}/targets?limit=50` for the current workspace.
+- `!targets` calls AcornOps `GET /api/v1/workspaces/{workspaceId}/targets?limit=50` for the current workspace. It returns numbered text and, when `BOT_PUBLIC_BASE_URL` is configured, Mattermost buttons for the first practical set of targets.
 - `!target 1` fetches `GET /api/v1/workspaces/{workspaceId}/targets/{targetId}` and updates the current generic target.
 - `!clusters`/`!cluster 1` and `!vms`/`!vm 1` remain compatibility shortcuts over Kubernetes- and VM-specific endpoints.
 - `!resources` and `!findings` list resources or findings for the currently selected target. They accept documented `key=value` filters where the AcornOps endpoint supports them.
@@ -189,7 +189,7 @@ Postgres persistence makes command context, chat-thread lookup, webhook routes, 
 The bot can run one built-in HTTP listener:
 
 - `GET /healthz` returns basic readiness.
-- `POST /mattermost/actions` handles interactive Mattermost button callbacks. Workspace selection verifies the action secret and acting Mattermost user before updating that user's current workspace and returning an ephemeral confirmation.
+- `POST /mattermost/actions` handles interactive Mattermost button callbacks. Workspace and target selection verify the action secret and acting Mattermost user before updating that user's current context and returning an ephemeral success or failure confirmation.
 - `POST /acornops/webhooks/routes/:routeToken` handles signed AcornOps webhook deliveries. The route token identifies the Mattermost destination, and the handler verifies `AcornOps-Timestamp` plus `AcornOps-Signature`, rejects stale timestamps, requires and deduplicates `AcornOps-Event-Id`, and posts a concise alert to Mattermost.
 
 Mattermost and AcornOps must be able to reach `BOT_PUBLIC_BASE_URL` for interactive actions and webhooks in any live environment.

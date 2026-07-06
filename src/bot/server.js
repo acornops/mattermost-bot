@@ -97,56 +97,87 @@ export function handleMattermostAction({
 }) {
   const context = payload.context ?? {};
   if (mattermostActionSecret && context.secret !== mattermostActionSecret) {
-    return {
-      status: 200,
-      body: {
-        error: {
-          message: "This action is not authorized."
-        }
-      }
-    };
-  }
-
-  if (context.action !== "select_workspace") {
-    return {
-      status: 200,
-      body: {
-        error: {
-          message: "Unknown AcornOps action."
-        }
-      }
-    };
+    return actionFailure("This action is not authorized.");
   }
 
   const actingUserId = payload.user_id ?? payload.userId ?? "";
   if (!actingUserId || actingUserId !== context.externalUserId) {
-    return {
-      status: 200,
-      body: {
-        error: {
-          message: "Only the Mattermost user who requested this list can select from it."
-        }
-      }
-    };
+    return actionFailure("Only the Mattermost user who requested this list can select from it.");
   }
 
+  if (context.action === "select_workspace") {
+    return handleWorkspaceAction({
+      actingUserId,
+      context,
+      commandContextStore
+    });
+  }
+
+  if (context.action === "select_target") {
+    return handleTargetAction({
+      actingUserId,
+      context,
+      commandContextStore
+    });
+  }
+
+  return actionFailure("Unknown AcornOps action.");
+}
+
+function handleWorkspaceAction({
+  actingUserId,
+  context,
+  commandContextStore
+}) {
   const workspace = context.workspace ?? {};
   if (!workspace.id) {
-    return {
-      status: 200,
-      body: {
-        error: {
-          message: "Workspace selection is missing a workspace id."
-        }
-      }
-    };
+    return actionFailure("Workspace selection failed: missing workspace id.");
   }
 
   commandContextStore.selectWorkspace(actingUserId, workspace);
+  return actionSuccess(`Workspace changed successfully: ${workspace.name || workspace.id}`);
+}
+
+function handleTargetAction({
+  actingUserId,
+  context,
+  commandContextStore
+}) {
+  const target = context.target ?? {};
+  if (!target.id) {
+    return actionFailure("Target selection failed: missing target id.");
+  }
+
+  const workspace = context.workspace ?? {};
+  const currentWorkspace = commandContextStore.get(actingUserId).currentWorkspace;
+  if (workspace.id && currentWorkspace?.id && workspace.id !== currentWorkspace.id) {
+    return actionFailure("Target selection failed: your current workspace has changed. Send `!targets` again.");
+  }
+  if (workspace.id && !currentWorkspace?.id) {
+    return actionFailure("Target selection failed: choose a workspace first, then send `!targets` again.");
+  }
+
+  commandContextStore.selectTarget(actingUserId, target);
+  return actionSuccess(`Target changed successfully: ${target.name || target.id}`);
+}
+
+function actionSuccess(message) {
   return {
     status: 200,
     body: {
-      ephemeral_text: `Current workspace updated: ${workspace.name || workspace.id}`
+      ephemeral_text: message
+    }
+  };
+}
+
+function actionFailure(message) {
+  return {
+    status: 200,
+    body: {
+      error: {
+        message
+      },
+      ephemeral_text: message
     }
   };
 }

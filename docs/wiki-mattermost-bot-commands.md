@@ -36,7 +36,7 @@ why is the development cluster unhealthy?
 | `!workspaces` | Lists AcornOps workspaces you can access and may include selection buttons. |
 | `!workspace 1` | Selects a workspace from the latest `!workspaces` result. |
 | `!workspace` | Shows the current workspace. |
-| `!targets` | Lists Kubernetes and VM targets in the current workspace. |
+| `!targets` | Lists Kubernetes and VM targets in the current workspace and may include selection buttons. |
 | `!target 1` | Selects a target from the latest `!targets` result. |
 | `!resources` | Lists resources for the selected target. |
 | `!findings` | Lists findings for the selected target. |

@@ -627,6 +627,69 @@ test("handleBotMessage lists and selects generic targets", async () => {
   });
 });
 
+test("handleBotMessage adds target selection actions when callback URL is configured", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.selectWorkspace("mattermost-user-1", {
+    id: "workspace-1",
+    name: "Platform"
+  });
+
+  const result = await handleBotMessageResult({
+    text: "!targets",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "D",
+    botPublicBaseUrl: "https://bot.example.com/",
+    mattermostActionSecret: "action-secret",
+    commandContextStore,
+    acornOpsClient: {
+      async listTargets() {
+        return {
+          items: [
+            {
+              id: "target-1",
+              name: "payments-prod",
+              targetType: "kubernetes",
+              status: "online"
+            }
+          ]
+        };
+      }
+    }
+  });
+
+  assert.match(result.message, /AcornOps targets:/);
+  assert.deepEqual(result.attachments, [
+    {
+      text: "Choose target",
+      actions: [
+        {
+          id: "selectTarget1",
+          name: "1",
+          type: "button",
+          integration: {
+            url: "https://bot.example.com/mattermost/actions",
+            context: {
+              action: "select_target",
+              secret: "action-secret",
+              externalUserId: "mattermost-user-1",
+              workspace: {
+                id: "workspace-1",
+                name: "Platform"
+              },
+              target: {
+                id: "target-1",
+                name: "payments-prod",
+                type: "kubernetes"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]);
+});
+
 test("handleBotMessage creates chat sessions through generic target endpoint after target selection", async () => {
   const commandContextStore = createInMemoryCommandContextStore();
   commandContextStore.selectWorkspace("mattermost-user-1", {

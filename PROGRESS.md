@@ -40,6 +40,7 @@
 - `B12`: Add interactive workspace selection for `!workspaces`.
 - `B13`: Add user-level AcornOps webhook alert intake and Mattermost posting.
 - `B14`: Fix Mattermost actions, Compose database, and webhook route registration UX.
+- `B15`: Add Mattermost target selection buttons.
 
 ## In Progress
 
@@ -56,7 +57,7 @@
 - `!workspaces 1` calls `GET /api/v1/workspaces/{workspaceId}` and shows detail without changing the current workspace.
 - `!workspace 1` calls `GET /api/v1/workspaces/{workspaceId}`, shows detail, and makes that workspace current for the user.
 - `!workspace` shows full details for the current workspace selection.
-- `!targets` calls `GET /api/v1/workspaces/{workspaceId}/targets?limit=50` for the current workspace, and `!target 1` selects a generic Kubernetes or VM target.
+- `!targets` calls `GET /api/v1/workspaces/{workspaceId}/targets?limit=50` for the current workspace and, when `BOT_PUBLIC_BASE_URL` is configured, returns Mattermost target selection buttons. `!target 1` selects a generic Kubernetes or VM target.
 - `!clusters`/`!cluster 1` and `!vms`/`!vm 1` remain compatibility shortcuts for Kubernetes and VM-specific target paths.
 - `!resources` and `!findings` use the currently selected target. `!investigations` uses the current workspace.
 - `!chat new [title]` creates a read-only troubleshooting session for the selected target, posts an acknowledgement, then posts a Mattermost root thread such as `Chat #1 - Investigate Pods`.
@@ -71,7 +72,7 @@
 - Bot runtime defaults now live in `src/bot/config.js`; `MATTERMOST_BOT_USERNAME` is the runtime source for changing the bot mention name, with `acorn-ops-bot` as the single code fallback.
 - Runtime Mattermost environment variables are `MATTERMOST_URL`, `MATTERMOST_BOT_TOKEN`, and `MATTERMOST_BOT_USERNAME`. The previous prefixed Mattermost names are not accepted.
 - Postgres-backed command context is configured with `BOT_DATABASE_URL`; the no-URL fallback remains in-memory for tests and simple local development.
-- The inbound HTTP listener is configured with `BOT_HTTP_HOST`, `BOT_HTTP_PORT`, `BOT_PUBLIC_BASE_URL`, and `MATTERMOST_ACTION_SECRET`. It serves `GET /healthz`, `POST /mattermost/actions`, and `POST /acornops/webhooks/routes/:routeToken`.
+- The inbound HTTP listener is configured with `BOT_HTTP_HOST`, `BOT_HTTP_PORT`, `BOT_PUBLIC_BASE_URL`, and `MATTERMOST_ACTION_SECRET`. It serves `GET /healthz`, `POST /mattermost/actions`, and `POST /acornops/webhooks/routes/:routeToken`. Mattermost Docker deployments that call `host.docker.internal` for local button callbacks must allow that hostname through Mattermost `AllowedUntrustedInternalConnections`.
 - `!webhook connect`, `!webhook reconnect`, `!webhook status`, and `!webhook disconnect` manage user-level AcornOps alert routes to Mattermost destinations. `connect` returns a route-token delivery URL and per-route signing secret once. Route webhook intake verifies timestamp/signature, requires and deduplicates event ids, resolves the route token, and posts concise alerts.
 - Chat timing environment variables are `CHAT_RUN_POLL_ATTEMPTS`, `CHAT_RUN_POLL_INTERVAL_MS`, `RUN_STREAM_RECONNECT_ATTEMPTS`, `RUN_STREAM_RECONNECT_DELAY_MS`, `RUN_STREAM_FALLBACK_POLL_INTERVAL_MS`, and `RUN_STREAM_FALLBACK_POLL_MAX_MS`.
 - Docker image build lives in `Dockerfile`. The image installs dependencies inside Docker from `package*.json`, does not copy host `node_modules`, runs as the non-root `node` user, and exposes the optional bot HTTP port.
@@ -84,7 +85,7 @@
 
 ## Next Steps
 
-1. Run live Mattermost/AcornOps smoke for `!login`, `!status`, `!workspaces`, workspace button selection with no action integration error, `!workspace 1`, `!targets`, `!target 1`, `!resources`, `!findings`, `!chat new`, a threaded question/reply, concurrent chat threads, thread-local `!chat end`, `!webhook connect`, a signed route-token AcornOps webhook alert, duplicate webhook suppression, and bot restart persistence when the local stack is available.
+1. Run live Mattermost/AcornOps smoke for `!login`, `!status`, `!workspaces`, workspace button selection with no action integration error, `!workspace 1`, `!targets`, target button selection, `!resources`, `!findings`, `!chat new`, a threaded question/reply, concurrent chat threads, thread-local `!chat end`, `!webhook connect`, a signed route-token AcornOps webhook alert, duplicate webhook suppression, and bot restart persistence when the local stack is available.
 2. Add repeatable live-smoke notes for `!` commands, workspace buttons, threaded chats, webhook routing, and signed webhook alert delivery if local service command output becomes available.
 3. Coordinate image publishing, environment templates, and orchestration manifests in `acornops-deployment`.
 4. Decide whether active run recovery workers are needed after restart now that active run records can be persisted in Postgres.
@@ -92,6 +93,13 @@
 ## Session Log
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
+
+### 2026-07-06 - Target selection buttons
+
+- Goal: Explain the Mattermost interactive button flow, add matching selection buttons for `!targets`, and make workspace/target button callbacks return clear user-facing success or failure messages.
+- Completed: Confirmed live Mattermost button failures were caused by Mattermost blocking `host.docker.internal` until `AllowedUntrustedInternalConnections` allowed it. Added target selection button attachments to `!targets` when callback config is present. Extended `POST /mattermost/actions` with `select_target`, preserving user/secret verification and adding explicit ephemeral success or failure text for both workspace and target selection callbacks.
+- Verification run: Baseline `./init.sh` passed before changes with harness verification, lint, build, and 108 tests. Focused `node --test test/bot-server.test.js test/bot-message.test.js` passed with 64 tests after implementation. Final `./init.sh` passed with harness verification, lint, build, and 112 tests.
+- Known risks: Live smoke still needs to confirm target button clicks against Mattermost after rebuilding/restarting the bot.
 
 ### 2026-07-03 - Smoke-test follow-up for actions, database, and webhooks
 

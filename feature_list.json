@@ -486,6 +486,25 @@
       },
       "evidence": "Implementation completed on 2026-07-03 after smoke testing found Mattermost action integration errors, missing Compose database setup, and too-manual webhook registration UX. Focused node --test test/bot-server.test.js test/bot-message.test.js test/command-context.test.js test/postgres-store.test.js test/config.test.js passed with 74 tests after the first implementation pass, and focused node --test test/bot-server.test.js passed with 7 tests after adding old-endpoint removal coverage. Final ./init.sh passed with harness verification, lint, build, and 108 tests.",
       "notes": "Backward compatibility with the old global webhook endpoint is intentionally not preserved because the feature is still in testing."
+    },
+    {
+      "id": "B15",
+      "priority": 23,
+      "area": "bot",
+      "title": "Add Mattermost target selection buttons",
+      "user_visible_behavior": "The !targets command can include Mattermost buttons that select the current target, and workspace/target button callbacks return clear success or failure messages.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus live target-button smoke when services are available",
+        "steps": [
+          "Add target selection button attachments to !targets when BOT_PUBLIC_BASE_URL is configured.",
+          "Extend POST /mattermost/actions with a select_target action.",
+          "Return explicit ephemeral success and failure messages for workspace and target button callbacks.",
+          "Add automated tests and run ./init.sh."
+        ]
+      },
+      "evidence": "Implementation completed on 2026-07-06 after live smoke confirmed Mattermost workspace buttons work once AllowedUntrustedInternalConnections allows host.docker.internal. Focused node --test test/bot-server.test.js test/bot-message.test.js passed with 64 tests after adding target button handling. Final ./init.sh passed with harness verification, lint, build, and 112 tests.",
+      "notes": "Mattermost local Docker deployments must allow host.docker.internal through AllowedUntrustedInternalConnections for button callbacks to reach the bot."
     }
   ]
 }
