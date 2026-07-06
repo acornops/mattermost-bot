@@ -18,8 +18,7 @@ test("readBotConfig applies local development defaults", () => {
     botHttpHost: "0.0.0.0",
     botHttpPort: 0,
     botPublicBaseUrl: "",
-    mattermostActionSecret: "",
-    acornOpsWebhookSecret: ""
+    mattermostActionSecret: ""
   });
 });
 
@@ -65,7 +64,7 @@ test("readBotConfig reads bot persistence and inbound HTTP configuration", () =>
     BOT_HTTP_PORT: "8090",
     BOT_PUBLIC_BASE_URL: "https://bot.example.com",
     MATTERMOST_ACTION_SECRET: "mattermost-secret",
-    ACORNOPS_WEBHOOK_SECRET: "webhook-secret"
+    ACORNOPS_WEBHOOK_SECRET: "ignored-webhook-secret"
   });
 
   assert.equal(config.botDatabaseUrl, "postgres://bot:secret@db/acornops_bot");
@@ -73,5 +72,5 @@ test("readBotConfig reads bot persistence and inbound HTTP configuration", () =>
   assert.equal(config.botHttpPort, 8090);
   assert.equal(config.botPublicBaseUrl, "https://bot.example.com");
   assert.equal(config.mattermostActionSecret, "mattermost-secret");
-  assert.equal(config.acornOpsWebhookSecret, "webhook-secret");
+  assert.equal("acornOpsWebhookSecret" in config, false);
 });

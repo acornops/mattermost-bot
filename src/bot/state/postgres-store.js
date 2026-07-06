@@ -54,8 +54,19 @@ async function migrate(db) {
       channel_id TEXT NOT NULL,
       root_id TEXT NOT NULL DEFAULT '',
       display_name TEXT NOT NULL DEFAULT '',
+      route_token_hash TEXT NOT NULL DEFAULT '',
+      signing_secret TEXT NOT NULL DEFAULT '',
+      delivery_url TEXT NOT NULL DEFAULT '',
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+  await db.query("ALTER TABLE bot_webhook_routes ADD COLUMN IF NOT EXISTS route_token_hash TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE bot_webhook_routes ADD COLUMN IF NOT EXISTS signing_secret TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE bot_webhook_routes ADD COLUMN IF NOT EXISTS delivery_url TEXT NOT NULL DEFAULT ''");
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS bot_webhook_routes_route_token_hash_idx
+    ON bot_webhook_routes (route_token_hash)
+    WHERE route_token_hash <> ''
   `);
   await db.query(`
     CREATE TABLE IF NOT EXISTS bot_inbound_events (
@@ -95,7 +106,10 @@ async function loadState(db) {
       externalUserId: row.external_user_id,
       channelId: row.channel_id,
       rootId: row.root_id,
-      displayName: row.display_name
+      displayName: row.display_name,
+      routeTokenHash: row.route_token_hash,
+      signingSecret: row.signing_secret,
+      deliveryUrl: row.delivery_url
     })),
     inboundEvents: events.rows.map((row) => row.event_id)
   };
@@ -158,6 +172,10 @@ function wrapPersistentStore({ memory, db, logger }) {
     const result = memory.deleteWebhookRoute(externalUserId);
     deleteWebhookRoute(db, externalUserId).catch(logPersistenceError(logger));
     return result;
+  };
+
+  store.getWebhookRouteByTokenHash = (routeTokenHash) => {
+    return memory.getWebhookRouteByTokenHash(routeTokenHash);
   };
 
   store.rememberInboundEvent = async (eventId) => {
@@ -273,16 +291,30 @@ async function persistWebhookRoute(db, route) {
         channel_id,
         root_id,
         display_name,
+        route_token_hash,
+        signing_secret,
+        delivery_url,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
       ON CONFLICT (external_user_id) DO UPDATE SET
         channel_id = EXCLUDED.channel_id,
         root_id = EXCLUDED.root_id,
         display_name = EXCLUDED.display_name,
+        route_token_hash = EXCLUDED.route_token_hash,
+        signing_secret = EXCLUDED.signing_secret,
+        delivery_url = EXCLUDED.delivery_url,
         updated_at = NOW()
     `,
-    [route.externalUserId, route.channelId, route.rootId, route.displayName]
+    [
+      route.externalUserId,
+      route.channelId,
+      route.rootId,
+      route.displayName,
+      route.routeTokenHash,
+      route.signingSecret,
+      route.deliveryUrl
+    ]
   );
 }
 

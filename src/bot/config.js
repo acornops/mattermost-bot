@@ -13,7 +13,6 @@ export function readBotConfig(env = process.env) {
     botHttpHost: env.BOT_HTTP_HOST || "0.0.0.0",
     botHttpPort: Number.parseInt(env.BOT_HTTP_PORT || "0", 10) || 0,
     botPublicBaseUrl: env.BOT_PUBLIC_BASE_URL || "",
-    mattermostActionSecret: env.MATTERMOST_ACTION_SECRET || "",
-    acornOpsWebhookSecret: env.ACORNOPS_WEBHOOK_SECRET || ""
+    mattermostActionSecret: env.MATTERMOST_ACTION_SECRET || ""
   };
 }

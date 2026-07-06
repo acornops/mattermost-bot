@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { DEFAULT_MATTERMOST_BOT_USERNAME } from "./config.js";
 import {
   createNullCommandContextStore,
@@ -365,6 +366,7 @@ export async function handleBotMessageResult({
       userName,
       channelId,
       rootId,
+      botPublicBaseUrl,
       commandContextStore
     });
   }
@@ -664,7 +666,9 @@ function workspaceSelectionAttachments({
         const id = workspace.id ?? "";
         const name = workspace.name ?? workspace.displayName ?? workspace.slug ?? id;
         return {
+          id: `selectWorkspace${index + 1}`,
           name: String(index + 1),
+          type: "button",
           integration: {
             url: actionUrl,
             context: {
@@ -1447,6 +1451,7 @@ async function handleWebhook({
   userName,
   channelId,
   rootId,
+  botPublicBaseUrl,
   commandContextStore
 }) {
   const identity = externalIdentityForUserId(userId);
@@ -1455,20 +1460,34 @@ async function handleWebhook({
   }
 
   const subcommand = commandArgs[0] ?? "status";
-  if (subcommand === "connect") {
+  if (subcommand === "connect" || subcommand === "reconnect") {
     if (!channelId) {
       return "I cannot connect webhooks because Mattermost did not provide the channel id.";
     }
+    if (!botPublicBaseUrl) {
+      return "I cannot connect webhooks because BOT_PUBLIC_BASE_URL is not configured.";
+    }
+    const routeToken = randomToken();
+    const signingSecret = randomToken();
+    const deliveryUrl = `${botPublicBaseUrl.replace(/\/+$/, "")}/acornops/webhooks/routes/${encodeURIComponent(routeToken)}`;
     const route = commandContextStore.upsertWebhookRoute?.(identity.externalUserId, {
       channelId,
       rootId,
-      displayName: identityLabel({ userId, userName })
+      displayName: identityLabel({ userId, userName }),
+      routeTokenHash: sha256(routeToken),
+      signingSecret,
+      deliveryUrl
     });
     return [
       "Webhook alerts connected.",
       `- Mattermost user: ${identityLabel({ userId, userName })}`,
       `- Channel: ${route?.channelId ?? channelId}`,
-      rootId ? `- Thread: ${rootId}` : "- Thread: none"
+      rootId ? `- Thread: ${rootId}` : "- Thread: none",
+      `- Delivery URL: ${deliveryUrl}`,
+      `- Signing secret: ${signingSecret}`,
+      "",
+      "Save the signing secret now. `!webhook status` will not show it again.",
+      "AcornOps must sign each delivery with `AcornOps-Signature: v1=<hmac_sha256(secret, timestamp + \".\" + rawBody)>`."
     ].join("\n");
   }
 
@@ -1489,11 +1508,21 @@ async function handleWebhook({
       "Webhook alert route:",
       `- Mattermost user: ${identityLabel({ userId, userName })}`,
       `- Channel: ${route.channelId}`,
-      route.rootId ? `- Thread: ${route.rootId}` : "- Thread: none"
+      route.rootId ? `- Thread: ${route.rootId}` : "- Thread: none",
+      route.deliveryUrl ? `- Delivery URL: ${route.deliveryUrl}` : "- Delivery URL: not available; run `!webhook reconnect`",
+      "- Signing secret: hidden; run `!webhook reconnect` or `!webhook connect --rotate` to rotate credentials."
     ].join("\n");
   }
 
-  return "`!webhook` supports `connect`, `status`, and `disconnect`.";
+  return "`!webhook` supports `connect`, `reconnect`, `status`, and `disconnect`.";
+}
+
+function randomToken() {
+  return randomBytes(32).toString("base64url");
+}
+
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 async function handleChat({

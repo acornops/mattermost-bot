@@ -38,7 +38,6 @@ const httpServer = createBotHttpServer({
   host: config.botHttpHost,
   port: config.botHttpPort,
   mattermostActionSecret: config.mattermostActionSecret,
-  acornOpsWebhookSecret: config.acornOpsWebhookSecret,
   commandContextStore,
   mattermostClient: client
 });

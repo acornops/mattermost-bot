@@ -205,14 +205,21 @@ test("command context tracks user-level webhook routes and inbound event ids", (
   assert.deepEqual(store.upsertWebhookRoute("user-1", {
     channelId: "channel-1",
     rootId: "root-1",
-    displayName: "alice"
+    displayName: "alice",
+    routeTokenHash: "token-hash",
+    signingSecret: "secret",
+    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
   }), {
     externalUserId: "user-1",
     channelId: "channel-1",
     rootId: "root-1",
-    displayName: "alice"
+    displayName: "alice",
+    routeTokenHash: "token-hash",
+    signingSecret: "secret",
+    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
   });
   assert.equal(store.getWebhookRoute("user-1").channelId, "channel-1");
+  assert.equal(store.getWebhookRouteByTokenHash("token-hash").externalUserId, "user-1");
   assert.equal(store.rememberInboundEvent("event-1"), true);
   assert.equal(store.rememberInboundEvent("event-1"), false);
   assert.equal(store.deleteWebhookRoute("user-1").channelId, "channel-1");

@@ -4,8 +4,10 @@ import test from "node:test";
 import { createInMemoryCommandContextStore } from "../src/bot/commands/context.js";
 import {
   createBotHttpServer,
-  handleAcornOpsWebhook,
-  handleMattermostAction
+  handleAcornOpsRouteWebhook,
+  handleMattermostAction,
+  hashSecret,
+  routeTokenFromPath
 } from "../src/bot/server.js";
 
 test("bot HTTP server can be constructed without listening when port is disabled", async () => {
@@ -17,6 +19,11 @@ test("bot HTTP server can be constructed without listening when port is disabled
   });
 
   assert.equal(await botServer.start(), null);
+});
+
+test("bot HTTP server no longer matches the old global webhook endpoint", () => {
+  assert.equal(routeTokenFromPath("/acornops/webhooks"), "");
+  assert.equal(routeTokenFromPath("/acornops/webhooks/routes/route-token"), "route-token");
 });
 
 test("Mattermost action selects workspace for the requesting user", () => {
@@ -59,15 +66,21 @@ test("Mattermost action rejects invalid secrets", () => {
     commandContextStore: createInMemoryCommandContextStore()
   });
 
-  assert.equal(result.status, 401);
+  assert.equal(result.status, 200);
+  assert.match(result.body.error.message, /not authorized/);
 });
 
-test("AcornOps webhook verifies signature, deduplicates, and posts to user route", async () => {
+test("AcornOps route webhook verifies signature, deduplicates, and posts to route destination", async () => {
   const posts = [];
   const commandContextStore = createInMemoryCommandContextStore();
+  const routeToken = "route-token";
+  const signingSecret = "webhook-secret";
   commandContextStore.upsertWebhookRoute("user-1", {
     channelId: "channel-1",
-    rootId: "root-1"
+    rootId: "root-1",
+    routeTokenHash: hashSecret(routeToken),
+    signingSecret,
+    deliveryUrl: `https://bot.example.com/acornops/webhooks/routes/${routeToken}`
   });
   const body = {
     id: "event-1",
@@ -75,19 +88,18 @@ test("AcornOps webhook verifies signature, deduplicates, and posts to user route
     workspaceId: "workspace-1",
     subject: { type: "run", id: "run-1" },
     data: {
-      externalUserId: "user-1",
       errorMessage: "Provider unavailable"
     }
   };
-  const first = await handleAcornOpsWebhook({
-    ...signedWebhookInput(body, "webhook-secret"),
-    acornOpsWebhookSecret: "webhook-secret",
+  const first = await handleAcornOpsRouteWebhook({
+    routeToken,
+    ...signedWebhookInput(body, signingSecret),
     commandContextStore,
     mattermostClient: fakeMattermostClient(posts)
   });
-  const duplicate = await handleAcornOpsWebhook({
-    ...signedWebhookInput(body, "webhook-secret"),
-    acornOpsWebhookSecret: "webhook-secret",
+  const duplicate = await handleAcornOpsRouteWebhook({
+    routeToken,
+    ...signedWebhookInput(body, signingSecret),
     commandContextStore,
     mattermostClient: fakeMattermostClient(posts)
   });
@@ -101,19 +113,50 @@ test("AcornOps webhook verifies signature, deduplicates, and posts to user route
   assert.match(posts[0].message, /Provider unavailable/);
 });
 
-test("AcornOps webhook rejects stale or invalid signatures", async () => {
-  const result = await handleAcornOpsWebhook({
+test("AcornOps route webhook rejects stale or invalid signatures", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.upsertWebhookRoute("user-1", {
+    channelId: "channel-1",
+    routeTokenHash: hashSecret("route-token"),
+    signingSecret: "webhook-secret"
+  });
+  const result = await handleAcornOpsRouteWebhook({
+    routeToken: "route-token",
     rawBody: JSON.stringify({ id: "event-1" }),
     headers: {
       "acornops-timestamp": "1",
       "acornops-signature": "v1=bad"
     },
-    acornOpsWebhookSecret: "webhook-secret",
-    commandContextStore: createInMemoryCommandContextStore(),
+    commandContextStore,
     mattermostClient: fakeMattermostClient()
   });
 
   assert.equal(result.status, 401);
+});
+
+test("AcornOps route webhook rejects unknown route tokens and missing event ids", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  const missingRoute = await handleAcornOpsRouteWebhook({
+    routeToken: "missing",
+    ...signedWebhookInput({ id: "event-1" }, "webhook-secret"),
+    commandContextStore,
+    mattermostClient: fakeMattermostClient()
+  });
+
+  commandContextStore.upsertWebhookRoute("user-1", {
+    channelId: "channel-1",
+    routeTokenHash: hashSecret("route-token"),
+    signingSecret: "webhook-secret"
+  });
+  const missingEvent = await handleAcornOpsRouteWebhook({
+    routeToken: "route-token",
+    ...signedWebhookInput({ type: "run.failed.v1" }, "webhook-secret"),
+    commandContextStore,
+    mattermostClient: fakeMattermostClient()
+  });
+
+  assert.equal(missingRoute.status, 404);
+  assert.equal(missingEvent.status, 400);
 });
 
 function signedWebhookInput(body, secret) {
@@ -122,13 +165,16 @@ function signedWebhookInput(body, secret) {
   const signature = createHmac("sha256", secret)
     .update(`${timestamp}.${rawBody}`)
     .digest("hex");
-  return {
-    rawBody,
-    headers: {
-      "acornops-event-id": body.id,
+  const headers = {
       "acornops-timestamp": timestamp,
       "acornops-signature": `v1=${signature}`
-    }
+  };
+  if (body.id) {
+    headers["acornops-event-id"] = body.id;
+  }
+  return {
+    rawBody,
+    headers
   };
 }
 

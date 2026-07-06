@@ -168,9 +168,12 @@ After AcornOps webhook intake is configured for the bot, users can route user-le
 
 | Command | What it does |
 | --- | --- |
-| `!webhook connect` | Saves the current Mattermost channel or direct-message destination as your alert route. If used in a thread, alerts route to that thread. |
-| `!webhook status` | Shows where your alerts currently route. |
-| `!webhook disconnect` | Deletes your alert route. |
+| `!webhook connect` | Creates or rotates a delivery URL and signing secret for the current channel, direct message, or thread. Save the signing secret when it is shown. |
+| `!webhook reconnect` | Rotates the delivery URL and signing secret. |
+| `!webhook status` | Shows where alerts route and the delivery URL, but never shows the signing secret. |
+| `!webhook disconnect` | Deletes your alert route and disables the delivery URL. |
+
+AcornOps must send webhook deliveries to the route URL with `AcornOps-Event-Id`, `AcornOps-Timestamp`, and `AcornOps-Signature: v1=<hmac>`, where the HMAC is SHA-256 over `timestamp + "." + rawBody` using the signing secret from `!webhook connect`.
 
 ## Safety Notes
 

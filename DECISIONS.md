@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-07-03: Use per-route signed webhook delivery URLs and bundled Compose Postgres
+
+- Decision: Replace the global `POST /acornops/webhooks` intake and `ACORNOPS_WEBHOOK_SECRET` with per-user delivery URLs at `POST /acornops/webhooks/routes/:routeToken`. `!webhook connect` returns the route URL plus a per-route HMAC signing secret, and Compose starts a bundled Postgres service for durable bot state.
+- Reason: Smoke testing showed the global secret flow was too manual for users and that Docker deployment fell back to in-memory state. Per-route URLs are easier to hand to AcornOps, while mandatory HMAC still protects each delivery.
+- Consequence: Backward compatibility for the old global webhook endpoint is intentionally not preserved during testing. Route tokens are looked up by hash; signing secrets are stored as bot deployment-secret data because HMAC validation needs the original secret. Compose defaults `BOT_PUBLIC_BASE_URL` to a Mattermost-reachable `host.docker.internal` URL.
+
 ## 2026-07-03: Require bang-prefixed Mattermost bot commands
 
 - Decision: Mattermost bot commands require `!` on the command word only, for example `!login`, `!status`, and `!chat new`. Slash-prefixed input is rejected with guidance to use `!`, and unprefixed main-conversation messages nudge users toward `!help`.
@@ -20,9 +26,9 @@
 
 ## 2026-07-03: Add one inbound HTTP listener for actions and webhooks
 
-- Decision: Add a built-in Node HTTP listener with `GET /healthz`, `POST /mattermost/actions`, and `POST /acornops/webhooks`, configured by `BOT_HTTP_HOST`, `BOT_HTTP_PORT`, `BOT_PUBLIC_BASE_URL`, `MATTERMOST_ACTION_SECRET`, and `ACORNOPS_WEBHOOK_SECRET`.
+- Decision: Initially add a built-in Node HTTP listener with `GET /healthz`, `POST /mattermost/actions`, and `POST /acornops/webhooks`, configured by `BOT_HTTP_HOST`, `BOT_HTTP_PORT`, `BOT_PUBLIC_BASE_URL`, `MATTERMOST_ACTION_SECRET`, and `ACORNOPS_WEBHOOK_SECRET`.
 - Reason: Mattermost interactive messages and AcornOps alerts both need a public callback path. One small listener is enough for the current bot without introducing a web framework.
-- Consequence: Docker now exposes the optional bot HTTP port. Any live deployment must make `BOT_PUBLIC_BASE_URL` reachable by Mattermost for actions and by AcornOps for webhook delivery.
+- Consequence: Superseded later on 2026-07-03 for AcornOps alerts by per-route webhook delivery URLs and removal of `ACORNOPS_WEBHOOK_SECRET`. Docker now exposes the optional bot HTTP port. Any live deployment must make `BOT_PUBLIC_BASE_URL` reachable by Mattermost for actions and by AcornOps for webhook delivery.
 
 ## 2026-07-03: Use user-level routes for AcornOps webhook alerts
 

@@ -308,6 +308,15 @@ export function createInMemoryCommandContextStore({ initialState = {} } = {}) {
       return webhookRoutes.get(externalUserId) ?? null;
     },
 
+    getWebhookRouteByTokenHash(routeTokenHash) {
+      for (const route of webhookRoutes.values()) {
+        if (route.routeTokenHash && route.routeTokenHash === routeTokenHash) {
+          return route;
+        }
+      }
+      return null;
+    },
+
     deleteWebhookRoute(externalUserId) {
       const record = webhookRoutes.get(externalUserId) ?? null;
       webhookRoutes.delete(externalUserId);
@@ -454,6 +463,9 @@ export function createNullCommandContextStore() {
     getWebhookRoute() {
       return null;
     },
+    getWebhookRouteByTokenHash() {
+      return null;
+    },
     deleteWebhookRoute() {
       return null;
     },
@@ -579,7 +591,10 @@ function webhookRouteReference(route) {
     externalUserId: route.externalUserId ?? "",
     channelId: route.channelId ?? route.channel_id ?? "",
     rootId: route.rootId ?? route.root_id ?? "",
-    displayName: route.displayName ?? route.display_name ?? ""
+    displayName: route.displayName ?? route.display_name ?? "",
+    routeTokenHash: route.routeTokenHash ?? route.route_token_hash ?? "",
+    signingSecret: route.signingSecret ?? route.signing_secret ?? "",
+    deliveryUrl: route.deliveryUrl ?? route.delivery_url ?? ""
   };
 }
 

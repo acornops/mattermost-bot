@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -8,19 +8,19 @@ export function createBotHttpServer({
   host = "0.0.0.0",
   port = 0,
   mattermostActionSecret = "",
-  acornOpsWebhookSecret = "",
   commandContextStore,
   mattermostClient,
   logger = console
 }) {
   const server = http.createServer(async (req, res) => {
     try {
-      if (req.method === "GET" && req.url === "/healthz") {
+      const { pathname } = new URL(req.url ?? "/", "http://localhost");
+      if (req.method === "GET" && pathname === "/healthz") {
         sendJson(res, 200, { status: "ok" });
         return;
       }
 
-      if (req.method === "POST" && req.url === "/mattermost/actions") {
+      if (req.method === "POST" && pathname === "/mattermost/actions") {
         const rawBody = await readBody(req);
         const payload = parseJson(rawBody);
         const result = handleMattermostAction({
@@ -32,12 +32,13 @@ export function createBotHttpServer({
         return;
       }
 
-      if (req.method === "POST" && req.url === "/acornops/webhooks") {
+      const routeToken = routeTokenFromPath(pathname);
+      if (req.method === "POST" && routeToken) {
         const rawBody = await readBody(req);
-        const result = await handleAcornOpsWebhook({
+        const result = await handleAcornOpsRouteWebhook({
+          routeToken,
           rawBody,
           headers: req.headers,
-          acornOpsWebhookSecret,
           commandContextStore,
           mattermostClient
         });
@@ -97,15 +98,23 @@ export function handleMattermostAction({
   const context = payload.context ?? {};
   if (mattermostActionSecret && context.secret !== mattermostActionSecret) {
     return {
-      status: 401,
-      body: { ephemeral_text: "This action is not authorized." }
+      status: 200,
+      body: {
+        error: {
+          message: "This action is not authorized."
+        }
+      }
     };
   }
 
   if (context.action !== "select_workspace") {
     return {
-      status: 400,
-      body: { ephemeral_text: "Unknown AcornOps action." }
+      status: 200,
+      body: {
+        error: {
+          message: "Unknown AcornOps action."
+        }
+      }
     };
   }
 
@@ -113,15 +122,23 @@ export function handleMattermostAction({
   if (!actingUserId || actingUserId !== context.externalUserId) {
     return {
       status: 200,
-      body: { ephemeral_text: "Only the Mattermost user who requested this list can select from it." }
+      body: {
+        error: {
+          message: "Only the Mattermost user who requested this list can select from it."
+        }
+      }
     };
   }
 
   const workspace = context.workspace ?? {};
   if (!workspace.id) {
     return {
-      status: 400,
-      body: { ephemeral_text: "Workspace selection is missing a workspace id." }
+      status: 200,
+      body: {
+        error: {
+          message: "Workspace selection is missing a workspace id."
+        }
+      }
     };
   }
 
@@ -134,23 +151,25 @@ export function handleMattermostAction({
   };
 }
 
-export async function handleAcornOpsWebhook({
+export async function handleAcornOpsRouteWebhook({
+  routeToken,
   rawBody,
   headers,
-  acornOpsWebhookSecret,
   commandContextStore,
   mattermostClient
 }) {
-  if (!acornOpsWebhookSecret) {
+  const routeTokenHash = hashSecret(routeToken);
+  const route = commandContextStore.getWebhookRouteByTokenHash?.(routeTokenHash);
+  if (!route || !route.signingSecret) {
     return {
-      status: 503,
-      body: { error: "webhook_secret_not_configured" }
+      status: 404,
+      body: { error: "webhook_route_not_found" }
     };
   }
 
   const timestamp = headerValue(headers, "acornops-timestamp");
   const signature = headerValue(headers, "acornops-signature").replace(/^v1=/, "");
-  if (!validWebhookTimestamp(timestamp) || !validSignature({ acornOpsWebhookSecret, timestamp, rawBody, signature })) {
+  if (!validWebhookTimestamp(timestamp) || !validSignature({ secret: route.signingSecret, timestamp, rawBody, signature })) {
     return {
       status: 401,
       body: { error: "invalid_signature" }
@@ -159,29 +178,18 @@ export async function handleAcornOpsWebhook({
 
   const payload = parseJson(rawBody);
   const eventId = headerValue(headers, "acornops-event-id") || payload.id || "";
-  if (eventId) {
-    const firstSeen = await commandContextStore.rememberInboundEvent?.(eventId);
-    if (!firstSeen) {
-      return {
-        status: 202,
-        body: { status: "duplicate" }
-      };
-    }
-  }
-
-  const externalUserId = externalUserIdFromWebhook(payload);
-  if (!externalUserId) {
+  if (!eventId) {
     return {
-      status: 202,
-      body: { status: "ignored", reason: "missing_external_user_id" }
+      status: 400,
+      body: { error: "missing_event_id" }
     };
   }
 
-  const route = commandContextStore.getWebhookRoute?.(externalUserId);
-  if (!route) {
+  const firstSeen = await commandContextStore.rememberInboundEvent?.(eventId);
+  if (!firstSeen) {
     return {
       status: 202,
-      body: { status: "ignored", reason: "no_route" }
+      body: { status: "duplicate" }
     };
   }
 
@@ -219,16 +227,6 @@ function formatWebhookAlert(payload) {
   return lines.join("\n");
 }
 
-function externalUserIdFromWebhook(payload) {
-  return payload.externalUserId
-    ?? payload.external_user_id
-    ?? payload.data?.externalUserId
-    ?? payload.data?.external_user_id
-    ?? payload.subject?.externalUserId
-    ?? payload.subject?.external_user_id
-    ?? "";
-}
-
 function validWebhookTimestamp(timestamp) {
   const value = Number.parseInt(timestamp, 10);
   if (!Number.isInteger(value)) {
@@ -238,14 +236,26 @@ function validWebhookTimestamp(timestamp) {
   return ageSeconds <= WEBHOOK_TOLERANCE_SECONDS;
 }
 
-function validSignature({ acornOpsWebhookSecret, timestamp, rawBody, signature }) {
+function validSignature({ secret, timestamp, rawBody, signature }) {
   if (!signature) {
     return false;
   }
-  const expected = createHmac("sha256", acornOpsWebhookSecret)
+  const expected = createHmac("sha256", secret)
     .update(`${timestamp}.${rawBody}`)
     .digest("hex");
   return safeEqual(signature, expected);
+}
+
+export function hashSecret(secret) {
+  return createHash("sha256").update(secret).digest("hex");
+}
+
+export function routeTokenFromPath(pathname) {
+  const prefix = "/acornops/webhooks/routes/";
+  if (!pathname.startsWith(prefix)) {
+    return "";
+  }
+  return decodeURIComponent(pathname.slice(prefix.length));
 }
 
 function safeEqual(left, right) {

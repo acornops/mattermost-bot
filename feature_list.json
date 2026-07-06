@@ -464,6 +464,28 @@
       },
       "evidence": "On 2026-07-03, added user-level !webhook connect, !webhook status, and !webhook disconnect commands, persisted webhook routes in bot state, verified AcornOps-Timestamp and AcornOps-Signature for incoming webhook deliveries, deduplicated AcornOps-Event-Id, resolved user-level routes, and posted concise Mattermost alerts. Added command, storage, signature, idempotency, and alert-posting tests. Baseline ./init.sh passed before changes with 93 tests. Final ./init.sh passed with harness verification, lint, build, and 104 tests.",
       "notes": "AcornOps webhook registration or management may require coordinated control-plane work if external integrations cannot create user-level subscriptions yet."
+    },
+    {
+      "id": "B14",
+      "priority": 22,
+      "area": "bot",
+      "title": "Fix Mattermost actions, Compose database, and webhook route registration UX",
+      "user_visible_behavior": "Workspace buttons work without Mattermost action integration errors, Docker Compose provides durable bot Postgres state, and users get a signed per-route webhook URL plus signing secret from !webhook connect.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus live smoke when services are available",
+        "steps": [
+          "Make Mattermost action callbacks return HTTP 200 for expected user-facing action failures.",
+          "Make workspace button payloads include explicit button type and stable ids.",
+          "Add a bundled Postgres service and default BOT_DATABASE_URL to docker-compose.yml.",
+          "Remove the old global /acornops/webhooks endpoint and ACORNOPS_WEBHOOK_SECRET config.",
+          "Add per-route signed webhook delivery URLs under /acornops/webhooks/routes/:routeToken.",
+          "Require AcornOps-Event-Id, AcornOps-Timestamp, and AcornOps-Signature on route webhook deliveries.",
+          "Add automated tests and run ./init.sh."
+        ]
+      },
+      "evidence": "Implementation completed on 2026-07-03 after smoke testing found Mattermost action integration errors, missing Compose database setup, and too-manual webhook registration UX. Focused node --test test/bot-server.test.js test/bot-message.test.js test/command-context.test.js test/postgres-store.test.js test/config.test.js passed with 74 tests after the first implementation pass, and focused node --test test/bot-server.test.js passed with 7 tests after adding old-endpoint removal coverage. Final ./init.sh passed with harness verification, lint, build, and 108 tests.",
+      "notes": "Backward compatibility with the old global webhook endpoint is intentionally not preserved because the feature is still in testing."
     }
   ]
 }

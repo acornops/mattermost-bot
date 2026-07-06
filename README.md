@@ -83,12 +83,11 @@ Environment variables:
 | `MATTERMOST_BOT_USERNAME` | Bot username used for mention detection. | `acorn-ops-bot` |
 | `ACORNOPS_API_BASE_URL` | AcornOps control-plane base URL. | `http://localhost:8081` |
 | `EXTERNAL_INTEGRATION_SERVICE_TOKEN` | AcornOps service token for this installed external integration. | Required for AcornOps-backed commands |
-| `BOT_DATABASE_URL` | Optional Postgres URL for persistent bot command context, chat threads, active runs, webhook routes, and inbound idempotency. Empty uses in-memory state for local tests. | Empty |
+| `BOT_DATABASE_URL` | Optional Postgres URL for persistent bot command context, chat threads, active runs, webhook routes, and inbound idempotency. Compose supplies a bundled Postgres URL; empty uses in-memory state for local tests. | Empty |
 | `BOT_HTTP_HOST` | Host for the optional inbound bot HTTP listener. | `0.0.0.0` |
 | `BOT_HTTP_PORT` | Port for the inbound bot HTTP listener. `0` disables listening. | `0` |
 | `BOT_PUBLIC_BASE_URL` | Public base URL used in Mattermost interactive action callbacks. Required for workspace buttons. | Empty |
 | `MATTERMOST_ACTION_SECRET` | Shared secret embedded in Mattermost action contexts. | Empty |
-| `ACORNOPS_WEBHOOK_SECRET` | Secret used to verify signed AcornOps webhook deliveries. | Empty |
 | `CHAT_RUN_POLL_ATTEMPTS` | Immediate chat run polling attempts before SSE follow-up. | `15` |
 | `CHAT_RUN_POLL_INTERVAL_MS` | Immediate chat run polling interval in milliseconds. | `1000` |
 | `RUN_STREAM_RECONNECT_ATTEMPTS` | SSE reconnect attempts before fallback polling. | `3` |
@@ -117,8 +116,8 @@ Commands are plain Mattermost messages, not slash commands. Command words requir
 - `!investigations`: list workspace investigations
 - `!chat new [title]`: create a read-only troubleshooting chat for the selected target and post a dedicated Mattermost root thread
 - `!chat end`: inside a chat thread, close only that chat and stop following its active answer
-- `!webhook connect`: route user-level AcornOps webhook alerts to the current Mattermost destination
-- `!webhook status`: show the current user-level webhook route
+- `!webhook connect`: create or rotate a signed AcornOps webhook delivery URL for the current Mattermost destination
+- `!webhook status`: show the current user-level webhook route without revealing its signing secret
 - `!webhook disconnect`: remove the current user's webhook route
 
 After `!chat new`, reply in the generated Mattermost thread to send read-only assistant questions for that specific AcornOps session. Thread replies do not need `!`; assistant replies and long-running SSE follow-ups stay in that thread. The main bot direct message or channel mention remains available for normal `!` commands and additional `!chat new` threads. Advanced filters, shortcuts such as `!clusters` and `!vms`, and compatibility session commands are documented in [`docs/wiki-mattermost-bot-commands.md`](docs/wiki-mattermost-bot-commands.md).
@@ -169,7 +168,7 @@ Run with Docker Compose:
 docker compose up --build
 ```
 
-Compose defaults `MATTERMOST_URL` to `http://host.docker.internal:8065` and `ACORNOPS_API_BASE_URL` to `http://host.docker.internal:8081`, which lets the container reach services running on the host through Docker Desktop. Keep `MATTERMOST_BOT_TOKEN` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN` in your local `.env` or shell environment.
+Compose starts a bundled `bot-postgres` service and defaults `BOT_DATABASE_URL` to that database. It also defaults `MATTERMOST_URL` to `http://host.docker.internal:8065`, `ACORNOPS_API_BASE_URL` to `http://host.docker.internal:8081`, and `BOT_PUBLIC_BASE_URL` to `http://host.docker.internal:8080`, which lets Mattermost and AcornOps containers reach the bot callback listener through Docker Desktop. Keep `MATTERMOST_BOT_TOKEN` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN` in your local `.env` or shell environment.
 
 The image installs dependencies from `package*.json` inside Docker. It does not copy host `node_modules` and does not bake local `.env` files into the image. It exposes the optional bot HTTP port for Mattermost actions and AcornOps webhooks; the listener only binds when `BOT_HTTP_PORT` is non-zero.
 
@@ -190,6 +189,7 @@ Do not run overlapping local stacks on the same host ports.
 - Run behind the deployment topology owned by `acornops-deployment`.
 - Use Postgres through `BOT_DATABASE_URL` for restart-resilient command context, chat-thread mappings, active run records, user webhook routes, and inbound webhook idempotency.
 - `BOT_PUBLIC_BASE_URL` must be reachable by Mattermost for interactive actions and by AcornOps for webhook deliveries.
+- Webhook delivery URLs include an opaque route token and each delivery must be signed with the per-route signing secret returned by `!webhook connect`. The signing secret is stored in bot Postgres as deployment-secret data so HMAC validation can run.
 - Treat channel responses as potentially visible to the whole channel. Login remains direct-message-only; read and assistant commands are intentionally channel-capable.
 - Rotate service tokens through AcornOps control-plane procedures and restart the bot runtime after secret updates.
 

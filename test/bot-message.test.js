@@ -289,7 +289,9 @@ test("handleBotMessage adds workspace selection actions when callback URL is con
       text: "Choose workspace",
       actions: [
         {
+          id: "selectWorkspace1",
           name: "1",
+          type: "button",
           integration: {
             url: "https://bot.example.com/mattermost/actions",
             context: {
@@ -306,6 +308,51 @@ test("handleBotMessage adds workspace selection actions when callback URL is con
       ]
     }
   ]);
+});
+
+test("handleBotMessage connects webhook route with delivery URL and signing secret", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  const response = await handleBotMessage({
+    text: "!webhook connect",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelId: "channel-1",
+    rootId: "root-1",
+    botPublicBaseUrl: "https://bot.example.com",
+    commandContextStore
+  });
+  const route = commandContextStore.getWebhookRoute("mattermost-user-1");
+
+  assert.match(response, /Webhook alerts connected/);
+  assert.match(response, /Delivery URL: https:\/\/bot\.example\.com\/acornops\/webhooks\/routes\//);
+  assert.match(response, /Signing secret:/);
+  assert.equal(route.channelId, "channel-1");
+  assert.equal(route.rootId, "root-1");
+  assert.match(route.routeTokenHash, /^[a-f0-9]{64}$/);
+  assert.equal(route.signingSecret.length > 20, true);
+  assert.match(route.deliveryUrl, /\/acornops\/webhooks\/routes\//);
+});
+
+test("handleBotMessage shows webhook route status without exposing signing secret", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.upsertWebhookRoute("mattermost-user-1", {
+    channelId: "channel-1",
+    routeTokenHash: "token-hash",
+    signingSecret: "secret-value",
+    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
+  });
+
+  const response = await handleBotMessage({
+    text: "!webhook status",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    commandContextStore
+  });
+
+  assert.match(response, /Webhook alert route/);
+  assert.match(response, /Delivery URL: https:\/\/bot\.example\.com/);
+  assert.doesNotMatch(response, /secret-value/);
+  assert.match(response, /Signing secret: hidden/);
 });
 
 test("handleBotMessage reports no available workspaces", async () => {
