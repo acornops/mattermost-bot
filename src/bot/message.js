@@ -22,10 +22,11 @@ import {
   formatContextLines,
   formatFindingPage,
   formatMessagePage,
-  formatReference,
+  formatReferenceName,
   formatResourcePage,
   formatSessionDetail,
   formatSessionPage,
+  selectedContextTarget,
   formatTargetDetail,
   formatTargetPage,
   formatVirtualMachineDetail,
@@ -497,31 +498,25 @@ async function handleStatus({ userId, userName, acornOpsClient, commandContextSt
   const context = commandContextStore.get(identity.externalUserId);
   if (result.status === "linked") {
     const user = result.user ?? {};
-    const linkedUser = [user.displayName, user.email, user.id].filter(Boolean).join(" / ");
+    const linkedUser = [user.displayName, user.email].filter(Boolean).join(" / ");
+    const current = `Workspace: ${formatReferenceName(context.currentWorkspace)}    |    Target: ${formatReferenceName(selectedContextTarget(context))}`;
     return [
       "AcornOps bot status:",
-      `- Mattermost user: ${identityLabel({ userId, userName })}`,
-      `- Backend authentication: linked to AcornOps${linkedUser ? ` as ${linkedUser}` : ""}`,
-      `- Workspace: ${formatReference(context.currentWorkspace)}`,
-      `- Target: ${formatReference(context.currentTarget ?? context.currentCluster ?? context.currentVm)}`,
-      `- Chat: ${context.currentSession ? `${formatReference(context.currentSession)} (${context.chatActive ? "active" : "paused"})` : "none"}`
+      `- Account: linked to AcornOps${linkedUser ? ` as ${linkedUser}` : ""}`,
+      `- Current: ${current}`
     ].join("\n");
   }
 
   if (result.status === "unlinked") {
     return [
       "AcornOps bot status:",
-      `- Mattermost user: ${identityLabel({ userId, userName })}`,
-      "- Backend authentication: not linked. Run `login` in a direct message to connect AcornOps.",
-      "- Cluster access: not loaded"
+      "- Account: not linked. Run `!login` in a direct message to connect AcornOps."
     ].join("\n");
   }
 
   return [
     "AcornOps bot status:",
-    `- Mattermost user: ${identityLabel({ userId, userName })}`,
-    `- Backend authentication: unknown AcornOps status ${JSON.stringify(result.status)}`,
-    "- Cluster access: not loaded"
+    `- Account: unknown AcornOps status ${JSON.stringify(result.status)}`
   ].join("\n");
 }
 
@@ -628,7 +623,7 @@ async function handleTargets({
 
   const context = commandContextStore.get(auth.identity.externalUserId);
   if (!context.currentWorkspace) {
-    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
+    return "Choose a workspace first: send `!workspaces`, then `!workspace 1`.";
   }
 
   try {
@@ -800,12 +795,12 @@ async function handleTargetDetail({
   const context = commandContextStore.get(identity.externalUserId);
   const workspace = context.currentWorkspace;
   if (!workspace) {
-    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
+    return "Choose a workspace first: send `!workspaces`, then `!workspace 1`.";
   }
 
   const target = resolveTargetReference(reference, context);
   if (!target) {
-    return "I do not have that target number yet. Send `targets` first, or use a target id.";
+    return "I do not have that target number yet. Send `!targets` first, or use a target id.";
   }
 
   try {
@@ -851,7 +846,7 @@ async function handleWorkspace({
   if (commandArgs.length === 0) {
     const currentWorkspace = commandContextStore.get(auth.identity.externalUserId).currentWorkspace;
     if (!currentWorkspace) {
-      return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
+      return "Choose a workspace first: send `!workspaces`, then `!workspace 1`.";
     }
 
     return handleWorkspaceDetail({
@@ -893,7 +888,7 @@ async function handleWorkspaceDetail({
     commandContextStore
   });
   if (!workspace) {
-    return "I do not have that workspace number yet. Send `workspaces` first, or use a workspace id.";
+    return "I do not have that workspace number yet. Send `!workspaces` first, or use a workspace id.";
   }
 
   try {
@@ -954,7 +949,7 @@ async function handleClusters({
     commandContextStore
   });
   if (!workspace) {
-    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
+    return "Choose a workspace first: send `!workspaces`, then `!workspace 1`.";
   }
 
   try {
@@ -1014,12 +1009,12 @@ async function handleClusterDetail({
   const context = commandContextStore.get(identity.externalUserId);
   const workspace = context.currentWorkspace;
   if (!workspace) {
-    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
+    return "Choose a workspace first: send `!workspaces`, then `!workspace 1`.";
   }
 
   const cluster = resolveClusterReference(reference, context);
   if (!cluster) {
-    return "I do not have that cluster number yet. Send `clusters` first, or use a cluster id.";
+    return "I do not have that cluster number yet. Send `!clusters` first, or use a cluster id.";
   }
 
   try {
@@ -1193,7 +1188,7 @@ async function handleInvestigations({
 
   const context = commandContextStore.get(auth.identity.externalUserId);
   if (!context.currentWorkspace) {
-    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
+    return "Choose a workspace first: send `!workspaces`, then `!workspace 1`.";
   }
 
   try {
@@ -1238,7 +1233,7 @@ async function handleVirtualMachines({
 
   const context = commandContextStore.get(auth.identity.externalUserId);
   if (!context.currentWorkspace) {
-    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
+    return "Choose a workspace first: send `!workspaces`, then `!workspace 1`.";
   }
 
   if (commandArgs.length === 1) {
@@ -1312,12 +1307,12 @@ async function handleVirtualMachineDetail({
   const context = commandContextStore.get(identity.externalUserId);
   const workspace = context.currentWorkspace;
   if (!workspace) {
-    return "Choose a workspace first: send `workspaces`, then `workspace 1`.";
+    return "Choose a workspace first: send `!workspaces`, then `!workspace 1`.";
   }
 
   const vm = resolveVirtualMachineReference(reference, context);
   if (!vm) {
-    return "I do not have that VM number yet. Send `vms` first, or use a VM id.";
+    return "I do not have that VM number yet. Send `!vms` first, or use a VM id.";
   }
 
   try {
@@ -1425,7 +1420,7 @@ async function handleSession({
   const context = commandContextStore.get(auth.identity.externalUserId);
   const session = resolveSessionReference(commandArgs[0], context);
   if (!session) {
-    return "I do not have that session number yet. Send `sessions` first, or use a session id.";
+    return "I do not have that session number yet. Send `!sessions` first, or use a session id.";
   }
 
   try {
@@ -1497,7 +1492,7 @@ async function handleMessages({
   const context = commandContextStore.get(auth.identity.externalUserId);
   const session = resolveSessionReference(commandArgs[0] ?? "", context);
   if (!session) {
-    return "No current session is selected. Send `sessions`, then `session 1`, or use `session new`.";
+    return "No current session is selected. Send `!sessions`, then `!session 1`, or use `!session new`.";
   }
 
   try {
@@ -1690,7 +1685,7 @@ async function handleChatQuestion({
   threadChat = null
 }) {
   if (!question) {
-    return "Send a question, or use `chat pause` to leave chat mode.";
+    return "Send a question in this chat thread, or use `!chat end` to close it.";
   }
 
   const auth = requireExternalDataCommand({
@@ -1729,7 +1724,7 @@ async function handleChatQuestion({
       context = commandContextStore.get(auth.identity.externalUserId);
     } catch (error) {
       if (error instanceof CommandResponseError) {
-        return `${error.message}\nStart with \`chat new\` after choosing a target.`;
+        return `${error.message}\nStart with \`!chat new\` after choosing a target.`;
       }
       return dataErrorText(error, "chat session");
     }
@@ -1892,7 +1887,7 @@ function resolveWorkspaceForUser({ reference, identity, commandContextStore }) {
 function selectedTarget(context, hint = "") {
   if (!context.currentWorkspace) {
     return {
-      response: "Choose a workspace first: send `workspaces`, then `workspace 1`."
+      response: "Choose a workspace first: send `!workspaces`, then `!workspace 1`."
     };
   }
 
@@ -1905,7 +1900,7 @@ function selectedTarget(context, hint = "") {
   if (hint === "cluster") {
     if (!context.currentCluster) {
       return {
-        response: "No current cluster is selected. Send `clusters`, then `cluster 1`."
+        response: "No current cluster is selected. Send `!clusters`, then `!cluster 1`."
       };
     }
     return { type: "cluster", reference: context.currentCluster };
@@ -1914,7 +1909,7 @@ function selectedTarget(context, hint = "") {
   if (hint === "vm") {
     if (!context.currentVm) {
       return {
-        response: "No current VM is selected. Send `vms`, then `vm 1`."
+        response: "No current VM is selected. Send `!vms`, then `!vm 1`."
       };
     }
     return { type: "vm", reference: context.currentVm };
@@ -1947,7 +1942,7 @@ function selectedTarget(context, hint = "") {
   }
 
   return {
-    response: "Choose a target first: send `targets`, then `target 1`."
+    response: "Choose a target first: send `!targets`, then `!target 1`."
   };
 }
 

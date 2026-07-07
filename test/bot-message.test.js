@@ -172,7 +172,10 @@ test("handleBotMessage status reports linked AcornOps identity", async () => {
     }
   });
 
-  assert.match(response, /Backend authentication: linked to AcornOps as Alice \/ alice@example\.com \/ acorn-user-1/);
+  assert.match(response, /Account: linked to AcornOps as Alice \/ alice@example\.com/);
+  assert.match(response, /Current: Workspace: none {4}\| {4}Target: none/);
+  assert.doesNotMatch(response, /acorn-user-1/);
+  assert.doesNotMatch(response, /Mattermost user/);
 });
 
 test("handleBotMessage status tells unlinked users to run login", async () => {
@@ -189,8 +192,9 @@ test("handleBotMessage status tells unlinked users to run login", async () => {
     }
   });
 
-  assert.match(response, /Backend authentication: not linked/);
-  assert.match(response, /Run `login`/);
+  assert.match(response, /Account: not linked/);
+  assert.match(response, /Run `!login`/);
+  assert.doesNotMatch(response, /mattermost-user-1/);
 });
 
 test("handleBotMessage reports status configuration when service token is missing", async () => {
@@ -251,7 +255,9 @@ test("handleBotMessage lists workspaces for a linked direct-message user", async
   });
 
   assert.match(response, /AcornOps workspaces:/);
-  assert.match(response, /Mattermost user: alice \(mattermost-user-1\)/);
+  assert.match(response, /Current: Workspace: none {4}\| {4}Target: none/);
+  assert.match(response, /------------------------------/);
+  assert.doesNotMatch(response, /Mattermost user: alice \(mattermost-user-1\)/);
   assert.match(response, /1\. Platform \(workspace-1\) \| plan: Team \| quota: members 0\/10, clusters 0\/3, VMs 0\/5/);
   assert.match(response, /2\. Sandbox \(workspace-2\) \| plan: free/);
   assert.match(response, /Next page cursor: cursor-2/);
@@ -435,7 +441,7 @@ test("handleBotMessage tells unlinked users to login before workspaces", async (
   });
 
   assert.match(response, /not linked or the bot credentials are invalid/);
-  assert.match(response, /Run `login`/);
+  assert.match(response, /Run `!login`/);
 });
 
 test("handleBotMessage reports backend workspace errors without leaking response body", async () => {
@@ -494,7 +500,7 @@ test("handleBotMessage shows workspace detail by remembered index without select
   assert.match(response, /Permissions: read_workspace_data/);
   assert.match(response, /Counts: kubernetesClusters 2/);
   assert.doesNotMatch(response, /Current workspace updated/);
-  assert.match(response, /Use `workspace 1` to make this the current workspace/);
+  assert.match(response, /Use `!workspace 1` to make this the current workspace/);
   assert.equal(commandContextStore.get("mattermost-user-1").currentWorkspace, null);
 });
 
@@ -560,7 +566,7 @@ test("handleBotMessage shows details for current workspace", async () => {
   assert.match(response, /Name: Platform/);
   assert.match(response, /Plan: Team/);
   assert.match(response, /Quota: clusters 2\/3/);
-  assert.match(response, /Use `targets`/);
+  assert.match(response, /Use `!targets`/);
 });
 
 test("handleBotMessage lists and selects generic targets", async () => {
@@ -774,7 +780,7 @@ test("handleBotMessage lists clusters in the current workspace", async () => {
     }
   });
 
-  assert.match(response, /Workspace: Platform \(workspace-1\)/);
+  assert.match(response, /Current: Workspace: Platform {4}\| {4}Target: none/);
   assert.match(response, /AcornOps clusters:/);
   assert.match(response, /1\. Prod \(cluster-1\) - status: ready, agent: connected, version: v1\.33\.0/);
   assert.match(response, /Next page cursor: cluster-cursor-2/);
@@ -813,7 +819,7 @@ test("handleBotMessage shows cluster detail by remembered index without selectin
 
   assert.match(response, /AcornOps cluster:/);
   assert.match(response, /Name: Prod/);
-  assert.match(response, /Use `target 1` or `cluster 1`/);
+  assert.match(response, /Use `!target 1` or `!cluster 1`/);
   assert.equal(commandContextStore.get("mattermost-user-1").currentCluster, null);
 });
 
@@ -887,8 +893,7 @@ test("handleBotMessage lists resources for the selected cluster", async () => {
     }
   });
 
-  assert.match(response, /Workspace: Platform \(workspace-1\)/);
-  assert.match(response, /Target: Prod \(cluster-1\)/);
+  assert.match(response, /Current: Workspace: Platform {4}\| {4}Target: Prod/);
   assert.match(response, /AcornOps resources:/);
   assert.match(response, /payments-api - Pod, namespace: payments, status: Running/);
 });
@@ -917,7 +922,7 @@ test("handleBotMessage lists findings for the selected VM", async () => {
     }
   });
 
-  assert.match(response, /Target: App VM \(vm-1\)/);
+  assert.match(response, /Current: Workspace: Platform {4}\| {4}Target: App VM/);
   assert.match(response, /AcornOps findings:/);
   assert.match(response, /Service attention needed - severity: warning/);
 });

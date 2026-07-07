@@ -1,5 +1,3 @@
-import { identityLabel } from "../message-utils.js";
-
 export function formatWorkspacePage({ page, context, userId, userName }) {
   const items = Array.isArray(page?.items) ? page.items : [];
   if (items.length === 0) {
@@ -23,7 +21,7 @@ export function formatWorkspacePage({ page, context, userId, userName }) {
     lines.push(`Next page cursor: ${page.nextCursor}`);
   }
 
-  lines.push("Use `workspaces 1` for details or `workspace 1` to set the current workspace.");
+  lines.push("Use `!workspaces 1` for details or `!workspace 1` to set the current workspace.");
 
   return lines.join("\n");
 }
@@ -57,11 +55,11 @@ export function formatWorkspaceDetail({ workspace, context, userId, userName, se
   }
 
   if (selectCurrent) {
-    lines.push("Current workspace updated. Use `targets` to choose what to inspect.");
+    lines.push("Current workspace updated. Use `!targets` to choose what to inspect.");
   } else if (!currentPrefix) {
-    lines.push("Use `workspace 1` to make this the current workspace.");
+    lines.push("Use `!workspace 1` to make this the current workspace.");
   } else {
-    lines.push("Use `targets` to choose what to inspect in this workspace.");
+    lines.push("Use `!targets` to choose what to inspect in this workspace.");
   }
   return lines.join("\n");
 }
@@ -171,9 +169,9 @@ export function formatClusterDetail({ cluster, context, fallbackWorkspace, userI
   }
 
   if (selectCurrent) {
-    lines.push("Current target updated. Use `chat new`, `resources`, or `findings`.");
+    lines.push("Current target updated. Use `!chat new`, `!resources`, or `!findings`.");
   } else {
-    lines.push("Use `target 1` or `cluster 1` to make this the current target.");
+    lines.push("Use `!target 1` or `!cluster 1` to make this the current target.");
   }
 
   return lines.join("\n");
@@ -244,9 +242,9 @@ export function formatVirtualMachineDetail({ vm, context, fallbackWorkspace, use
   }
 
   if (selectCurrent) {
-    lines.push("Current target updated. Use `chat new`, `resources`, or `findings`.");
+    lines.push("Current target updated. Use `!chat new`, `!resources`, or `!findings`.");
   } else {
-    lines.push("Use `target 1` or `vm 1` to make this the current target.");
+    lines.push("Use `!target 1` or `!vm 1` to make this the current target.");
   }
 
   return lines.join("\n");
@@ -461,7 +459,7 @@ export function formatTargetPage({ page, context, userId, userName }) {
     lines.push("More targets are available. Use filters to narrow the list.");
   }
 
-  lines.push("Next: `target 1`, then `chat new`.");
+  lines.push("Next: `!target 1`, then `!chat new`.");
   return lines.join("\n");
 }
 
@@ -489,9 +487,9 @@ export function formatTargetDetail({ target, context, fallbackWorkspace, userId,
   }
 
   if (selectCurrent) {
-    lines.push("Current target updated. Use `chat new`, `resources`, or `findings`.");
+    lines.push("Current target updated. Use `!chat new`, `!resources`, or `!findings`.");
   } else {
-    lines.push("Use `target 1` to make this the current target.");
+    lines.push("Use `!target 1` to make this the current target.");
   }
 
   return lines.join("\n");
@@ -510,28 +508,10 @@ function formatTargetSummary(target) {
 }
 
 export function formatContextLines(context, { userId, userName } = {}) {
-  const lines = [
-    "Context:",
-    `- Mattermost user: ${identityLabel({ userId, userName })}`,
-    `- Workspace: ${formatReference(context?.currentWorkspace)}`
+  return [
+    `Current: Workspace: ${formatReferenceName(context?.currentWorkspace)}    |    Target: ${formatReferenceName(selectedContextTarget(context))}`,
+    "------------------------------"
   ];
-
-  if (context?.currentTarget) {
-    lines.push(`- Target: ${formatReference(context.currentTarget)}`);
-  } else if (context?.currentCluster) {
-    lines.push(`- Target: ${formatReference(context.currentCluster)}`);
-  } else if (context?.currentVm) {
-    lines.push(`- Target: ${formatReference(context.currentVm)}`);
-  } else {
-    lines.push("- Target: none");
-  }
-
-  if (context?.currentSession) {
-    const mode = context.chatActive ? "active" : "paused";
-    lines.push(`- Chat: ${formatReference(context.currentSession)} (${mode})`);
-  }
-
-  return lines;
 }
 
 export function formatReference(reference) {
@@ -544,6 +524,18 @@ export function formatReference(reference) {
   }
 
   return reference.name || reference.id || "unknown";
+}
+
+export function formatReferenceName(reference) {
+  if (!reference) {
+    return "none";
+  }
+
+  return reference.name || reference.displayName || reference.title || reference.id || "unknown";
+}
+
+export function selectedContextTarget(context) {
+  return context?.currentTarget ?? context?.currentCluster ?? context?.currentVm ?? null;
 }
 
 export function normalizeListResponse(value) {
@@ -566,16 +558,10 @@ export function singleLine(value) {
 export function formatChatStatus({ context, userId, userName }) {
   const lines = [
     ...formatContextLines(context, { userId, userName }),
-    context.chatActive ? "Chat mode is active." : "Chat mode is paused."
+    "Chat runs happen in Mattermost threads."
   ];
 
-  if (!context.currentSession) {
-    lines.push("No chat session is selected. Use `chat new` after choosing a target.");
-  } else if (context.chatActive) {
-    lines.push("Send a question. Use `chat pause` before running bot commands like `status`, `resources`, or `findings`.");
-  } else {
-    lines.push("Use `chat resume` to continue, or `chat end` to clear it.");
-  }
+  lines.push("Use `!chat new` after choosing a target, then reply in the thread it creates.");
 
   return lines.join("\n");
 }

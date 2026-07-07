@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-07-07: Keep bot context headers and status messages concise
+
+- Decision: Context-bearing Mattermost command replies start with `Current: Workspace: <name>    |    Target: <name>` and a divider, rather than a repeated multi-line identity/context block. `!status` reports linked/unlinked account state and current workspace/target only, omitting Mattermost user ids, backend AcornOps user ids, and chat/session selection.
+- Reason: The previous responses repeated long context and identity details, making command output harder to scan in Mattermost. Workspace and target selection are the useful operational context; chat threads already carry chat state.
+- Consequence: New commands should reuse the shared compact context formatter when they need current context. Object list/detail responses may still show AcornOps object ids where ids are useful for explicit selection, troubleshooting, or support.
+
 ## 2026-07-03: Use per-route signed webhook delivery URLs and bundled Compose Postgres
 
 - Decision: Replace the global `POST /acornops/webhooks` intake and `ACORNOPS_WEBHOOK_SECRET` with per-user delivery URLs at `POST /acornops/webhooks/routes/:routeToken`. `!webhook connect` returns the route URL plus a per-route HMAC signing secret, and Compose starts a bundled Postgres service for durable bot state.

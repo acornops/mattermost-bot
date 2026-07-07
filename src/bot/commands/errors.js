@@ -5,7 +5,7 @@ export function workspaceErrorText(error) {
   if (status === 401) {
     return [
       "AcornOps workspaces could not be loaded because this external chat account is not linked or the bot credentials are invalid.",
-      "Run `login` in a direct message, then try `workspaces` again."
+      "Run `!login` in a direct message, then try `!workspaces` again."
     ].join("\n");
   }
 
@@ -25,7 +25,7 @@ export function dataErrorText(error, label) {
   if (status === 401) {
     return [
       `AcornOps ${label} could not be loaded because this external chat account is not linked or the bot credentials are invalid.`,
-      "Run `login` in a direct message, then try again."
+      "Run `!login` in a direct message, then try again."
     ].join("\n");
   }
 

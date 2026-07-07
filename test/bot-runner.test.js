@@ -86,9 +86,9 @@ test("handlePostedEvent responds to direct message posts in the main timeline", 
   assert.equal(result.id, "reply-1");
   assert.equal(posts[0].channelId, "channel-1");
   assert.equal(posts[0].rootId, "");
-  assert.match(posts[0].message, /alice \(user-1\)/);
   assert.match(posts[0].message, /not linked/);
-  assert.match(posts[0].message, /Run `login`/);
+  assert.match(posts[0].message, /Run `!login`/);
+  assert.doesNotMatch(posts[0].message, /user-1/);
 });
 
 test("handlePostedEvent skips unmentioned channel posts", async () => {

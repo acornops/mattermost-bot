@@ -41,6 +41,7 @@
 - `B13`: Add user-level AcornOps webhook alert intake and Mattermost posting.
 - `B14`: Fix Mattermost actions, Compose database, and webhook route registration UX.
 - `B15`: Add Mattermost target selection buttons.
+- `B16`: Shorten Mattermost command context and status messages.
 
 ## In Progress
 
@@ -49,7 +50,8 @@
 ## Known Issues
 
 - `login` direct messages now call AcornOps `POST /api/v1/auth/external-integrations/link` with `externalUserId` set to the Mattermost post author's `user_id` and optional `externalDisplayName` from the Mattermost sender name.
-- `status` now calls AcornOps `POST /api/v1/auth/external-integrations/resolve` and reports `linked` or tells unlinked users to run `login`.
+- `status` now calls AcornOps `POST /api/v1/auth/external-integrations/resolve` and reports concise linked/unlinked account state plus current workspace/target names. It intentionally omits the Mattermost user id, backend AcornOps user id, and old chat/session selection line.
+- Context-bearing command replies now start with `Current: Workspace: <name>    |    Target: <name>` followed by a divider before the command-specific response body.
 - The bot accepts commands with a `!` prefix on the command word only, such as `!login`, `!workspaces`, and `!chat new`. Slash-prefixed commands return guidance to use `!`; unprefixed main-conversation messages nudge users toward `!help`.
 - Only `login` is direct-message-only. Authenticated read and read-only assistant commands can run in direct messages or channel mentions.
 - `!workspaces` calls AcornOps `GET /api/v1/workspaces?limit=50` with `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
@@ -93,6 +95,14 @@
 ## Session Log
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
+
+### 2026-07-07 - Short command context and status messages
+
+- Goal: Shorten repeated context blocks in bot replies and remove low-value identifiers from the bot status message.
+- Message audit results: Context-bearing commands (`!workspaces`, `!workspace`, `!targets`, `!target`, compatibility cluster/VM commands, `!resources`, `!findings`, `!investigations`, sessions/messages, chat start, and chat status) repeated Mattermost identity and ids before every response. `!status` exposed Mattermost user id, backend AcornOps user id, and an obsolete chat/session line. Error/help guidance also had a few stale bare-command examples even though commands now require `!`.
+- Completed: Replaced the shared context block with `Current: Workspace: <name>    |    Target: <name>` plus a divider. Changed `!status` to show account state and current workspace/target only. Updated command guidance to use `!` examples consistently. Kept list/detail object ids where they are still useful for selection, support, or explicit id lookup.
+- Verification run: Baseline `./init.sh` passed before changes with harness verification, lint, build, and 113 tests. Focused `node --test test/bot-message.test.js test/bot-runner.test.js` passed with 63 tests after the copy cleanup. Full `npm test` passed with 113 tests. Final `./init.sh` passed with harness verification, lint, build, and 113 tests.
+- Known risks: Live Mattermost/AcornOps smoke still needs to confirm the shortened copy reads well in actual Mattermost rendering.
 
 ### 2026-07-06 - Target selection buttons
 

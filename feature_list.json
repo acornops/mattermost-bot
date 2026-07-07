@@ -505,6 +505,25 @@
       },
       "evidence": "Implementation completed on 2026-07-06 after live smoke confirmed Mattermost workspace buttons work once AllowedUntrustedInternalConnections allows host.docker.internal. Focused node --test test/bot-server.test.js test/bot-message.test.js passed with 64 tests after adding target button handling. Focused node --test test/bot-server.test.js passed with 11 tests after adding visible callback result posts. Final ./init.sh passed with harness verification, lint, build, and 113 tests.",
       "notes": "Mattermost local Docker deployments must allow host.docker.internal through AllowedUntrustedInternalConnections for button callbacks to reach the bot."
+    },
+    {
+      "id": "B16",
+      "priority": 24,
+      "area": "bot",
+      "title": "Shorten Mattermost command context and status messages",
+      "user_visible_behavior": "Context-bearing bot replies start with a compact current workspace/target header, and !status no longer exposes low-value Mattermost/backend ids or stale chat selection details.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus live command-copy smoke when services are available",
+        "steps": [
+          "Replace the repeated multi-line context block with a one-line workspace/target summary and divider.",
+          "Remove Mattermost user id, backend AcornOps user id, and chat/session selection from !status output.",
+          "Review command response copy for stale or noisy guidance.",
+          "Update tests and run ./init.sh."
+        ]
+      },
+      "evidence": "Implementation completed on 2026-07-07 after reviewing context-bearing command responses, !status, login/account-link copy, webhook route copy, chat-thread copy, error guidance, help, and compatibility command messages. Changed shared context rendering to Current: Workspace: <name>    |    Target: <name> followed by a divider. Changed !status to show only linked/unlinked account state and current workspace/target names, without Mattermost user ids, backend AcornOps user ids, or chat selection. Updated stale guidance to use !-prefixed command examples. Focused node --test test/bot-message.test.js test/bot-runner.test.js passed with 63 tests, npm test passed with 113 tests, and final ./init.sh passed with harness verification, lint, build, and 113 tests.",
+      "notes": "List rows and object detail sections may still show AcornOps object ids where they are needed for explicit selection, troubleshooting, or support."
     }
   ]
 }
