@@ -51,7 +51,7 @@ test("Mattermost action selects workspace for the requesting user", () => {
     id: "workspace-1",
     name: "Platform"
   });
-  assert.match(result.body.ephemeral_text, /Workspace changed successfully/);
+  assert.deepEqual(result.body, {});
   assert.match(result.message, /Workspace changed successfully/);
 });
 
@@ -82,11 +82,11 @@ test("Mattermost action selects target for the requesting user", () => {
     type: "kubernetes",
     source: "target"
   });
-  assert.match(result.body.ephemeral_text, /Target changed successfully/);
+  assert.deepEqual(result.body, {});
   assert.match(result.message, /Target changed successfully/);
 });
 
-test("Mattermost action response posts a visible callback message", async () => {
+test("Mattermost action response posts one visible callback message in the main conversation", async () => {
   const posts = [];
   await postMattermostActionResponse({
     payload: {
@@ -95,9 +95,7 @@ test("Mattermost action response posts a visible callback message", async () => 
     },
     result: {
       status: 200,
-      body: {
-        ephemeral_text: "Target changed successfully: Prod cluster"
-      },
+      body: {},
       message: "Target changed successfully: Prod cluster"
     },
     mattermostClient: fakeMattermostClient(posts)
@@ -106,7 +104,6 @@ test("Mattermost action response posts a visible callback message", async () => 
   assert.deepEqual(posts, [
     {
       channelId: "channel-1",
-      rootId: "post-1",
       message: "Target changed successfully: Prod cluster"
     }
   ]);
@@ -126,8 +123,7 @@ test("Mattermost action rejects invalid secrets", () => {
   });
 
   assert.equal(result.status, 200);
-  assert.match(result.body.error.message, /not authorized/);
-  assert.match(result.body.ephemeral_text, /not authorized/);
+  assert.deepEqual(result.body, {});
   assert.match(result.message, /not authorized/);
 });
 
@@ -158,9 +154,11 @@ test("Mattermost action returns user-facing failures for invalid selections", ()
   });
 
   assert.equal(wrongUser.status, 200);
-  assert.match(wrongUser.body.ephemeral_text, /Only the Mattermost user/);
+  assert.deepEqual(wrongUser.body, {});
+  assert.match(wrongUser.message, /Only the Mattermost user/);
   assert.equal(missingTarget.status, 200);
-  assert.match(missingTarget.body.ephemeral_text, /Target selection failed/);
+  assert.deepEqual(missingTarget.body, {});
+  assert.match(missingTarget.message, /Target selection failed/);
 });
 
 test("Mattermost action rejects stale target buttons after workspace changes", () => {
@@ -191,7 +189,8 @@ test("Mattermost action rejects stale target buttons after workspace changes", (
   });
 
   assert.equal(result.status, 200);
-  assert.match(result.body.ephemeral_text, /current workspace has changed/);
+  assert.deepEqual(result.body, {});
+  assert.match(result.message, /current workspace has changed/);
   assert.equal(commandContextStore.get("user-1").currentTarget, null);
 });
 

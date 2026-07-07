@@ -189,7 +189,7 @@ Postgres persistence makes command context, chat-thread lookup, webhook routes, 
 The bot can run one built-in HTTP listener:
 
 - `GET /healthz` returns basic readiness.
-- `POST /mattermost/actions` handles interactive Mattermost button callbacks. Workspace and target selection verify the action secret and acting Mattermost user before updating that user's current context. The callback returns Mattermost-compatible action JSON and also posts a visible bot message in the source post thread with the success or failure result.
+- `POST /mattermost/actions` handles interactive Mattermost button callbacks. Workspace and target selection verify the action secret and acting Mattermost user before updating that user's current context. The callback returns a quiet Mattermost-compatible HTTP 200 response and posts one visible bot message in the main conversation with the success or failure result.
 - `POST /acornops/webhooks/routes/:routeToken` handles signed AcornOps webhook deliveries. The route token identifies the Mattermost destination, and the handler verifies `AcornOps-Timestamp` plus `AcornOps-Signature`, rejects stale timestamps, requires and deduplicates `AcornOps-Event-Id`, and posts a concise alert to Mattermost.
 
 Mattermost and AcornOps must be able to reach `BOT_PUBLIC_BASE_URL` for interactive actions and webhooks in any live environment.

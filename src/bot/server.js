@@ -171,9 +171,7 @@ function handleTargetAction({
 function actionSuccess(message) {
   return {
     status: 200,
-    body: {
-      ephemeral_text: message
-    },
+    body: {},
     message
   };
 }
@@ -181,12 +179,7 @@ function actionSuccess(message) {
 function actionFailure(message) {
   return {
     status: 200,
-    body: {
-      error: {
-        message
-      },
-      ephemeral_text: message
-    },
+    body: {},
     message
   };
 }
@@ -203,17 +196,8 @@ export async function postMattermostActionResponse({
 
   await mattermostClient.createPost({
     channelId,
-    rootId: actionResponseRootId(payload),
     message: result.message
   });
-}
-
-function actionResponseRootId(payload) {
-  return payload.root_id
-    ?? payload.rootId
-    ?? payload.post_id
-    ?? payload.postId
-    ?? "";
 }
 
 export async function handleAcornOpsRouteWebhook({
