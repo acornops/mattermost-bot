@@ -502,21 +502,21 @@ async function handleStatus({ userId, userName, acornOpsClient, commandContextSt
     const current = `Workspace: ${formatReferenceName(context.currentWorkspace)}    |    Target: ${formatReferenceName(selectedContextTarget(context))}`;
     return [
       "AcornOps bot status:",
-      `- Account: linked to AcornOps${linkedUser ? ` as ${linkedUser}` : ""}`,
-      `- Current: ${current}`
+      `- Acornops: linked to AcornOps${linkedUser ? ` as ${linkedUser}` : ""}`,
+      `- Context: ${current}`
     ].join("\n");
   }
 
   if (result.status === "unlinked") {
     return [
       "AcornOps bot status:",
-      "- Account: not linked. Run `!login` in a direct message to connect AcornOps."
+      `- Acornops: not linked. Run \`!login\` in a direct message to connect AcornOps.`
     ].join("\n");
   }
 
   return [
     "AcornOps bot status:",
-    `- Account: unknown AcornOps status ${JSON.stringify(result.status)}`
+    `- Acornops: unknown AcornOps status ${JSON.stringify(result.status)}`
   ].join("\n");
 }
 

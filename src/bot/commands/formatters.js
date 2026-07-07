@@ -509,8 +509,8 @@ function formatTargetSummary(target) {
 
 export function formatContextLines(context, { userId, userName } = {}) {
   return [
-    `Current: Workspace: ${formatReferenceName(context?.currentWorkspace)}    |    Target: ${formatReferenceName(selectedContextTarget(context))}`,
-    "------------------------------"
+    `**Current: Workspace: ${formatReferenceName(context?.currentWorkspace)}    |    Target: ${formatReferenceName(selectedContextTarget(context))}**`,
+    "————————————————————————————————————————————"
   ];
 }
 

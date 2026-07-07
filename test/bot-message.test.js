@@ -172,8 +172,8 @@ test("handleBotMessage status reports linked AcornOps identity", async () => {
     }
   });
 
-  assert.match(response, /Account: linked to AcornOps as Alice \/ alice@example\.com/);
-  assert.match(response, /Current: Workspace: none {4}\| {4}Target: none/);
+  assert.match(response, /Acornops: linked to AcornOps as Alice \/ alice@example\.com/);
+  assert.match(response, /Context: Workspace: none {4}\| {4}Target: none/);
   assert.doesNotMatch(response, /acorn-user-1/);
   assert.doesNotMatch(response, /Mattermost user/);
 });
@@ -192,7 +192,7 @@ test("handleBotMessage status tells unlinked users to run login", async () => {
     }
   });
 
-  assert.match(response, /Account: not linked/);
+  assert.match(response, /Acornops: not linked/);
   assert.match(response, /Run `!login`/);
   assert.doesNotMatch(response, /mattermost-user-1/);
 });
@@ -255,8 +255,8 @@ test("handleBotMessage lists workspaces for a linked direct-message user", async
   });
 
   assert.match(response, /AcornOps workspaces:/);
-  assert.match(response, /Current: Workspace: none {4}\| {4}Target: none/);
-  assert.match(response, /------------------------------/);
+  assert.match(response, /\*\*Current: Workspace: none {4}\| {4}Target: none\*\*/);
+  assert.match(response, /\u2014{10,}/);
   assert.doesNotMatch(response, /Mattermost user: alice \(mattermost-user-1\)/);
   assert.match(response, /1\. Platform \(workspace-1\) \| plan: Team \| quota: members 0\/10, clusters 0\/3, VMs 0\/5/);
   assert.match(response, /2\. Sandbox \(workspace-2\) \| plan: free/);
