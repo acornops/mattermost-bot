@@ -323,6 +323,19 @@ export function createInMemoryCommandContextStore({ initialState = {} } = {}) {
       return record;
     },
 
+    connectWebhookRoute(externalUserId, route) {
+      const current = webhookRoutes.get(externalUserId) ?? {};
+      const record = webhookRouteReference({
+        ...current,
+        ...route,
+        externalUserId,
+        connectionStatus: "connected",
+        connectedAt: route.connectedAt ?? new Date().toISOString()
+      });
+      webhookRoutes.set(externalUserId, record);
+      return record;
+    },
+
     rememberInboundEvent(eventId) {
       if (!eventId) {
         return false;
@@ -460,6 +473,12 @@ export function createNullCommandContextStore() {
     upsertWebhookRoute(_externalUserId, route) {
       return webhookRouteReference(route);
     },
+    connectWebhookRoute(_externalUserId, route) {
+      return webhookRouteReference({
+        ...route,
+        connectionStatus: "connected"
+      });
+    },
     getWebhookRoute() {
       return null;
     },
@@ -588,14 +607,39 @@ function chatThreadReference(thread) {
 
 function webhookRouteReference(route) {
   return {
+    provider: route.provider ?? "acornops",
     externalUserId: route.externalUserId ?? "",
     channelId: route.channelId ?? route.channel_id ?? "",
     rootId: route.rootId ?? route.root_id ?? "",
     displayName: route.displayName ?? route.display_name ?? "",
     routeTokenHash: route.routeTokenHash ?? route.route_token_hash ?? "",
     signingSecret: route.signingSecret ?? route.signing_secret ?? "",
-    deliveryUrl: route.deliveryUrl ?? route.delivery_url ?? ""
+    deliveryUrl: route.deliveryUrl ?? route.delivery_url ?? "",
+    connectionStatus: route.connectionStatus ?? route.connection_status ?? (route.signingSecret || route.signing_secret ? "connected" : "pending"),
+    connectedAt: route.connectedAt ?? route.connected_at ?? "",
+    lastSyncedAt: route.lastSyncedAt ?? route.last_synced_at ?? "",
+    lastError: route.lastError ?? route.last_error ?? "",
+    subscriptions: normalizeWebhookSubscriptions(route.subscriptions ?? route.subscription_snapshot ?? [])
   };
+}
+
+function normalizeWebhookSubscriptions(subscriptions) {
+  if (!Array.isArray(subscriptions)) {
+    return [];
+  }
+  return subscriptions.map((subscription) => ({
+    workspaceId: subscription.workspaceId ?? subscription.workspace_id ?? "",
+    workspaceName: subscription.workspaceName ?? subscription.workspace_name ?? "",
+    webhookId: subscription.webhookId ?? subscription.webhook_id ?? subscription.id ?? "",
+    eventTypes: Array.isArray(subscription.eventTypes ?? subscription.event_types)
+      ? (subscription.eventTypes ?? subscription.event_types).map(String)
+      : [],
+    signingSecret: subscription.signingSecret ?? subscription.signing_secret ?? "",
+    enabled: subscription.enabled !== false,
+    status: subscription.status ?? (subscription.enabled === false ? "disabled" : "enabled"),
+    updatedAt: subscription.updatedAt ?? subscription.updated_at ?? "",
+    lastSyncedAt: subscription.lastSyncedAt ?? subscription.last_synced_at ?? ""
+  }));
 }
 
 function resolveReference(reference, current, remembered, referenceFactory) {

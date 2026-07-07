@@ -35,6 +35,37 @@ export class AcornOpsClient {
     });
   }
 
+  async connectWebhookRoute(identity, { deliveryUrl }) {
+    this.requireExternalIntegrationAuth();
+
+    return this.requestJson(
+      "POST",
+      "/api/v1/external-integrations/webhook-routes/connect",
+      { deliveryUrl },
+      {
+        serviceAuth: true,
+        headers: this.externalUserHeaders(identity)
+      }
+    );
+  }
+
+  async getWebhookRouteStatus(identity, { deliveryUrl }) {
+    this.requireExternalIntegrationAuth();
+
+    const params = new URLSearchParams();
+    params.set("deliveryUrl", deliveryUrl);
+
+    return this.requestJson(
+      "GET",
+      `/api/v1/external-integrations/webhook-routes/status?${params.toString()}`,
+      undefined,
+      {
+        serviceAuth: true,
+        headers: this.externalUserHeaders(identity)
+      }
+    );
+  }
+
   async listWorkspaces(identity, { limit = 50, cursor = "", q = "" } = {}) {
     this.requireExternalIntegrationAuth();
 

@@ -62,6 +62,72 @@ test("resolveExternalIntegrationLink asks AcornOps for durable link state", asyn
   assert.deepEqual(JSON.parse(requests[0].init.body), externalIdentity());
 });
 
+test("webhook route connect and status use external integration auth", async () => {
+  const requests = [];
+  const client = new AcornOpsClient({
+    baseUrl: "http://acornops/",
+    externalIntegrationToken: "chat-token",
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      const body = url.includes("/connect")
+        ? {
+            status: "connected",
+            subscriptions: [
+              {
+                workspaceId: "workspace-1",
+                workspaceName: "Platform",
+                webhookId: "webhook-1",
+                eventTypes: ["run.failed.v1"],
+                signingSecret: "whsec_123",
+                enabled: true
+              }
+            ]
+          }
+        : {
+            status: "connected",
+            subscriptions: [
+              {
+                workspaceId: "workspace-1",
+                workspaceName: "Platform",
+                webhookId: "webhook-1",
+                eventTypes: ["run.failed.v1"],
+                enabled: true
+              }
+            ]
+          };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  });
+
+  const connect = await client.connectWebhookRoute(externalIdentity(), {
+    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
+  });
+  const status = await client.getWebhookRouteStatus(externalIdentity(), {
+    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
+  });
+
+  assert.equal(connect.subscriptions[0].signingSecret, "whsec_123");
+  assert.equal(status.subscriptions[0].webhookId, "webhook-1");
+  assert.equal(requests[0].url, "http://acornops/api/v1/external-integrations/webhook-routes/connect");
+  assert.equal(requests[0].init.method, "POST");
+  assert.equal(requests[0].init.headers.authorization, "Bearer chat-token");
+  assert.equal(requests[0].init.headers["x-acornops-external-user-id"], "mattermost-user-1");
+  assert.deepEqual(JSON.parse(requests[0].init.body), {
+    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
+  });
+  assert.equal(
+    requests[1].url,
+    "http://acornops/api/v1/external-integrations/webhook-routes/status?deliveryUrl=https%3A%2F%2Fbot.example.com%2Facornops%2Fwebhooks%2Froutes%2Ftoken"
+  );
+  assert.equal(requests[1].init.method, "GET");
+  assert.equal(requests[1].init.body, undefined);
+  assert.equal(requests[1].init.headers.authorization, "Bearer chat-token");
+  assert.equal(requests[1].init.headers["x-acornops-external-user-id"], "mattermost-user-1");
+});
+
 test("listWorkspaces uses service auth and external user header", async () => {
   const requests = [];
   const client = new AcornOpsClient({

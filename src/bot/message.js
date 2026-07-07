@@ -370,6 +370,7 @@ export async function handleBotMessageResult({
       channelId,
       rootId,
       botPublicBaseUrl,
+      acornOpsClient,
       commandContextStore
     });
   }
@@ -1515,6 +1516,7 @@ async function handleWebhook({
   channelId,
   rootId,
   botPublicBaseUrl,
+  acornOpsClient,
   commandContextStore
 }) {
   const identity = externalIdentityForUserId(userId);
@@ -1523,35 +1525,84 @@ async function handleWebhook({
   }
 
   const subcommand = commandArgs[0] ?? "status";
-  if (subcommand === "connect" || subcommand === "reconnect") {
+  if (subcommand === "create" || subcommand === "recreate") {
     if (!channelId) {
-      return "I cannot connect webhooks because Mattermost did not provide the channel id.";
+      return "I cannot create a webhook route because Mattermost did not provide the channel id.";
     }
     if (!botPublicBaseUrl) {
-      return "I cannot connect webhooks because BOT_PUBLIC_BASE_URL is not configured.";
+      return "I cannot create a webhook route because BOT_PUBLIC_BASE_URL is not configured.";
     }
+    if (!isAllowedWebhookPublicBaseUrl(botPublicBaseUrl)) {
+      return "I cannot create a webhook route because BOT_PUBLIC_BASE_URL must use HTTPS outside local development.";
+    }
+
+    const existingRoute = commandContextStore.getWebhookRoute?.(identity.externalUserId);
+    if (subcommand === "create" && existingRoute?.deliveryUrl) {
+      return formatWebhookCreateResponse({
+        route: existingRoute,
+        userId,
+        userName,
+        existing: true
+      });
+    }
+
     const routeToken = randomToken();
-    const signingSecret = randomToken();
     const deliveryUrl = `${botPublicBaseUrl.replace(/\/+$/, "")}/acornops/webhooks/routes/${encodeURIComponent(routeToken)}`;
     const route = commandContextStore.upsertWebhookRoute?.(identity.externalUserId, {
+      provider: "acornops",
       channelId,
       rootId,
       displayName: identityLabel({ userId, userName }),
       routeTokenHash: sha256(routeToken),
-      signingSecret,
-      deliveryUrl
+      signingSecret: "",
+      deliveryUrl,
+      connectionStatus: "pending",
+      connectedAt: "",
+      lastSyncedAt: "",
+      lastError: "",
+      subscriptions: []
     });
-    return [
-      "Webhook alerts connected.",
-      `- Mattermost user: ${identityLabel({ userId, userName })}`,
-      `- Channel: ${route?.channelId ?? channelId}`,
-      rootId ? `- Thread: ${rootId}` : "- Thread: none",
-      `- Delivery URL: ${deliveryUrl}`,
-      `- Signing secret: ${signingSecret}`,
-      "",
-      "Save the signing secret now. `!webhook status` will not show it again.",
-      "AcornOps must sign each delivery with `AcornOps-Signature: v1=<hmac_sha256(secret, timestamp + \".\" + rawBody)>`."
-    ].join("\n");
+    return formatWebhookCreateResponse({
+      route,
+      userId,
+      userName,
+      existing: false,
+      recreated: subcommand === "recreate"
+    });
+  }
+
+  if (subcommand === "connect") {
+    const route = commandContextStore.getWebhookRoute?.(identity.externalUserId);
+    if (!route?.deliveryUrl) {
+      return "No webhook route exists yet. Run `!webhook create`, then paste the delivery URL into the AcornOps console.";
+    }
+
+    const auth = requireExternalDataCommand({
+      acornOpsClient,
+      userId,
+      commandLabel: "webhook connect"
+    });
+    if (auth.response) {
+      return auth.response;
+    }
+
+    try {
+      const response = await acornOpsClient.connectWebhookRoute(auth.identity, {
+        deliveryUrl: route.deliveryUrl
+      });
+      const now = new Date().toISOString();
+      const connectedRoute = commandContextStore.connectWebhookRoute?.(identity.externalUserId, {
+        ...route,
+        connectionStatus: response.status ?? "connected",
+        connectedAt: response.connectedAt ?? now,
+        lastSyncedAt: response.lastSyncedAt ?? now,
+        lastError: "",
+        subscriptions: normalizeWebhookSubscriptions(response.subscriptions)
+      });
+      return formatWebhookConnectResponse(connectedRoute ?? route);
+    } catch (error) {
+      return dataErrorText(error, "webhook connect");
+    }
   }
 
   if (subcommand === "disconnect") {
@@ -1565,19 +1616,169 @@ async function handleWebhook({
   if (subcommand === "status") {
     const route = commandContextStore.getWebhookRoute?.(identity.externalUserId);
     if (!route) {
-      return "No webhook alert route is connected. Use `!webhook connect` in the destination channel or thread.";
+      return "No webhook route exists yet. Use `!webhook create` in the destination channel or thread.";
     }
-    return [
-      "Webhook alert route:",
-      `- Mattermost user: ${identityLabel({ userId, userName })}`,
-      `- Channel: ${route.channelId}`,
-      route.rootId ? `- Thread: ${route.rootId}` : "- Thread: none",
-      route.deliveryUrl ? `- Delivery URL: ${route.deliveryUrl}` : "- Delivery URL: not available; run `!webhook reconnect`",
-      "- Signing secret: hidden; run `!webhook reconnect` or `!webhook connect --rotate` to rotate credentials."
-    ].join("\n");
+
+    if (isAcornOpsChatAuthConfigured(acornOpsClient) && route.deliveryUrl) {
+      try {
+        const response = await acornOpsClient.getWebhookRouteStatus(identity, {
+          deliveryUrl: route.deliveryUrl
+        });
+        const now = new Date().toISOString();
+        const freshSubscriptions = normalizeWebhookSubscriptions(response.subscriptions);
+        const syncedRoute = commandContextStore.upsertWebhookRoute?.(identity.externalUserId, {
+          ...route,
+          connectionStatus: response.status ?? route.connectionStatus,
+          lastSyncedAt: response.lastSyncedAt ?? now,
+          lastError: "",
+          subscriptions: mergeWebhookSubscriptionSecrets(freshSubscriptions, route.subscriptions)
+        }) ?? route;
+        return formatWebhookStatusResponse({
+          route: syncedRoute,
+          userId,
+          userName,
+          stale: false
+        });
+      } catch (error) {
+        const staleRoute = commandContextStore.upsertWebhookRoute?.(identity.externalUserId, {
+          ...route,
+          lastError: error instanceof Error ? error.message : String(error)
+        }) ?? route;
+        return formatWebhookStatusResponse({
+          route: staleRoute,
+          userId,
+          userName,
+          stale: true
+        });
+      }
+    }
+
+    return formatWebhookStatusResponse({
+      route,
+      userId,
+      userName,
+      stale: Boolean(route.subscriptions?.length)
+    });
   }
 
-  return "`!webhook` supports `connect`, `reconnect`, `status`, and `disconnect`.";
+  return "`!webhook` supports `create`, `connect`, `status`, `recreate`, and `disconnect`.";
+}
+
+function formatWebhookCreateResponse({ route, userId, userName, existing, recreated = false }) {
+  return [
+    existing ? "Webhook route already exists." : recreated ? "Webhook route recreated." : "Webhook route created.",
+    `- Mattermost user: ${identityLabel({ userId, userName })}`,
+    `- Channel: ${route?.channelId ?? "unknown"}`,
+    route?.rootId ? `- Thread: ${route.rootId}` : "- Thread: none",
+    `- Delivery URL: ${route?.deliveryUrl ?? "not available"}`,
+    "",
+    "Paste this delivery URL into the AcornOps console webhook setup, choose workspaces and events there, then run `!webhook connect`.",
+    "Signing secrets are claimed from AcornOps by the bot; do not paste secrets into Mattermost."
+  ].join("\n");
+}
+
+function formatWebhookConnectResponse(route) {
+  return [
+    "Webhook route connected to AcornOps.",
+    `- Delivery URL: ${route.deliveryUrl}`,
+    `- Subscriptions: ${route.subscriptions.length}`,
+    ...formatWebhookSubscriptionLines(route.subscriptions),
+    "",
+    "Signing secrets are stored by the bot and hidden from Mattermost."
+  ].join("\n");
+}
+
+function formatWebhookStatusResponse({ route, userId, userName, stale }) {
+  const lines = [
+    "Webhook alert route:",
+    `- Mattermost user: ${identityLabel({ userId, userName })}`,
+    `- Channel: ${route.channelId}`,
+    route.rootId ? `- Thread: ${route.rootId}` : "- Thread: none",
+    route.deliveryUrl ? `- Delivery URL: ${route.deliveryUrl}` : "- Delivery URL: not available; run `!webhook recreate`",
+    `- AcornOps connection: ${route.connectionStatus ?? "pending"}`,
+    route.lastSyncedAt ? `- Last synced: ${route.lastSyncedAt}` : "- Last synced: never",
+    "- Signing secrets: hidden"
+  ];
+
+  if (stale) {
+    lines.push("- Live AcornOps status: unavailable; showing cached snapshot.");
+  }
+  if (route.lastError && stale) {
+    lines.push(`- Last refresh error: ${route.lastError}`);
+  }
+
+  lines.push(...formatWebhookSubscriptionLines(route.subscriptions));
+  if (!route.subscriptions.length) {
+    lines.push("No AcornOps subscriptions are connected yet. Configure the delivery URL in AcornOps, then run `!webhook connect`.");
+  }
+
+  return lines.join("\n");
+}
+
+function formatWebhookSubscriptionLines(subscriptions) {
+  if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
+    return [];
+  }
+  return [
+    "AcornOps subscriptions:",
+    ...subscriptions.map((subscription, index) => {
+      const workspace = subscription.workspaceName || subscription.workspaceId || "unknown workspace";
+      const id = subscription.workspaceId && subscription.workspaceId !== workspace ? ` (${subscription.workspaceId})` : "";
+      const events = subscription.eventTypes.length ? subscription.eventTypes.join(", ") : "no events reported";
+      const state = subscription.enabled === false ? "disabled" : subscription.status || "enabled";
+      return `${index + 1}. ${workspace}${id} - ${state} - ${events}`;
+    })
+  ];
+}
+
+function normalizeWebhookSubscriptions(subscriptions) {
+  if (!Array.isArray(subscriptions)) {
+    return [];
+  }
+  return subscriptions.map((subscription) => ({
+    workspaceId: subscription.workspaceId ?? subscription.workspace_id ?? "",
+    workspaceName: subscription.workspaceName ?? subscription.workspace_name ?? "",
+    webhookId: subscription.webhookId ?? subscription.webhook_id ?? subscription.id ?? "",
+    eventTypes: Array.isArray(subscription.eventTypes ?? subscription.event_types)
+      ? (subscription.eventTypes ?? subscription.event_types).map(String)
+      : [],
+    signingSecret: subscription.signingSecret ?? subscription.signing_secret ?? "",
+    enabled: subscription.enabled !== false,
+    status: subscription.status ?? (subscription.enabled === false ? "disabled" : "enabled"),
+    updatedAt: subscription.updatedAt ?? subscription.updated_at ?? "",
+    lastSyncedAt: subscription.lastSyncedAt ?? subscription.last_synced_at ?? ""
+  }));
+}
+
+function mergeWebhookSubscriptionSecrets(freshSubscriptions, cachedSubscriptions = []) {
+  return freshSubscriptions.map((subscription) => {
+    if (subscription.signingSecret) {
+      return subscription;
+    }
+    const cached = cachedSubscriptions.find((item) => (
+      (subscription.webhookId && item.webhookId === subscription.webhookId) ||
+      (subscription.workspaceId && item.workspaceId === subscription.workspaceId)
+    ));
+    return {
+      ...subscription,
+      signingSecret: cached?.signingSecret ?? ""
+    };
+  });
+}
+
+function isAllowedWebhookPublicBaseUrl(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol === "https:") {
+      return true;
+    }
+    if (url.protocol !== "http:") {
+      return false;
+    }
+    return ["localhost", "127.0.0.1", "::1", "host.docker.internal"].includes(url.hostname);
+  } catch {
+    return false;
+  }
 }
 
 function randomToken() {

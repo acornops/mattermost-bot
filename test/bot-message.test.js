@@ -316,10 +316,10 @@ test("handleBotMessage adds workspace selection actions when callback URL is con
   ]);
 });
 
-test("handleBotMessage connects webhook route with delivery URL and signing secret", async () => {
+test("handleBotMessage creates one webhook route without exposing a signing secret", async () => {
   const commandContextStore = createInMemoryCommandContextStore();
   const response = await handleBotMessage({
-    text: "!webhook connect",
+    text: "!webhook create",
     userId: "mattermost-user-1",
     userName: "alice",
     channelId: "channel-1",
@@ -329,36 +329,156 @@ test("handleBotMessage connects webhook route with delivery URL and signing secr
   });
   const route = commandContextStore.getWebhookRoute("mattermost-user-1");
 
-  assert.match(response, /Webhook alerts connected/);
+  assert.match(response, /Webhook route created/);
   assert.match(response, /Delivery URL: https:\/\/bot\.example\.com\/acornops\/webhooks\/routes\//);
-  assert.match(response, /Signing secret:/);
+  assert.doesNotMatch(response, /Signing secret:/);
   assert.equal(route.channelId, "channel-1");
   assert.equal(route.rootId, "root-1");
   assert.match(route.routeTokenHash, /^[a-f0-9]{64}$/);
-  assert.equal(route.signingSecret.length > 20, true);
+  assert.equal(route.signingSecret, "");
+  assert.equal(route.connectionStatus, "pending");
   assert.match(route.deliveryUrl, /\/acornops\/webhooks\/routes\//);
 });
 
-test("handleBotMessage shows webhook route status without exposing signing secret", async () => {
+test("handleBotMessage connects webhook route through AcornOps and stores returned secrets", async () => {
   const commandContextStore = createInMemoryCommandContextStore();
   commandContextStore.upsertWebhookRoute("mattermost-user-1", {
     channelId: "channel-1",
     routeTokenHash: "token-hash",
-    signingSecret: "secret-value",
-    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
+    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token",
+    connectionStatus: "pending"
+  });
+  const response = await handleBotMessage({
+    text: "!webhook connect",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    commandContextStore,
+    acornOpsClient: {
+      canUseExternalIntegrationAuth() {
+        return true;
+      },
+      async connectWebhookRoute(identity, input) {
+        assert.deepEqual(identity, { externalUserId: "mattermost-user-1" });
+        assert.deepEqual(input, {
+          deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
+        });
+        return {
+          status: "connected",
+          subscriptions: [
+            {
+              workspaceId: "workspace-1",
+              workspaceName: "Platform",
+              webhookId: "webhook-1",
+              eventTypes: ["run.failed.v1", "run.cancelled.v1"],
+              signingSecret: "secret-value",
+              enabled: true
+            }
+          ]
+        };
+      }
+    }
+  });
+  const route = commandContextStore.getWebhookRoute("mattermost-user-1");
+
+  assert.match(response, /Webhook route connected to AcornOps/);
+  assert.match(response, /Platform \(workspace-1\) - enabled - run\.failed\.v1, run\.cancelled\.v1/);
+  assert.doesNotMatch(response, /secret-value/);
+  assert.equal(route.connectionStatus, "connected");
+  assert.equal(route.subscriptions[0].signingSecret, "secret-value");
+});
+
+test("handleBotMessage shows live webhook status without exposing signing secrets", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.upsertWebhookRoute("mattermost-user-1", {
+    channelId: "channel-1",
+    routeTokenHash: "token-hash",
+    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token",
+    connectionStatus: "connected",
+    subscriptions: [
+      {
+        workspaceId: "workspace-1",
+        workspaceName: "Platform",
+        webhookId: "webhook-1",
+        eventTypes: ["run.failed.v1"],
+        signingSecret: "secret-value"
+      }
+    ]
   });
 
   const response = await handleBotMessage({
     text: "!webhook status",
     userId: "mattermost-user-1",
     userName: "alice",
-    commandContextStore
+    commandContextStore,
+    acornOpsClient: {
+      canUseExternalIntegrationAuth() {
+        return true;
+      },
+      async getWebhookRouteStatus(identity, input) {
+        assert.deepEqual(identity, { externalUserId: "mattermost-user-1" });
+        assert.deepEqual(input, {
+          deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
+        });
+        return {
+          status: "connected",
+          subscriptions: [
+            {
+              workspaceId: "workspace-1",
+              workspaceName: "Platform",
+              webhookId: "webhook-1",
+              eventTypes: ["run.failed.v1", "target.status_changed.v1"],
+              enabled: true
+            }
+          ]
+        };
+      }
+    }
   });
 
   assert.match(response, /Webhook alert route/);
   assert.match(response, /Delivery URL: https:\/\/bot\.example\.com/);
+  assert.match(response, /Platform \(workspace-1\) - enabled - run\.failed\.v1, target\.status_changed\.v1/);
   assert.doesNotMatch(response, /secret-value/);
-  assert.match(response, /Signing secret: hidden/);
+  assert.match(response, /Signing secrets: hidden/);
+  assert.equal(commandContextStore.getWebhookRoute("mattermost-user-1").subscriptions[0].signingSecret, "secret-value");
+});
+
+test("handleBotMessage status warns when AcornOps live state cannot refresh", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.upsertWebhookRoute("mattermost-user-1", {
+    channelId: "channel-1",
+    routeTokenHash: "token-hash",
+    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token",
+    connectionStatus: "connected",
+    subscriptions: [
+      {
+        workspaceId: "workspace-1",
+        workspaceName: "Platform",
+        webhookId: "webhook-1",
+        eventTypes: ["run.failed.v1"],
+        signingSecret: "secret-value"
+      }
+    ]
+  });
+
+  const response = await handleBotMessage({
+    text: "!webhook status",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    commandContextStore,
+    acornOpsClient: {
+      canUseExternalIntegrationAuth() {
+        return true;
+      },
+      async getWebhookRouteStatus() {
+        throw new Error("AcornOps status failed with 503");
+      }
+    }
+  });
+
+  assert.match(response, /Live AcornOps status: unavailable; showing cached snapshot/);
+  assert.match(response, /Platform \(workspace-1\)/);
+  assert.doesNotMatch(response, /secret-value/);
 });
 
 test("handleBotMessage reports no available workspaces", async () => {

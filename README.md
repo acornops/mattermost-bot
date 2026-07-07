@@ -86,7 +86,7 @@ Environment variables:
 | `BOT_DATABASE_URL` | Optional Postgres URL for persistent bot command context, chat threads, active runs, webhook routes, and inbound idempotency. Compose supplies a bundled Postgres URL; empty uses in-memory state for local tests. | Empty |
 | `BOT_HTTP_HOST` | Host for the optional inbound bot HTTP listener. | `0.0.0.0` |
 | `BOT_HTTP_PORT` | Port for the inbound bot HTTP listener. `0` disables listening. | `0` |
-| `BOT_PUBLIC_BASE_URL` | Public base URL used in Mattermost interactive action callbacks. Required for workspace buttons. | Empty |
+| `BOT_PUBLIC_BASE_URL` | Public base URL used in Mattermost interactive action callbacks and AcornOps webhook delivery URLs. Required for workspace buttons and `!webhook create`. | Empty |
 | `MATTERMOST_ACTION_SECRET` | Shared secret embedded in Mattermost action contexts. | Empty |
 | `CHAT_RUN_POLL_ATTEMPTS` | Immediate chat run polling attempts before SSE follow-up. | `15` |
 | `CHAT_RUN_POLL_INTERVAL_MS` | Immediate chat run polling interval in milliseconds. | `1000` |
@@ -116,8 +116,10 @@ Commands are plain Mattermost messages, not slash commands. Command words requir
 - `!investigations`: list workspace investigations
 - `!chat new [title]`: create a read-only troubleshooting chat for the selected target and post a dedicated Mattermost root thread
 - `!chat end`: inside a chat thread, close only that chat and stop following its active answer
-- `!webhook connect`: create or rotate a signed AcornOps webhook delivery URL for the current Mattermost destination
-- `!webhook status`: show the current user-level webhook route without revealing its signing secret
+- `!webhook create`: create or show the current user's AcornOps webhook delivery URL for the current Mattermost destination
+- `!webhook connect`: claim AcornOps console-created subscription metadata and signing secrets for that delivery URL
+- `!webhook status`: refresh and show the current user-level webhook route without revealing signing secrets
+- `!webhook recreate`: rotate the delivery URL route token
 - `!webhook disconnect`: remove the current user's webhook route
 
 After `!chat new`, reply in the generated Mattermost thread to send read-only assistant questions for that specific AcornOps session. Thread replies do not need `!`; assistant replies and long-running SSE follow-ups stay in that thread. The main bot direct message or channel mention remains available for normal `!` commands and additional `!chat new` threads. Advanced filters, shortcuts such as `!clusters` and `!vms`, and compatibility session commands are documented in [`docs/wiki-mattermost-bot-commands.md`](docs/wiki-mattermost-bot-commands.md).
@@ -189,7 +191,7 @@ Do not run overlapping local stacks on the same host ports.
 - Run behind the deployment topology owned by `acornops-deployment`.
 - Use Postgres through `BOT_DATABASE_URL` for restart-resilient command context, chat-thread mappings, active run records, user webhook routes, and inbound webhook idempotency.
 - `BOT_PUBLIC_BASE_URL` must be reachable by Mattermost for interactive actions and by AcornOps for webhook deliveries.
-- Webhook delivery URLs include an opaque route token and each delivery must be signed with the per-route signing secret returned by `!webhook connect`. The signing secret is stored in bot Postgres as deployment-secret data so HMAC validation can run.
+- Webhook delivery URLs include an opaque route token. AcornOps console-created subscriptions send signed deliveries to that URL; `!webhook connect` claims the AcornOps subscription metadata and signing secrets over authenticated TLS. Signing secrets are stored in bot Postgres as deployment-secret data so HMAC validation can run.
 - Treat channel responses as potentially visible to the whole channel. Login remains direct-message-only; read and assistant commands are intentionally channel-capable.
 - Rotate service tokens through AcornOps control-plane procedures and restart the bot runtime after secret updates.
 

@@ -129,7 +129,7 @@ The Dockerfile installs dependencies inside the image from `package*.json`; host
 - `!chat new [title]` creates a read-only troubleshooting session for the selected target, posts a short acknowledgement, then posts a Mattermost root thread such as `Chat #1 - Investigate Pods`. Replies inside that registered thread are posted to AcornOps as read-only assistant questions without requiring `!`.
 - If a chat answer is still running after the brief immediate polling window, the bot follows the run with AcornOps SSE and posts the final assistant answer back to the same Mattermost channel when it completes.
 - `!chat end` is valid inside a registered chat thread and closes only that chat. `!chat pause` and `!chat resume` are retired from the main UX because the main bot conversation stays available while chat threads remain open. `!ask <question>`, `!sessions`, `!session`, and `!messages` remain compatibility commands but are not part of the short help surface.
-- `!webhook connect`, `!webhook status`, and `!webhook disconnect` manage the current Mattermost user's user-level AcornOps alert route. `connect` returns a per-route delivery URL and signing secret once; `status` shows the route without revealing the signing secret.
+- `!webhook create`, `!webhook connect`, `!webhook status`, `!webhook recreate`, and `!webhook disconnect` manage the current Mattermost user's user-level AcornOps alert route. `create` returns the delivery URL to paste into AcornOps console. `connect` claims console-created subscription metadata and signing secrets from AcornOps over authenticated TLS. `status` refreshes live AcornOps subscription state when available and never reveals signing secrets.
 - Only `!login` is direct-message-only. Authenticated read, read-only assistant, and user webhook routing commands can run in direct messages or channel mentions.
 - The bot does not keep bot-side login state or AcornOps browser sessions. It keeps only lightweight ids, names, thread mappings, active-run references, webhook routes, and inbound event ids for command convenience.
 - `MATTERMOST_URL` defaults to `http://localhost:8065`, and `ACORNOPS_API_BASE_URL` defaults to `http://localhost:8081`, the standalone AcornOps control-plane URL.
@@ -194,7 +194,7 @@ The bot can run one built-in HTTP listener:
 
 Mattermost and AcornOps must be able to reach `BOT_PUBLIC_BASE_URL` for interactive actions and webhooks in any live environment.
 
-Webhook route tokens are stored as hashes for lookup. Per-route signing secrets are stored in bot Postgres as deployment-secret data because HMAC validation requires the original secret.
+Webhook route tokens are stored as hashes for lookup. AcornOps subscription signing secrets are stored in bot Postgres as deployment-secret data because HMAC validation requires the original secret. AcornOps remains the source of truth for workspace and event subscription state; the bot caches the latest snapshot for fallback status output.
 
 ## AcornOps Account-Link Stage
 

@@ -524,6 +524,28 @@
       },
       "evidence": "Implementation completed on 2026-07-07 after reviewing context-bearing command responses, !status, login/account-link copy, webhook route copy, chat-thread copy, error guidance, help, and compatibility command messages. Changed shared context rendering to Current: Workspace: <name>    |    Target: <name> followed by a divider. Changed !status to show only linked/unlinked account state and current workspace/target names, without Mattermost user ids, backend AcornOps user ids, or chat selection. Updated stale guidance to use !-prefixed command examples. Focused node --test test/bot-message.test.js test/bot-runner.test.js passed with 63 tests, npm test passed with 113 tests, and final ./init.sh passed with harness verification, lint, build, and 113 tests.",
       "notes": "List rows and object detail sections may still show AcornOps object ids where they are needed for explicit selection, troubleshooting, or support."
+    },
+    {
+      "id": "B17",
+      "priority": 25,
+      "area": "bot",
+      "title": "Move webhook setup to AcornOps-owned subscription state",
+      "user_visible_behavior": "A Mattermost user creates one delivery URL, configures workspaces/events in AcornOps console, connects the route from Mattermost, and sees live AcornOps subscription status without any signing secret being shown in chat.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus live AcornOps console setup smoke when contract support is available",
+        "steps": [
+          "Create an AcornOps-facing contract document for route setup, connect, status, secret handling, and signed delivery requirements.",
+          "Change !webhook create to create or show one route-token delivery URL without exposing signing secrets.",
+          "Change !webhook connect to claim AcornOps subscription metadata and signing secrets through authenticated external integration APIs.",
+          "Change !webhook status to refresh live AcornOps subscription state and warn when falling back to cached state.",
+          "Verify inbound delivery signatures against claimed subscription secrets.",
+          "Persist connection status and subscription snapshots in memory and Postgres.",
+          "Add automated tests and run ./init.sh."
+        ]
+      },
+      "evidence": "Implemented on 2026-07-07. Added docs/acornops-mattermost-webhook-contract.md. Added AcornOps client methods for POST /api/v1/external-integrations/webhook-routes/connect and GET /api/v1/external-integrations/webhook-routes/status. Changed !webhook create/connect/status/recreate/disconnect behavior around one user route and AcornOps-owned subscription state. Expanded webhook route persistence with provider, connection status, sync timestamps, errors, and subscription snapshots. Focused node --test test/acornops-client.test.js test/command-context.test.js test/postgres-store.test.js test/bot-server.test.js test/bot-message.test.js passed with 88 tests. Full npm test passed with 116 tests. Final ./init.sh passed with harness verification, lint, build, and 116 tests.",
+      "notes": "Live smoke depends on AcornOps implementing or adapting the contract endpoints. Production setup requires HTTPS for BOT_PUBLIC_BASE_URL and ACORNOPS_API_BASE_URL; local development may use explicit localhost-style HTTP exceptions."
     }
   ]
 }

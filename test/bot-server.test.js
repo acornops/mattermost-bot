@@ -203,8 +203,15 @@ test("AcornOps route webhook verifies signature, deduplicates, and posts to rout
     channelId: "channel-1",
     rootId: "root-1",
     routeTokenHash: hashSecret(routeToken),
-    signingSecret,
-    deliveryUrl: `https://bot.example.com/acornops/webhooks/routes/${routeToken}`
+    deliveryUrl: `https://bot.example.com/acornops/webhooks/routes/${routeToken}`,
+    subscriptions: [
+      {
+        workspaceId: "workspace-1",
+        webhookId: "webhook-1",
+        eventTypes: ["run.failed.v1"],
+        signingSecret
+      }
+    ]
   });
   const body = {
     id: "event-1",
@@ -242,7 +249,13 @@ test("AcornOps route webhook rejects stale or invalid signatures", async () => {
   commandContextStore.upsertWebhookRoute("user-1", {
     channelId: "channel-1",
     routeTokenHash: hashSecret("route-token"),
-    signingSecret: "webhook-secret"
+    subscriptions: [
+      {
+        workspaceId: "workspace-1",
+        webhookId: "webhook-1",
+        signingSecret: "webhook-secret"
+      }
+    ]
   });
   const result = await handleAcornOpsRouteWebhook({
     routeToken: "route-token",
@@ -270,7 +283,13 @@ test("AcornOps route webhook rejects unknown route tokens and missing event ids"
   commandContextStore.upsertWebhookRoute("user-1", {
     channelId: "channel-1",
     routeTokenHash: hashSecret("route-token"),
-    signingSecret: "webhook-secret"
+    subscriptions: [
+      {
+        workspaceId: "workspace-1",
+        webhookId: "webhook-1",
+        signingSecret: "webhook-secret"
+      }
+    ]
   });
   const missingEvent = await handleAcornOpsRouteWebhook({
     routeToken: "route-token",

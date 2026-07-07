@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-07-07: Use AcornOps-owned subscription state for Mattermost webhook routes
+
+- Decision: Mattermost users get one bot-owned delivery URL through `!webhook create`, configure that URL in AcornOps console, then run `!webhook connect` so the bot claims AcornOps subscription metadata and signing secrets over authenticated TLS. `!webhook status` refreshes live AcornOps subscription state and falls back to cached state only with a stale warning.
+- Reason: Copying both a URL and signing secret into every workspace is poor UX, while accepting setup secrets through the public webhook listener or embedding secrets in URLs is not secure. AcornOps should remain authoritative for workspace/event subscription state and browser-console permission checks.
+- Consequence: The bot stores one provider-neutral route per Mattermost user plus claimed AcornOps subscription snapshots and signing secrets. AcornOps needs to review `docs/acornops-mattermost-webhook-contract.md` and implement or map the proposed connect/status APIs before live end-to-end setup can pass.
+
 ## 2026-07-07: Keep bot context headers and status messages concise
 
 - Decision: Context-bearing Mattermost command replies start with `Current: Workspace: <name>    |    Target: <name>` and a divider, rather than a repeated multi-line identity/context block. `!status` reports linked/unlinked account state and current workspace/target only, omitting Mattermost user ids, backend AcornOps user ids, and chat/session selection.

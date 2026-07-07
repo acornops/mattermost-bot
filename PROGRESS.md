@@ -42,6 +42,7 @@
 - `B14`: Fix Mattermost actions, Compose database, and webhook route registration UX.
 - `B15`: Add Mattermost target selection buttons.
 - `B16`: Shorten Mattermost command context and status messages.
+- `B17`: Move webhook setup to AcornOps-owned subscription state.
 
 ## In Progress
 
@@ -75,7 +76,8 @@
 - Runtime Mattermost environment variables are `MATTERMOST_URL`, `MATTERMOST_BOT_TOKEN`, and `MATTERMOST_BOT_USERNAME`. The previous prefixed Mattermost names are not accepted.
 - Postgres-backed command context is configured with `BOT_DATABASE_URL`; the no-URL fallback remains in-memory for tests and simple local development.
 - The inbound HTTP listener is configured with `BOT_HTTP_HOST`, `BOT_HTTP_PORT`, `BOT_PUBLIC_BASE_URL`, and `MATTERMOST_ACTION_SECRET`. It serves `GET /healthz`, `POST /mattermost/actions`, and `POST /acornops/webhooks/routes/:routeToken`. Mattermost Docker deployments that call `host.docker.internal` for local button callbacks must allow that hostname through Mattermost `AllowedUntrustedInternalConnections`.
-- `!webhook connect`, `!webhook reconnect`, `!webhook status`, and `!webhook disconnect` manage user-level AcornOps alert routes to Mattermost destinations. `connect` returns a route-token delivery URL and per-route signing secret once. Route webhook intake verifies timestamp/signature, requires and deduplicates event ids, resolves the route token, and posts concise alerts.
+- `!webhook create`, `!webhook connect`, `!webhook status`, `!webhook recreate`, and `!webhook disconnect` manage one user-level AcornOps alert route to a Mattermost destination. `create` returns the route-token delivery URL to paste into AcornOps console. `connect` claims AcornOps console-created subscription metadata and signing secrets over authenticated external integration APIs. `status` refreshes live AcornOps subscription state and falls back to cached state only with a stale warning. Route webhook intake verifies timestamp/signature against claimed subscription secrets, requires and deduplicates event ids, resolves the route token, and posts concise alerts.
+- `docs/acornops-mattermost-webhook-contract.md` is the AcornOps-facing contract for console setup, connect/status APIs, secret handling, TLS requirements, and signed delivery headers. Live AcornOps setup depends on AcornOps implementing or mapping those contract endpoints.
 - Chat timing environment variables are `CHAT_RUN_POLL_ATTEMPTS`, `CHAT_RUN_POLL_INTERVAL_MS`, `RUN_STREAM_RECONNECT_ATTEMPTS`, `RUN_STREAM_RECONNECT_DELAY_MS`, `RUN_STREAM_FALLBACK_POLL_INTERVAL_MS`, and `RUN_STREAM_FALLBACK_POLL_MAX_MS`.
 - Docker image build lives in `Dockerfile`. The image installs dependencies inside Docker from `package*.json`, does not copy host `node_modules`, runs as the non-root `node` user, and exposes the optional bot HTTP port.
 - `docker-compose.yml` runs the bot plus a bundled `bot-postgres` service, defaults `BOT_DATABASE_URL` to that database, defaults host-local Mattermost and AcornOps URLs to `http://host.docker.internal:8065` and `http://host.docker.internal:8081`, and defaults `BOT_PUBLIC_BASE_URL` to `http://host.docker.internal:8080`; deployment orchestration still belongs in `acornops-deployment`.
@@ -87,7 +89,7 @@
 
 ## Next Steps
 
-1. Run live Mattermost/AcornOps smoke for `!login`, `!status`, `!workspaces`, workspace button selection with no action integration error, `!workspace 1`, `!targets`, target button selection, `!resources`, `!findings`, `!chat new`, a threaded question/reply, concurrent chat threads, thread-local `!chat end`, `!webhook connect`, a signed route-token AcornOps webhook alert, duplicate webhook suppression, and bot restart persistence when the local stack is available.
+1. Run live Mattermost/AcornOps smoke for `!login`, `!status`, `!workspaces`, workspace button selection with no action integration error, `!workspace 1`, `!targets`, target button selection, `!resources`, `!findings`, `!chat new`, a threaded question/reply, concurrent chat threads, thread-local `!chat end`, `!webhook create`, AcornOps console setup, `!webhook connect`, `!webhook status`, a signed route-token AcornOps webhook alert, duplicate webhook suppression, and bot restart persistence when the local stack and webhook contract support are available.
 2. Add repeatable live-smoke notes for `!` commands, workspace buttons, threaded chats, webhook routing, and signed webhook alert delivery if local service command output becomes available.
 3. Coordinate image publishing, environment templates, and orchestration manifests in `acornops-deployment`.
 4. Decide whether active run recovery workers are needed after restart now that active run records can be persisted in Postgres.
@@ -95,6 +97,13 @@
 ## Session Log
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
+
+### 2026-07-07 - AcornOps-owned webhook subscription state
+
+- Goal: Implement one Mattermost user webhook route where the bot creates the delivery URL, AcornOps console owns workspace/event subscription configuration, and the bot claims subscription metadata and signing secrets through authenticated AcornOps APIs.
+- Completed: Added `docs/acornops-mattermost-webhook-contract.md` for AcornOps review. Added AcornOps client support for proposed `POST /api/v1/external-integrations/webhook-routes/connect` and `GET /api/v1/external-integrations/webhook-routes/status`. Changed `!webhook create` to create/show one delivery URL without exposing secrets, `!webhook connect` to claim subscription metadata and secrets, `!webhook status` to refresh live AcornOps state and warn on cached fallback, and `!webhook recreate` to rotate the route token. Expanded in-memory and Postgres route state with provider, connection status, sync timestamps, last error, and subscription snapshots. Changed signed delivery verification to validate against claimed subscription secrets.
+- Verification run: Baseline `./init.sh` passed before changes with harness verification, lint, build, and 113 tests. Focused `node --test test/acornops-client.test.js test/command-context.test.js test/postgres-store.test.js test/bot-server.test.js test/bot-message.test.js` passed with 88 tests after implementation. Full `npm test` passed with 116 tests. Final `./init.sh` passed with harness verification, lint, build, and 116 tests.
+- Known risks: Live smoke depends on AcornOps implementing or mapping the contract endpoints. The bot enforces HTTPS for `BOT_PUBLIC_BASE_URL` except local development hostnames; production AcornOps API TLS must also be enforced by deployment/AcornOps contract.
 
 ### 2026-07-07 - Short command context and status messages
 

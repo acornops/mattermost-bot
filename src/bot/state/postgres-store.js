@@ -51,18 +51,30 @@ async function migrate(db) {
   await db.query(`
     CREATE TABLE IF NOT EXISTS bot_webhook_routes (
       external_user_id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL DEFAULT 'acornops',
       channel_id TEXT NOT NULL,
       root_id TEXT NOT NULL DEFAULT '',
       display_name TEXT NOT NULL DEFAULT '',
       route_token_hash TEXT NOT NULL DEFAULT '',
       signing_secret TEXT NOT NULL DEFAULT '',
       delivery_url TEXT NOT NULL DEFAULT '',
+      connection_status TEXT NOT NULL DEFAULT 'pending',
+      connected_at TEXT NOT NULL DEFAULT '',
+      last_synced_at TEXT NOT NULL DEFAULT '',
+      last_error TEXT NOT NULL DEFAULT '',
+      subscription_snapshot JSONB NOT NULL DEFAULT '[]'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await db.query("ALTER TABLE bot_webhook_routes ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'acornops'");
   await db.query("ALTER TABLE bot_webhook_routes ADD COLUMN IF NOT EXISTS route_token_hash TEXT NOT NULL DEFAULT ''");
   await db.query("ALTER TABLE bot_webhook_routes ADD COLUMN IF NOT EXISTS signing_secret TEXT NOT NULL DEFAULT ''");
   await db.query("ALTER TABLE bot_webhook_routes ADD COLUMN IF NOT EXISTS delivery_url TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE bot_webhook_routes ADD COLUMN IF NOT EXISTS connection_status TEXT NOT NULL DEFAULT 'pending'");
+  await db.query("ALTER TABLE bot_webhook_routes ADD COLUMN IF NOT EXISTS connected_at TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE bot_webhook_routes ADD COLUMN IF NOT EXISTS last_synced_at TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE bot_webhook_routes ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE bot_webhook_routes ADD COLUMN IF NOT EXISTS subscription_snapshot JSONB NOT NULL DEFAULT '[]'::jsonb");
   await db.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS bot_webhook_routes_route_token_hash_idx
     ON bot_webhook_routes (route_token_hash)
@@ -103,13 +115,19 @@ async function loadState(db) {
       activeRun: row.active_run
     })),
     webhookRoutes: routes.rows.map((row) => ({
+      provider: row.provider,
       externalUserId: row.external_user_id,
       channelId: row.channel_id,
       rootId: row.root_id,
       displayName: row.display_name,
       routeTokenHash: row.route_token_hash,
       signingSecret: row.signing_secret,
-      deliveryUrl: row.delivery_url
+      deliveryUrl: row.delivery_url,
+      connectionStatus: row.connection_status,
+      connectedAt: row.connected_at,
+      lastSyncedAt: row.last_synced_at,
+      lastError: row.last_error,
+      subscriptions: row.subscription_snapshot
     })),
     inboundEvents: events.rows.map((row) => row.event_id)
   };
@@ -164,6 +182,12 @@ function wrapPersistentStore({ memory, db, logger }) {
 
   store.upsertWebhookRoute = (externalUserId, route) => {
     const result = memory.upsertWebhookRoute(externalUserId, route);
+    persistWebhookRoute(db, result).catch(logPersistenceError(logger));
+    return result;
+  };
+
+  store.connectWebhookRoute = (externalUserId, route) => {
+    const result = memory.connectWebhookRoute(externalUserId, route);
     persistWebhookRoute(db, result).catch(logPersistenceError(logger));
     return result;
   };
@@ -288,32 +312,50 @@ async function persistWebhookRoute(db, route) {
     `
       INSERT INTO bot_webhook_routes (
         external_user_id,
+        provider,
         channel_id,
         root_id,
         display_name,
         route_token_hash,
         signing_secret,
         delivery_url,
+        connection_status,
+        connected_at,
+        last_synced_at,
+        last_error,
+        subscription_snapshot,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
       ON CONFLICT (external_user_id) DO UPDATE SET
+        provider = EXCLUDED.provider,
         channel_id = EXCLUDED.channel_id,
         root_id = EXCLUDED.root_id,
         display_name = EXCLUDED.display_name,
         route_token_hash = EXCLUDED.route_token_hash,
         signing_secret = EXCLUDED.signing_secret,
         delivery_url = EXCLUDED.delivery_url,
+        connection_status = EXCLUDED.connection_status,
+        connected_at = EXCLUDED.connected_at,
+        last_synced_at = EXCLUDED.last_synced_at,
+        last_error = EXCLUDED.last_error,
+        subscription_snapshot = EXCLUDED.subscription_snapshot,
         updated_at = NOW()
     `,
     [
       route.externalUserId,
+      route.provider,
       route.channelId,
       route.rootId,
       route.displayName,
       route.routeTokenHash,
       route.signingSecret,
-      route.deliveryUrl
+      route.deliveryUrl,
+      route.connectionStatus,
+      route.connectedAt,
+      route.lastSyncedAt,
+      route.lastError,
+      route.subscriptions
     ]
   );
 }

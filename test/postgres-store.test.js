@@ -42,13 +42,27 @@ test("Postgres command context store migrates, loads, and persists state", async
         return {
           rows: [
             {
+              provider: "acornops",
               external_user_id: "user-1",
               channel_id: "channel-1",
               root_id: "",
               display_name: "alice",
               route_token_hash: "token-hash",
-              signing_secret: "secret",
-              delivery_url: "https://bot.example.com/acornops/webhooks/routes/token"
+              signing_secret: "",
+              delivery_url: "https://bot.example.com/acornops/webhooks/routes/token",
+              connection_status: "connected",
+              connected_at: "2026-07-07T00:00:00.000Z",
+              last_synced_at: "2026-07-07T00:00:00.000Z",
+              last_error: "",
+              subscription_snapshot: [
+                {
+                  workspaceId: "workspace-1",
+                  workspaceName: "Platform",
+                  webhookId: "webhook-1",
+                  eventTypes: ["run.failed.v1"],
+                  signingSecret: "secret"
+                }
+              ]
             }
           ]
         };
@@ -75,14 +89,23 @@ test("Postgres command context store migrates, loads, and persists state", async
   });
   assert.equal(store.getChatThread("channel-1", "root-1").sessionId, "session-1");
   assert.equal(store.getWebhookRoute("user-1").channelId, "channel-1");
+  assert.equal(store.getWebhookRoute("user-1").subscriptions[0].webhookId, "webhook-1");
   assert.equal(store.getWebhookRouteByTokenHash("token-hash").externalUserId, "user-1");
   assert.equal(store.nextChatNumber("user-1"), 4);
   store.selectWorkspace("user-1", { id: "workspace-2", name: "Sandbox" });
-  store.upsertWebhookRoute("user-1", {
+  store.connectWebhookRoute("user-1", {
     channelId: "channel-2",
     routeTokenHash: "token-hash-2",
-    signingSecret: "secret-2",
-    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token-2"
+    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token-2",
+    subscriptions: [
+      {
+        workspaceId: "workspace-2",
+        workspaceName: "Sandbox",
+        webhookId: "webhook-2",
+        eventTypes: ["run.cancelled.v1"],
+        signingSecret: "secret-2"
+      }
+    ]
   });
   assert.equal(await store.rememberInboundEvent("event-2"), true);
 

@@ -202,22 +202,31 @@ test("command context tracks chat threads and per-thread active runs", () => {
 test("command context tracks user-level webhook routes and inbound event ids", () => {
   const store = createInMemoryCommandContextStore();
 
-  assert.deepEqual(store.upsertWebhookRoute("user-1", {
+  const route = store.upsertWebhookRoute("user-1", {
     channelId: "channel-1",
     rootId: "root-1",
     displayName: "alice",
     routeTokenHash: "token-hash",
-    signingSecret: "secret",
-    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
-  }), {
-    externalUserId: "user-1",
-    channelId: "channel-1",
-    rootId: "root-1",
-    displayName: "alice",
-    routeTokenHash: "token-hash",
-    signingSecret: "secret",
     deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
   });
+  assert.equal(route.externalUserId, "user-1");
+  assert.equal(route.provider, "acornops");
+  assert.equal(route.connectionStatus, "pending");
+  assert.equal(route.signingSecret, "");
+  assert.deepEqual(route.subscriptions, []);
+  const connectedRoute = store.connectWebhookRoute("user-1", {
+    subscriptions: [
+      {
+        workspaceId: "workspace-1",
+        workspaceName: "Platform",
+        webhookId: "webhook-1",
+        eventTypes: ["run.failed.v1"],
+        signingSecret: "secret"
+      }
+    ]
+  });
+  assert.equal(connectedRoute.connectionStatus, "connected");
+  assert.equal(connectedRoute.subscriptions[0].signingSecret, "secret");
   assert.equal(store.getWebhookRoute("user-1").channelId, "channel-1");
   assert.equal(store.getWebhookRouteByTokenHash("token-hash").externalUserId, "user-1");
   assert.equal(store.rememberInboundEvent("event-1"), true);

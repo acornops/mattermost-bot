@@ -43,8 +43,9 @@ why is the development cluster unhealthy?
 | `!investigations` | Lists investigations in the current workspace. |
 | `!chat new [title]` | Starts a new read-only troubleshooting chat and posts a Mattermost thread for it. |
 | `!chat end` | Inside a chat thread, closes only that chat and stops following its active answer. |
-| `!webhook connect` | Routes user-level AcornOps webhook alerts to the current Mattermost destination. |
-| `!webhook status` | Shows your current webhook alert route. |
+| `!webhook create` | Creates or shows your AcornOps delivery URL for the current Mattermost destination. |
+| `!webhook connect` | Connects AcornOps console-created subscriptions for that delivery URL. |
+| `!webhook status` | Shows your current webhook alert route and live AcornOps subscription state when available. |
 | `!webhook disconnect` | Removes your webhook alert route. |
 
 ## Chat Threads
@@ -168,12 +169,13 @@ After AcornOps webhook intake is configured for the bot, users can route user-le
 
 | Command | What it does |
 | --- | --- |
-| `!webhook connect` | Creates or rotates a delivery URL and signing secret for the current channel, direct message, or thread. Save the signing secret when it is shown. |
-| `!webhook reconnect` | Rotates the delivery URL and signing secret. |
-| `!webhook status` | Shows where alerts route and the delivery URL, but never shows the signing secret. |
+| `!webhook create` | Creates or shows one delivery URL for the current channel, direct message, or thread. Paste this URL into the AcornOps console. |
+| `!webhook connect` | Claims AcornOps subscription metadata and signing secrets after the URL is configured in AcornOps. |
+| `!webhook recreate` | Rotates the delivery URL route token. Update the URL in AcornOps after using it. |
+| `!webhook status` | Refreshes AcornOps subscription state, shows where alerts route, and never shows signing secrets. |
 | `!webhook disconnect` | Deletes your alert route and disables the delivery URL. |
 
-AcornOps must send webhook deliveries to the route URL with `AcornOps-Event-Id`, `AcornOps-Timestamp`, and `AcornOps-Signature: v1=<hmac>`, where the HMAC is SHA-256 over `timestamp + "." + rawBody` using the signing secret from `!webhook connect`.
+AcornOps must send webhook deliveries to the route URL with `AcornOps-Event-Id`, `AcornOps-Timestamp`, and `AcornOps-Signature: v1=<hmac>`, where the HMAC is SHA-256 over `timestamp + "." + rawBody` using a signing secret returned to the bot through AcornOps' authenticated connect API.
 
 ## Safety Notes
 

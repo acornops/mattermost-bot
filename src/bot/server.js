@@ -209,7 +209,8 @@ export async function handleAcornOpsRouteWebhook({
 }) {
   const routeTokenHash = hashSecret(routeToken);
   const route = commandContextStore.getWebhookRouteByTokenHash?.(routeTokenHash);
-  if (!route || !route.signingSecret) {
+  const signingSecrets = webhookSigningSecrets(route);
+  if (!route || signingSecrets.length === 0) {
     return {
       status: 404,
       body: { error: "webhook_route_not_found" }
@@ -218,7 +219,7 @@ export async function handleAcornOpsRouteWebhook({
 
   const timestamp = headerValue(headers, "acornops-timestamp");
   const signature = headerValue(headers, "acornops-signature").replace(/^v1=/, "");
-  if (!validWebhookTimestamp(timestamp) || !validSignature({ secret: route.signingSecret, timestamp, rawBody, signature })) {
+  if (!validWebhookTimestamp(timestamp) || !signingSecrets.some((secret) => validSignature({ secret, timestamp, rawBody, signature }))) {
     return {
       status: 401,
       body: { error: "invalid_signature" }
@@ -251,6 +252,19 @@ export async function handleAcornOpsRouteWebhook({
     status: 202,
     body: { status: "posted" }
   };
+}
+
+function webhookSigningSecrets(route) {
+  if (!route) {
+    return [];
+  }
+  const secrets = Array.isArray(route.subscriptions)
+    ? route.subscriptions.map((subscription) => subscription.signingSecret).filter(Boolean)
+    : [];
+  if (route.signingSecret) {
+    secrets.push(route.signingSecret);
+  }
+  return [...new Set(secrets)];
 }
 
 function formatWebhookAlert(payload) {
