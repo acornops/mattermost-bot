@@ -1678,14 +1678,19 @@ function formatWebhookCreateResponse({ route, userId, userName, existing, recrea
 }
 
 function formatWebhookConnectResponse(route) {
+  const signingSecretCount = countWebhookSubscriptionsWithSecrets(route.subscriptions);
   return [
     "Webhook route connected to AcornOps.",
     `- Delivery URL: ${route.deliveryUrl}`,
     `- Subscriptions: ${route.subscriptions.length}`,
+    route.subscriptions.length ? `- Signing secrets claimed: ${signingSecretCount}/${route.subscriptions.length}` : "",
     ...formatWebhookSubscriptionLines(route.subscriptions),
     "",
+    route.subscriptions.length && signingSecretCount < route.subscriptions.length
+      ? "Some AcornOps subscriptions did not return signing secrets; run `!webhook connect` again after checking the console setup."
+      : "",
     "Signing secrets are stored by the bot and hidden from Mattermost."
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function formatWebhookStatusResponse({ route, userId, userName, stale }) {
@@ -1699,6 +1704,10 @@ function formatWebhookStatusResponse({ route, userId, userName, stale }) {
     route.lastSyncedAt ? `- Last synced: ${route.lastSyncedAt}` : "- Last synced: never",
     "- Signing secrets: hidden"
   ];
+  const nextStep = webhookStatusNextStep(route);
+  if (nextStep) {
+    lines.push(nextStep);
+  }
 
   if (stale) {
     lines.push("- Live AcornOps status: unavailable; showing cached snapshot.");
@@ -1713,6 +1722,29 @@ function formatWebhookStatusResponse({ route, userId, userName, stale }) {
   }
 
   return lines.join("\n");
+}
+
+function webhookStatusNextStep(route) {
+  const status = route.connectionStatus ?? "pending";
+  const subscriptions = Array.isArray(route.subscriptions) ? route.subscriptions : [];
+  const hasSubscriptionsWithoutSecrets = (
+    subscriptions.length > 0 &&
+    countWebhookSubscriptionsWithSecrets(subscriptions) === 0
+  );
+  if (status === "unconfigured" || status === "pending") {
+    return "- Next step: paste the delivery URL into the AcornOps console and choose workspaces/events.";
+  }
+  if (status === "configured") {
+    return "- Next step: run `!webhook connect` to claim signing secrets for the configured AcornOps subscriptions.";
+  }
+  if (status === "connected" && hasSubscriptionsWithoutSecrets) {
+    return "- Delivery verification: no signing secrets are stored yet; run `!webhook connect` to claim them.";
+  }
+  return "";
+}
+
+function countWebhookSubscriptionsWithSecrets(subscriptions = []) {
+  return subscriptions.filter((subscription) => Boolean(subscription.signingSecret)).length;
 }
 
 function formatWebhookSubscriptionLines(subscriptions) {

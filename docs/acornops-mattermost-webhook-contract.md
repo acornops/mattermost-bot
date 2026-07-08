@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Mattermost users need one reusable bot delivery URL that AcornOps can send signed event deliveries to. AcornOps remains the source of truth for workspace subscriptions, event selection, and webhook signing secrets. The Mattermost bot owns the delivery route, destination channel/thread, signature verification, idempotency, and Mattermost posting.
+Mattermost users need one reusable bot delivery URL that AcornOps can send signed event deliveries to. AcornOps remains the source of truth for workspace subscriptions, event selection, and webhook signing secret rotation. The Mattermost bot owns the delivery route, destination channel/thread, signature verification, idempotency, and Mattermost posting.
 
-This contract is intended for AcornOps review before implementing or adjusting the control-plane endpoints.
+This document records the external webhook route contract for the Mattermost bot and AcornOps control-plane endpoints.
 
 ## Delivery URL
 
@@ -33,11 +33,11 @@ AcornOps must enforce the browser user's normal workspace permissions, including
 
 After console setup, the user runs `!webhook connect` in Mattermost. The bot calls AcornOps to claim subscription metadata and signing secrets for the configured delivery URL.
 
-Proposed endpoint:
+Endpoint:
 
 ```http
-POST /api/v1/external-integrations/webhook-routes/connect
-Authorization: Bearer <EXTERNAL_INTEGRATION_SERVICE_TOKEN>
+POST {ACORNOPS_API_BASE_URL}/api/v1/external-integrations/webhook-routes/connect
+Authorization: Bearer <EXTERNAL_INTEGRATION_CLIENT_TOKEN>
 x-acornops-external-user-id: <mattermost-user-id>
 Content-Type: application/json
 
@@ -45,6 +45,8 @@ Content-Type: application/json
   "deliveryUrl": "https://bot.example.com/acornops/webhooks/routes/route-token"
 }
 ```
+
+The bot runtime currently supplies this bearer value from `EXTERNAL_INTEGRATION_SERVICE_TOKEN`. AcornOps names the same credential `EXTERNAL_INTEGRATION_CLIENT_TOKEN` in its endpoint contract.
 
 Response:
 
@@ -68,19 +70,25 @@ Response:
 }
 ```
 
-AcornOps must return only subscriptions for the linked AcornOps user that match the submitted delivery URL. Signing secrets are returned only during connect or documented rotation flows. The public Mattermost bot webhook listener must never receive setup secrets.
+AcornOps returns only subscriptions created by the linked AcornOps user for the exact submitted delivery URL where the user still has `permissions.manage_webhooks`. Each successful connect rotates the matching webhook signing secrets and returns the fresh `signingSecret` values once in this response. The public Mattermost bot webhook listener must never receive setup secrets.
 
 ## Bot Status API
 
 `!webhook status` should refresh live state from AcornOps before showing the user a status summary.
 
-Proposed endpoint:
+Endpoint:
 
 ```http
-GET /api/v1/external-integrations/webhook-routes/status?deliveryUrl=<url-encoded-delivery-url>
-Authorization: Bearer <EXTERNAL_INTEGRATION_SERVICE_TOKEN>
+GET {ACORNOPS_API_BASE_URL}/api/v1/external-integrations/webhook-routes/status?deliveryUrl=<url-encoded-delivery-url>
+Authorization: Bearer <EXTERNAL_INTEGRATION_CLIENT_TOKEN>
 x-acornops-external-user-id: <mattermost-user-id>
 ```
+
+Status responses use one of:
+
+- `unconfigured`: no AcornOps subscriptions exist for the submitted delivery URL.
+- `configured`: AcornOps subscriptions exist for the submitted delivery URL, but the bot has not claimed current signing secrets.
+- `connected`: AcornOps subscriptions exist and the bot has completed a connect/claim flow.
 
 Response:
 
