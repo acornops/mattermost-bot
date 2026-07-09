@@ -1948,6 +1948,35 @@ test("handleBotMessage launches a workflow with grants, quoted inputs, and selec
   }]);
 });
 
+test("handleBotMessage reports AcornOps workflow 400 reasons", async () => {
+  const commandContextStore = selectedClusterContext();
+  const client = workflowClient();
+  client.postWorkflowSessionMessage = async () => {
+    throw new Error([
+      "AcornOps API POST /api/v1/workflow-sessions/workflow-session-1/messages failed with 400:",
+      JSON.stringify({
+        error: {
+          code: "AI_PROVIDER_CREDENTIAL_MISSING",
+          message: "Configure an AI provider API key in AI Settings before starting a workflow run."
+        }
+      })
+    ].join(" "));
+  };
+
+  const response = await handleBotMessage({
+    text: '!workflow run 1 reason="check production pods"',
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    acornOpsClient: client
+  });
+
+  assert.equal(
+    response,
+    "AcornOps could not start the workflow run (AI_PROVIDER_CREDENTIAL_MISSING: Configure an AI provider API key in AI Settings before starting a workflow run.)."
+  );
+});
+
 test("handleBotMessage routes workflow thread replies to the same session", async () => {
   const commandContextStore = selectedClusterContext();
   const thread = registerThreadChat(commandContextStore, {

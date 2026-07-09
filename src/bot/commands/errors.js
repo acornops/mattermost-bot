@@ -59,6 +59,20 @@ export function chatMessageErrorText(error) {
   return dataErrorText(error, "chat message");
 }
 
+export function workflowMessageErrorText(error) {
+  const status = httpStatusFromError(error);
+  if (status === 400) {
+    const details = acornOpsErrorDetails(error);
+    const reason = [details.code, details.message].filter(Boolean).join(": ");
+    if (reason) {
+      return `AcornOps could not start the workflow run (${reason}).`;
+    }
+    return "AcornOps could not start the workflow run (HTTP 400). Check the AcornOps logs for the rejected request reason.";
+  }
+
+  return dataErrorText(error, "workflow");
+}
+
 function httpStatusFromError(error) {
   const message = error instanceof Error ? error.message : String(error);
   const match = /\bfailed with (\d{3})\b/.exec(message);

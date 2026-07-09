@@ -46,6 +46,7 @@ import {
 import {
   chatMessageErrorText,
   dataErrorText,
+  workflowMessageErrorText,
   workspaceErrorText
 } from "./commands/errors.js";
 import {
@@ -607,7 +608,7 @@ async function handleWorkflowThreadMessage({
       }]
     };
   } catch (error) {
-    return dataErrorText(error, "workflow follow-up");
+    return workflowMessageErrorText(error);
   }
 }
 
@@ -1108,7 +1109,7 @@ async function handleWorkflow({
       }]
     };
   } catch (error) {
-    return dataErrorText(error, "workflow");
+    return workflowMessageErrorText(error);
   }
 }
 

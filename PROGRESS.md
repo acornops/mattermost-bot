@@ -67,6 +67,7 @@
 - `!workflows` lists active read-only workflows for the current workspace. `!workflow run <number|id> [key=value...]` validates declared string inputs, derives exact context grants, supplies selected target bindings, and launches the workflow.
 - Accepted workflow launches create a Mattermost root post exactly like `**Workflow launched: Cluster triage**`. Generic run SSE results and plain-text follow-ups stay in that thread and use the same persisted AcornOps workflow session.
 - Workflow and chat threads each allow one active run and both close with `!chat end`. The bot does not mutate, schedule, approve, cancel, or run read-write/paused/draft/approval-gated workflows.
+- Workflow launch HTTP 400 responses surface AcornOps' safe error code and message. The current local smoke environment returns `AI_PROVIDER_CREDENTIAL_MISSING`; an AI provider API key must be configured in AcornOps AI Settings before a workflow can execute.
 - `!chat new [title]` creates a read-only troubleshooting session for the selected target, posts an acknowledgement, then posts a Mattermost root thread such as `Chat #1 - Investigate Pods`.
 - Registered chat-thread replies route to the matching AcornOps session by Mattermost `channel_id + root_id` and do not require `!`. Assistant replies and long-running SSE follow-ups are posted with the chat thread `root_id`.
 - Chat question `clientMessageId` values are stable per Mattermost post id when available, so websocket retries are idempotent while repeated identical questions in separate Mattermost posts create distinct AcornOps messages/runs.
@@ -106,8 +107,8 @@ Session log entries are historical. Superseded risks and decisions are corrected
 
 - Goal: Add external-integration workflow discovery and read-only launch support, with streamed results and subsequent workflow messages kept in a dedicated Mattermost thread.
 - Completed: Added `!workflows` and `!workflow run <number|id> [key=value...]`; quoted string parsing; required/unknown input validation; selected target and cluster bindings; exact unique context-grant derivation; workflow session creation and starter-prompt launch. Added the exact `**Workflow launched: <name>**` root post, workflow-aware persisted thread records, same-session plain-text follow-ups, one active run per thread, shared `!chat end` closure, and workflow terminal output from `run.assistantMessage.content`. Updated help, README, runtime/command docs, decisions, feature tracking, and handoff.
-- Verification run: Baseline `./init.sh` passed with 117 tests. Focused workflow/client/message/runner/store/follower tests passed with 104 tests. Full `npm test` passed with 130 tests. Final `./init.sh` passed with harness verification, lint, build, and 130 tests.
-- Known risks: Live Mattermost/AcornOps smoke still requires local services. The workflow message contract has no `clientMessageId`, and active SSE followers are not automatically recovered after restart.
+- Verification run: Baseline `./init.sh` passed with 117 tests. Focused workflow/client/message/runner/store/follower tests passed with 104 tests. Manual API reproduction confirmed workflow list returned 200 and session creation returned 201; run creation returned `400 AI_PROVIDER_CREDENTIAL_MISSING`. Added safe workflow 400 reason rendering and regression coverage. Final `./init.sh` passed with harness verification, lint, build, and 131 tests.
+- Known risks: A local AcornOps AI provider credential is required to complete the live workflow run smoke. The workflow message contract has no `clientMessageId`, and active SSE followers are not automatically recovered after restart.
 
 ### 2026-07-08 - AcornOps webhook route endpoint contract alignment
 
