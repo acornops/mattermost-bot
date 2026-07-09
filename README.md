@@ -89,6 +89,7 @@ Environment variables:
 | `BOT_HTTP_PORT` | Port for the inbound bot HTTP listener. `0` disables listening. | `0` |
 | `BOT_PUBLIC_BASE_URL` | Public base URL used in Mattermost interactive action callbacks and AcornOps webhook delivery URLs. Required for workspace buttons and `!webhook create`. | Empty |
 | `MATTERMOST_ACTION_SECRET` | Shared secret embedded in Mattermost action contexts. | Empty |
+| `BOT_ALERT_TIME_ZONE` | IANA timezone used when rendering AcornOps webhook alert timestamps. | `Asia/Singapore` |
 | `CHAT_RUN_POLL_ATTEMPTS` | Immediate chat run polling attempts before SSE follow-up. | `15` |
 | `CHAT_RUN_POLL_INTERVAL_MS` | Immediate chat run polling interval in milliseconds. | `1000` |
 | `RUN_STREAM_RECONNECT_ATTEMPTS` | SSE reconnect attempts before fallback polling. | `3` |
@@ -173,7 +174,7 @@ Run with Docker Compose:
 docker compose up --build
 ```
 
-Compose starts a bundled `bot-postgres` service and defaults `BOT_DATABASE_URL` to that database. It also defaults `MATTERMOST_URL` to `http://host.docker.internal:8065`, `ACORNOPS_API_BASE_URL` to `http://host.docker.internal:8081`, and `BOT_PUBLIC_BASE_URL` to `http://host.docker.internal:8080`, which lets Mattermost and AcornOps containers reach the bot callback listener through Docker Desktop. Keep `MATTERMOST_BOT_TOKEN` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN` in your local `.env` or shell environment.
+Compose starts a bundled `bot-postgres` service and defaults `BOT_DATABASE_URL` to that database. It also defaults `MATTERMOST_URL` to `http://host.docker.internal:8065`, `ACORNOPS_API_BASE_URL` to `http://host.docker.internal:8081`, `BOT_PUBLIC_BASE_URL` to `http://host.docker.internal:8080`, and `BOT_ALERT_TIME_ZONE` to `Asia/Singapore`, which lets Mattermost and AcornOps containers reach the bot callback listener through Docker Desktop and renders alerts in SGT by default. Keep `MATTERMOST_BOT_TOKEN` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN` in your local `.env` or shell environment.
 
 The image installs dependencies from `package*.json` inside Docker. It does not copy host `node_modules` and does not bake local `.env` files into the image. It exposes the optional bot HTTP port for Mattermost actions and AcornOps webhooks; the listener only binds when `BOT_HTTP_PORT` is non-zero.
 

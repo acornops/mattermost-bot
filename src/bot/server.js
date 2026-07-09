@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import http from "node:http";
+import { DEFAULT_ALERT_TIME_ZONE } from "./config.js";
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
@@ -13,6 +14,7 @@ export function createBotHttpServer({
   host = "0.0.0.0",
   port = 0,
   mattermostActionSecret = "",
+  alertTimeZone = DEFAULT_ALERT_TIME_ZONE,
   commandContextStore,
   mattermostClient,
   logger = console
@@ -52,7 +54,8 @@ export function createBotHttpServer({
           rawBody,
           headers: req.headers,
           commandContextStore,
-          mattermostClient
+          mattermostClient,
+          alertTimeZone
         });
         sendJson(res, result.status, result.body);
         return;
@@ -210,7 +213,8 @@ export async function handleAcornOpsRouteWebhook({
   rawBody,
   headers,
   commandContextStore,
-  mattermostClient
+  mattermostClient,
+  alertTimeZone = DEFAULT_ALERT_TIME_ZONE
 }) {
   const routeTokenHash = hashSecret(routeToken);
   const route = commandContextStore.getWebhookRouteByTokenHash?.(routeTokenHash);
@@ -255,7 +259,7 @@ export async function handleAcornOpsRouteWebhook({
   await mattermostClient.createPost({
     channelId: route.channelId,
     rootId: route.rootId,
-    message: formatWebhookAlert(payload, { receivedAt: new Date().toISOString() })
+    message: formatWebhookAlert(payload, { receivedAt: new Date().toISOString(), alertTimeZone })
   });
   return {
     status: 202,
@@ -276,21 +280,21 @@ function webhookSigningSecrets(route) {
   return [...new Set(secrets)];
 }
 
-function formatWebhookAlert(payload, { receivedAt = new Date().toISOString() } = {}) {
+function formatWebhookAlert(payload, { receivedAt = new Date().toISOString(), alertTimeZone = DEFAULT_ALERT_TIME_ZONE } = {}) {
   const type = compactText(payload.type, 120) || "unknown";
   if (ISSUE_EVENT_TYPES.has(type)) {
-    return formatIssueWebhookAlert(payload, type);
+    return formatIssueWebhookAlert(payload, { type, alertTimeZone });
   }
 
-  return formatInfoWebhookAlert(payload, { receivedAt, type });
+  return formatInfoWebhookAlert(payload, { receivedAt, type, alertTimeZone });
 }
 
-function formatIssueWebhookAlert(payload, type) {
+function formatIssueWebhookAlert(payload, { type, alertTimeZone }) {
   const data = objectValue(payload.data);
   const title = compactText(data.title, 240) || compactText(data.issueType, 120) || "Untitled issue";
   const severity = compactText(data.severity, 80) || "unknown";
   const status = compactText(data.status, 80) || "unknown";
-  const summary = compactText(data.summary, 1000);
+  const summary = dedupeRepeatedSentences(compactText(data.summary, 1000));
   const action = issueEventAction(type);
   const lines = [
     `### AcornOps issue alert: ${action}`,
@@ -305,36 +309,30 @@ function formatIssueWebhookAlert(payload, type) {
   const primaryTimestamp = type === "issue.resolved.v1" ? data.resolvedAt : data.lastSeenAt;
   const primaryLabel = type === "issue.resolved.v1" ? "Resolved" : "Last seen";
   if (primaryTimestamp) {
-    lines.push(`- ${primaryLabel}: ${formatTimestamp(primaryTimestamp)}`);
+    lines.push(`- ${primaryLabel}: ${formatTimestamp(primaryTimestamp, alertTimeZone)}`);
   }
   if (type === "issue.resolved.v1" && data.lastSeenAt) {
-    lines.push(`- Last seen: ${formatTimestamp(data.lastSeenAt)}`);
+    lines.push(`- Last seen: ${formatTimestamp(data.lastSeenAt, alertTimeZone)}`);
   }
   if (data.firstSeenAt) {
-    lines.push(`- First seen: ${formatTimestamp(data.firstSeenAt)}`);
+    lines.push(`- First seen: ${formatTimestamp(data.firstSeenAt, alertTimeZone)}`);
   }
   addOptionalLine(lines, "Scope", formatNamedPair(data.scope, data.scopeKind, data.scopeName));
   addOptionalLine(lines, "Object", formatNamedPair(data.object, data.objectKind, data.objectName));
   addOptionalLine(lines, "Reason", compactText(data.reason, 255));
-  addOptionalLine(lines, "Workspace", compactText(payload.workspaceId, 160));
-  addOptionalLine(lines, "Target", compactText(payload.targetId ?? payload.clusterId, 160));
-  addOptionalLine(lines, "Issue", subjectText(payload.subject));
 
   return lines.join("\n");
 }
 
-function formatInfoWebhookAlert(payload, { receivedAt, type }) {
+function formatInfoWebhookAlert(payload, { receivedAt, type, alertTimeZone }) {
   const lines = [
     "### AcornOps info alert",
     `**${genericWebhookTitle(payload, type)}**`,
     `- Type: ${type}`,
-    `- Occurred: ${formatTimestamp(genericOccurredAt(payload, receivedAt))}`
+    `- Occurred: ${formatTimestamp(genericOccurredAt(payload, receivedAt), alertTimeZone)}`
   ];
 
-  addOptionalLine(lines, "Workspace", compactText(payload.workspaceId, 160));
-  addOptionalLine(lines, "Target", compactText(payload.targetId ?? payload.clusterId, 160));
-  addOptionalLine(lines, "Subject", subjectText(payload.subject));
-  const message = compactText(payload.data?.message ?? payload.data?.errorMessage, 500);
+  const message = dedupeRepeatedSentences(compactText(payload.data?.message ?? payload.data?.errorMessage, 500));
   if (message && message !== lines[1].replace(/^\*\*|\*\*$/g, "")) {
     lines.push(`- Message: ${message}`);
   }
@@ -362,7 +360,6 @@ function genericWebhookTitle(payload, type) {
     compactText(data.title, 160) ||
     compactText(data.message, 160) ||
     compactText(data.errorMessage, 160) ||
-    subjectText(payload.subject) ||
     type
   );
 }
@@ -390,13 +387,6 @@ function formatNamedPair(value, kind, name) {
   return [compactText(kind, 120), compactText(name, 255)].filter(Boolean).join(" ");
 }
 
-function subjectText(subject) {
-  if (!subject || typeof subject !== "object") {
-    return "";
-  }
-  return [compactText(subject.type, 80) || "subject", compactText(subject.id, 160)].filter(Boolean).join(" ");
-}
-
 function addOptionalLine(lines, label, value) {
   if (value) {
     lines.push(`- ${label}: ${value}`);
@@ -417,7 +407,7 @@ function objectValue(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
-function formatTimestamp(value) {
+function formatTimestamp(value, alertTimeZone = DEFAULT_ALERT_TIME_ZONE) {
   const text = compactText(value, 120);
   if (!text) {
     return "";
@@ -426,7 +416,42 @@ function formatTimestamp(value) {
   if (!Number.isFinite(time)) {
     return text;
   }
-  return new Date(time).toISOString().replace("T", " ").replace(/(?:\.000)?Z$/, " UTC");
+  try {
+    const parts = new Intl.DateTimeFormat("en-SG", {
+      timeZone: alertTimeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+      timeZoneName: "short"
+    }).formatToParts(new Date(time));
+    const valueFor = (type) => parts.find((part) => part.type === type)?.value ?? "";
+    return `${valueFor("year")}-${valueFor("month")}-${valueFor("day")} ${valueFor("hour")}:${valueFor("minute")}:${valueFor("second")} ${valueFor("timeZoneName")}`.trim();
+  } catch {
+    return formatTimestamp(value, DEFAULT_ALERT_TIME_ZONE);
+  }
+}
+
+function dedupeRepeatedSentences(text) {
+  if (!text) {
+    return "";
+  }
+  const sentences = text.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g);
+  if (!sentences) {
+    return text;
+  }
+  const deduped = [];
+  for (const sentence of sentences) {
+    const normalized = sentence.replace(/\s+/g, " ").trim().toLowerCase();
+    const previous = deduped.at(-1)?.replace(/\s+/g, " ").trim().toLowerCase();
+    if (normalized && normalized !== previous) {
+      deduped.push(sentence.trim());
+    }
+  }
+  return deduped.join(" ");
 }
 
 function validWebhookTimestamp(timestamp) {

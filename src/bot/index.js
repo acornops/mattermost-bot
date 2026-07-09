@@ -38,6 +38,7 @@ const httpServer = createBotHttpServer({
   host: config.botHttpHost,
   port: config.botHttpPort,
   mattermostActionSecret: config.mattermostActionSecret,
+  alertTimeZone: config.alertTimeZone,
   commandContextStore,
   mattermostClient: client
 });

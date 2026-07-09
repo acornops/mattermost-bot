@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  DEFAULT_ALERT_TIME_ZONE,
   DEFAULT_ACORNOPS_API_BASE_URL,
   DEFAULT_MATTERMOST_BOT_USERNAME,
   DEFAULT_MATTERMOST_URL,
@@ -18,7 +19,8 @@ test("readBotConfig applies local development defaults", () => {
     botHttpHost: "0.0.0.0",
     botHttpPort: 0,
     botPublicBaseUrl: "",
-    mattermostActionSecret: ""
+    mattermostActionSecret: "",
+    alertTimeZone: DEFAULT_ALERT_TIME_ZONE
   });
 });
 
@@ -63,6 +65,7 @@ test("readBotConfig reads bot persistence and inbound HTTP configuration", () =>
     BOT_HTTP_HOST: "127.0.0.1",
     BOT_HTTP_PORT: "8090",
     BOT_PUBLIC_BASE_URL: "https://bot.example.com",
+    BOT_ALERT_TIME_ZONE: "America/New_York",
     MATTERMOST_ACTION_SECRET: "mattermost-secret",
     ACORNOPS_WEBHOOK_SECRET: "ignored-webhook-secret"
   });
@@ -71,6 +74,7 @@ test("readBotConfig reads bot persistence and inbound HTTP configuration", () =>
   assert.equal(config.botHttpHost, "127.0.0.1");
   assert.equal(config.botHttpPort, 8090);
   assert.equal(config.botPublicBaseUrl, "https://bot.example.com");
+  assert.equal(config.alertTimeZone, "America/New_York");
   assert.equal(config.mattermostActionSecret, "mattermost-secret");
   assert.equal("acornOpsWebhookSecret" in config, false);
 });

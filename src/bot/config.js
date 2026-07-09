@@ -1,6 +1,7 @@
 export const DEFAULT_MATTERMOST_URL = "http://localhost:8065";
 export const DEFAULT_MATTERMOST_BOT_USERNAME = "acorn-ops-bot";
 export const DEFAULT_ACORNOPS_API_BASE_URL = "http://localhost:8081";
+export const DEFAULT_ALERT_TIME_ZONE = "Asia/Singapore";
 
 export function readBotConfig(env = process.env) {
   return {
@@ -13,6 +14,7 @@ export function readBotConfig(env = process.env) {
     botHttpHost: env.BOT_HTTP_HOST || "0.0.0.0",
     botHttpPort: Number.parseInt(env.BOT_HTTP_PORT || "0", 10) || 0,
     botPublicBaseUrl: env.BOT_PUBLIC_BASE_URL || "",
-    mattermostActionSecret: env.MATTERMOST_ACTION_SECRET || ""
+    mattermostActionSecret: env.MATTERMOST_ACTION_SECRET || "",
+    alertTimeZone: env.BOT_ALERT_TIME_ZONE || DEFAULT_ALERT_TIME_ZONE
   };
 }

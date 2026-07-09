@@ -276,7 +276,7 @@ test("AcornOps route webhook formats issue lifecycle events with issue details",
       issueType: "kubernetes_pod_unhealthy",
       severity: "critical",
       title: "Payments pod crash looping",
-      summary: "The payments deployment recovered after repeated restart failures.",
+      summary: "Latest snapshot reports pod payments-abc in namespace payments as CrashLoopBackOff. Restart count: 6. Restart count: 6.",
       scopeKind: "namespace",
       scopeName: "payments",
       objectKind: "pod",
@@ -303,12 +303,16 @@ test("AcornOps route webhook formats issue lifecycle events with issue details",
   assert.match(posts[0].message, /AcornOps issue alert: Resolved/);
   assert.match(posts[0].message, /\*\*Payments pod crash looping\*\*/);
   assert.match(posts[0].message, /Severity: \*\*CRITICAL\*\*/);
-  assert.match(posts[0].message, /Summary: The payments deployment recovered/);
-  assert.match(posts[0].message, /Resolved: 2026-07-10 01:10:00 UTC/);
-  assert.match(posts[0].message, /Last seen: 2026-07-10 00:30:00 UTC/);
+  assert.match(posts[0].message, /Summary: Latest snapshot reports pod payments-abc in namespace payments as CrashLoopBackOff\. Restart count: 6\./);
+  assert.doesNotMatch(posts[0].message, /Restart count: 6\. Restart count: 6\./);
+  assert.match(posts[0].message, /Resolved: 2026-07-10 09:10:00 SGT/);
+  assert.match(posts[0].message, /Last seen: 2026-07-10 08:30:00 SGT/);
+  assert.doesNotMatch(posts[0].message, /Workspace:/);
+  assert.doesNotMatch(posts[0].message, /Target:/);
+  assert.doesNotMatch(posts[0].message, /Issue:/);
 });
 
-test("AcornOps route webhook formats generic events with createdAt timestamp fallback", async () => {
+test("AcornOps route webhook formats generic events with createdAt timestamp fallback and configured timezone", async () => {
   const posts = [];
   const commandContextStore = createInMemoryCommandContextStore();
   const routeToken = "route-token";
@@ -340,14 +344,17 @@ test("AcornOps route webhook formats generic events with createdAt timestamp fal
     routeToken,
     ...signedWebhookInput(body, signingSecret),
     commandContextStore,
-    mattermostClient: fakeMattermostClient(posts)
+    mattermostClient: fakeMattermostClient(posts),
+    alertTimeZone: "America/New_York"
   });
 
   assert.equal(result.status, 202);
   assert.match(posts[0].message, /AcornOps info alert/);
   assert.match(posts[0].message, /\*\*Agent disconnected\*\*/);
-  assert.match(posts[0].message, /Occurred: 2026-07-10 02:00:00 UTC/);
-  assert.match(posts[0].message, /Subject: agent agent-1/);
+  assert.match(posts[0].message, /Occurred: 2026-07-09 22:00:00 GMT-4/);
+  assert.doesNotMatch(posts[0].message, /Workspace:/);
+  assert.doesNotMatch(posts[0].message, /Target:/);
+  assert.doesNotMatch(posts[0].message, /Subject:/);
 });
 
 test("AcornOps route webhook rejects stale or invalid signatures", async () => {

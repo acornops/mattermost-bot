@@ -2,9 +2,9 @@
 
 ## 2026-07-10: Render issue webhook alerts around lifecycle semantics
 
-- Decision: Mattermost webhook posts treat `issue.created.v1`, `issue.reopened.v1`, and `issue.resolved.v1` as first-class issue alerts. Created and reopened alerts emphasize `lastSeenAt`; resolved alerts emphasize `resolvedAt` and include `lastSeenAt` only as supporting context. Other webhook events continue to post as generic AcornOps info alerts.
+- Decision: Mattermost webhook posts treat `issue.created.v1`, `issue.reopened.v1`, and `issue.resolved.v1` as first-class issue alerts. Created and reopened alerts emphasize `lastSeenAt`; resolved alerts emphasize `resolvedAt` and include `lastSeenAt` only as supporting context. Other webhook events continue to post as generic AcornOps info alerts. Alert notices omit ID-only workspace, target, issue, and subject lines. Alert timestamps render in `BOT_ALERT_TIME_ZONE`, defaulting to `Asia/Singapore`.
 - Reason: The local AcornOps issue webhook contract describes issue payloads as bounded issue snapshots with `stateAsOf` as the authoritative snapshot time. The control-plane source sets `lastSeenAt` when issue evidence is observed and sets `resolvedAt` when an issue becomes resolved, so `resolvedAt` is the more useful primary timestamp for resolved notifications.
-- Consequence: Alert formatting now depends on webhook event type, but signature verification, event idempotency, and user route resolution remain unchanged. Future issue event variants should make their lifecycle timestamp choice explicit before being added to the rich formatter.
+- Consequence: Alert formatting now depends on webhook event type, but signature verification, event idempotency, and user route resolution remain unchanged. The bot defensively collapses repeated adjacent summary sentences before posting, because AcornOps control-plane can currently emit a duplicated restart-count sentence when a snapshot finding message already contains the restart count and target issue derivation appends it again. Future issue event variants should make their lifecycle timestamp choice explicit before being added to the rich formatter.
 
 ## 2026-07-09: Run external workflows in dedicated Mattermost threads
 
