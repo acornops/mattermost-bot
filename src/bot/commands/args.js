@@ -1,10 +1,56 @@
 export function commandArguments(text) {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return [];
+  return parseCommandTokens(text).tokens.slice(1);
+}
+
+export function parseCommandTokens(text) {
+  const tokens = [];
+  let token = "";
+  let quote = "";
+  let escaped = false;
+
+  for (const character of String(text ?? "").trim()) {
+    if (escaped) {
+      token += character;
+      escaped = false;
+      continue;
+    }
+    if (character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) {
+        quote = "";
+      } else {
+        token += character;
+      }
+      continue;
+    }
+    if (character === "\"" || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (/\s/.test(character)) {
+      if (token) {
+        tokens.push(token);
+        token = "";
+      }
+      continue;
+    }
+    token += character;
   }
 
-  return trimmed.split(/\s+/).slice(1);
+  if (escaped) {
+    token += "\\";
+  }
+  if (token) {
+    tokens.push(token);
+  }
+
+  return {
+    tokens,
+    error: quote ? "Workflow input contains an unterminated quoted value." : ""
+  };
 }
 
 export function parseListArgs(commandArgs, allowedFilters, { allowReference = true } = {}) {

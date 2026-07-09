@@ -449,6 +449,96 @@ test("handlePostedEvent aborts the active run before posting chat end confirmati
   assert.match(posts[0].message, /Chat thread closed/);
 });
 
+test("handlePostedEvent creates and follows a workflow thread with the exact root post", async () => {
+  const posts = [];
+  const started = [];
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.selectWorkspace("user-1", {
+    id: "workspace-1",
+    name: "Platform"
+  });
+  commandContextStore.selectCluster("user-1", {
+    id: "cluster-1",
+    name: "Prod"
+  });
+
+  await handlePostedEvent({
+    client: fakeClient({
+      createPost: async (post) => {
+        posts.push(post);
+        return { id: `reply-${posts.length}`, ...post };
+      }
+    }),
+    acornOpsClient: {
+      async listWorkflows() {
+        return {
+          items: [{
+            id: "cluster-triage",
+            name: "Cluster triage",
+            status: "active",
+            inputs: [],
+            starterPrompt: "Triage the selected cluster.",
+            policy: { mode: "read_only", approvalRequirements: [] },
+            steps: [{
+              requiredInputs: [],
+              contextGrants: ["workspace_metadata", "target_inventory"],
+              approvalRequired: false,
+              targetBinding: {
+                type: "selected_cluster",
+                targetType: "kubernetes",
+                inputName: "clusterId"
+              }
+            }]
+          }]
+        };
+      },
+      async createWorkflowSession() {
+        return { session: { id: "workflow-session-1" } };
+      },
+      async postWorkflowSessionMessage() {
+        return {
+          message_id: "workflow-message-1",
+          run_id: "run-1",
+          status: "queued"
+        };
+      }
+    },
+    commandContextStore,
+    runFollowerRegistry: {
+      start(options) {
+        started.push(options);
+        return true;
+      },
+      abort() {}
+    },
+    botUser: {
+      id: "bot",
+      username: "acorn-ops-bot"
+    },
+    event: postedEvent("user-1", "!workflow run 1"),
+    logger: quietLogger()
+  });
+
+  assert.equal(
+    posts[0].message,
+    "Workflow “Cluster triage” was launched successfully. Follow the thread below for results and replies."
+  );
+  assert.equal(posts[1].message, "**Workflow launched: Cluster triage**");
+  const thread = commandContextStore.getChatThread("channel-1", "reply-2");
+  assert.equal(thread.kind, "workflow");
+  assert.equal(thread.workflowId, "cluster-triage");
+  assert.deepEqual(thread.workflowInputs, { clusterId: "cluster-1" });
+  assert.deepEqual(started, [{
+    kind: "workflow",
+    identity: { externalUserId: "user-1" },
+    sessionId: "workflow-session-1",
+    runId: "run-1",
+    messageId: "workflow-message-1",
+    channelId: "channel-1",
+    rootId: "reply-2"
+  }]);
+});
+
 function fakeClient(overrides = {}) {
   return {
     token: overrides.token ?? "token",

@@ -6,6 +6,7 @@ import {
   resolveSessionReference,
   resolveTargetReference,
   resolveVirtualMachineReference,
+  resolveWorkflowReference,
   resolveWorkspaceReference
 } from "../src/bot/commands/context.js";
 
@@ -46,6 +47,21 @@ test("command context tracks current workspace", () => {
     id: "workspace-1",
     name: "Platform"
   });
+});
+
+test("command context remembers workflows and clears them when workspace changes", () => {
+  const store = createInMemoryCommandContextStore();
+  store.selectWorkspace("user-1", { id: "workspace-1", name: "Platform" });
+  store.rememberWorkflows("user-1", [
+    { id: "workflow-1", name: "Cluster triage" }
+  ]);
+
+  assert.deepEqual(resolveWorkflowReference("1", store.get("user-1")), {
+    id: "workflow-1",
+    name: "Cluster triage"
+  });
+  store.selectWorkspace("user-1", { id: "workspace-2", name: "Sandbox" });
+  assert.deepEqual(store.get("user-1").workflows, []);
 });
 
 test("workspace reference falls back to explicit id", () => {
@@ -185,6 +201,10 @@ test("command context tracks chat threads and per-thread active runs", () => {
     title: "Investigate Prod",
     number: 2,
     status: "open",
+    kind: "chat",
+    workflowId: "",
+    workspaceId: "",
+    workflowInputs: {},
     activeRun: null
   });
   store.rememberActiveRunForChat("channel-1", "root-1", {
@@ -197,6 +217,26 @@ test("command context tracks chat threads and per-thread active runs", () => {
   assert.equal(store.getChatThread("channel-1", "root-1").activeRun, null);
   store.closeChatThread("channel-1", "root-1", "user-1");
   assert.equal(store.getChatThread("channel-1", "root-1").status, "closed");
+});
+
+test("command context stores workflow thread launch context", () => {
+  const store = createInMemoryCommandContextStore();
+  store.registerChatThread("user-1", {
+    channelId: "channel-1",
+    rootId: "root-workflow-1",
+    sessionId: "workflow-session-1",
+    sessionName: "Cluster triage",
+    title: "Cluster triage",
+    kind: "workflow",
+    workflowId: "cluster-triage",
+    workspaceId: "workspace-1",
+    workflowInputs: { clusterId: "cluster-1" }
+  });
+
+  const thread = store.getChatThread("channel-1", "root-workflow-1");
+  assert.equal(thread.kind, "workflow");
+  assert.equal(thread.workflowId, "cluster-triage");
+  assert.deepEqual(thread.workflowInputs, { clusterId: "cluster-1" });
 });
 
 test("command context tracks user-level webhook routes and inbound event ids", () => {

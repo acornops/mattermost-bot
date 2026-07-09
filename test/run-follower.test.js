@@ -95,6 +95,45 @@ test("run follower posts concise failure and cancelled messages", async () => {
   assert.equal(cancelPosts[0].message, "AcornOps cancelled that response.");
 });
 
+test("run follower reads workflow output from the terminal run", async () => {
+  const posts = [];
+  let sessionMessageCalls = 0;
+  const registry = createRunFollowerRegistry({
+    acornOpsClient: {
+      async streamRun() {
+        return asyncEvents([{ event: "run_completed", data: {} }]);
+      },
+      async getRun() {
+        return {
+          id: "run-1",
+          status: "completed",
+          assistantMessage: {
+            content: "Cluster triage completed."
+          }
+        };
+      },
+      async listSessionMessages() {
+        sessionMessageCalls += 1;
+        return { items: [] };
+      }
+    },
+    commandContextStore: createInMemoryCommandContextStore(),
+    postFollowUp: async (post) => {
+      posts.push(post);
+    },
+    logger: quietLogger(),
+    reconnectDelayMs: 0,
+    fallbackPollIntervalMs: 0,
+    fallbackPollMaxMs: 0
+  });
+
+  registry.start(followOptions({ kind: "workflow" }));
+  await waitFor(() => posts.length === 1);
+
+  assert.equal(posts[0].message, "Cluster triage completed.");
+  assert.equal(sessionMessageCalls, 0);
+});
+
 test("run follower abort prevents stale final posts", async () => {
   let releaseStream;
   const streamStarted = new Promise((resolve) => {
@@ -196,8 +235,9 @@ test("run follower checks run state and reconnects after a dropped stream", asyn
   assert.equal(posts[0].message, "Reconnected answer.");
 });
 
-function followOptions({ runId = "run-1" } = {}) {
+function followOptions({ runId = "run-1", kind = "chat" } = {}) {
   return {
+    kind,
     identity: {
       externalUserId: "mattermost-user-1"
     },

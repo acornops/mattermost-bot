@@ -43,11 +43,19 @@ async function migrate(db) {
       chat_number INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'open',
       active_run JSONB NULL,
+      thread_kind TEXT NOT NULL DEFAULT 'chat',
+      workflow_id TEXT NOT NULL DEFAULT '',
+      workspace_id TEXT NOT NULL DEFAULT '',
+      workflow_inputs JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (channel_id, root_id)
     )
   `);
+  await db.query("ALTER TABLE bot_chat_threads ADD COLUMN IF NOT EXISTS thread_kind TEXT NOT NULL DEFAULT 'chat'");
+  await db.query("ALTER TABLE bot_chat_threads ADD COLUMN IF NOT EXISTS workflow_id TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE bot_chat_threads ADD COLUMN IF NOT EXISTS workspace_id TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE bot_chat_threads ADD COLUMN IF NOT EXISTS workflow_inputs JSONB NOT NULL DEFAULT '{}'::jsonb");
   await db.query(`
     CREATE TABLE IF NOT EXISTS bot_webhook_routes (
       external_user_id TEXT PRIMARY KEY,
@@ -112,6 +120,10 @@ async function loadState(db) {
       title: row.title,
       number: row.chat_number,
       status: row.status,
+      kind: row.thread_kind,
+      workflowId: row.workflow_id,
+      workspaceId: row.workspace_id,
+      workflowInputs: row.workflow_inputs,
       activeRun: row.active_run
     })),
     webhookRoutes: routes.rows.map((row) => ({
@@ -225,6 +237,7 @@ function wrapPersistentStore({ memory, db, logger }) {
 
 const contextMutationMethods = [
   "rememberWorkspaces",
+  "rememberWorkflows",
   "selectWorkspace",
   "rememberTargets",
   "selectTarget",
@@ -280,9 +293,13 @@ async function persistThread(db, thread) {
         chat_number,
         status,
         active_run,
+        thread_kind,
+        workflow_id,
+        workspace_id,
+        workflow_inputs,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
       ON CONFLICT (channel_id, root_id) DO UPDATE SET
         external_user_id = EXCLUDED.external_user_id,
         session_id = EXCLUDED.session_id,
@@ -291,6 +308,10 @@ async function persistThread(db, thread) {
         chat_number = EXCLUDED.chat_number,
         status = EXCLUDED.status,
         active_run = EXCLUDED.active_run,
+        thread_kind = EXCLUDED.thread_kind,
+        workflow_id = EXCLUDED.workflow_id,
+        workspace_id = EXCLUDED.workspace_id,
+        workflow_inputs = EXCLUDED.workflow_inputs,
         updated_at = NOW()
     `,
     [
@@ -302,7 +323,11 @@ async function persistThread(db, thread) {
       thread.title,
       thread.number,
       thread.status,
-      thread.activeRun
+      thread.activeRun,
+      thread.kind,
+      thread.workflowId,
+      thread.workspaceId,
+      thread.workflowInputs
     ]
   );
 }

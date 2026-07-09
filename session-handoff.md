@@ -2,7 +2,8 @@
 
 ## Currently Verified
 
-- Current implementation has the Mattermost bot UX and alert roadmap plus smoke-test follow-up fixes in place: `!` commands, threaded multi-chat routing, Compose-bundled Postgres state, inbound HTTP callbacks, `!workspaces` and `!targets` selection buttons, AcornOps-owned webhook subscription state behind one Mattermost user delivery URL, and concise command context/status messages. The webhook route contract now matches AcornOps' supplied endpoints for exact delivery URL matching, `permissions.manage_webhooks` filtering, connect-time secret rotation, and `unconfigured`/`configured`/`connected` status values. Final `./init.sh` passed on 2026-07-08 with harness verification, lint, build, and 117 tests after the endpoint-contract alignment. Focused webhook-route implementation tests passed with 89 tests.
+- Current implementation includes workflow discovery and threaded execution: `!workflows` lists active read-only workflows, `!workflow run <number|id> [key=value...]` validates inputs and target bindings, and accepted runs create `**Workflow launched: <name>**` roots whose SSE output and follow-ups stay in the same persisted AcornOps workflow session. Focused workflow/client/message/runner/store/follower verification passed with 104 tests; full `npm test` and final `./init.sh` passed on 2026-07-09 with 130 tests.
+- The Mattermost bot UX and alert roadmap also remains in place: `!` commands, threaded multi-chat routing, Compose-bundled Postgres state, inbound HTTP callbacks, `!workspaces` and `!targets` selection buttons, AcornOps-owned webhook subscription state behind one Mattermost user delivery URL, and concise command context/status messages.
 - Docker image verification passed on 2026-07-01: `./scripts/verify-docker.sh` built the `verify` target, ran `npm run verify:bot` inside `node:22-bookworm-slim` with 93 passing tests, then built `acornops-mattermost-bot:local`.
 - `npm test` passed on 2026-07-01 with 93 tests after renaming runtime env vars and adding Docker packaging.
 - Final `./init.sh` passed after the bot command module refactor and domain-folder follow-up, with harness verification, lint, build, and 92 tests. `npm test` also passed with 92 tests during the refactor and after the folder move.
@@ -50,6 +51,7 @@
 - `!clusters`/`!cluster 1` and `!vms`/`!vm 1` remain compatibility shortcuts for Kubernetes and VM-specific target paths.
 - `!resources` and `!findings` use the currently selected target. `!investigations` uses the current workspace.
 - `!chat new [title]` creates a read-only troubleshooting session for the selected target, posts an acknowledgement, then posts a Mattermost root thread. Replies in that thread route to the matching AcornOps session without requiring `!`.
+- `!workflows` lists active read-only workflows for the current workspace. `!workflow run <number|id> [key=value...]` launches one with exact context grants and selected target bindings, creates a dedicated root, and streams final output there. Plain replies continue the same workflow session.
 - Long-running chat answers are followed over AcornOps SSE through `GET /api/v1/runs/{runId}/stream`; final assistant answers are posted back to the same Mattermost channel when AcornOps completes.
 - V1 follows one active streamed run per chat thread. A second question in the same thread is rejected while one answer is active.
 - `!chat end` works inside a chat thread and closes only that chat. `!chat pause` and `!chat resume` are retired from the main UX. `!sessions`, `!session new`, `!session 1`, `!messages`, and `!ask <question>` remain compatibility commands outside the short help surface.
@@ -136,7 +138,7 @@
 
 ## Next Best Action
 
-Live-smoke `!login`, `!status`, `!workspaces`, workspace button selection with no action integration error, `!workspace 1`, `!targets`, target button selection, `!resources`, `!findings`, `!chat new`, a threaded question/reply, a long-running threaded question that exercises SSE follow-up, concurrent chat threads, thread-local `!chat end`, `!webhook create`, AcornOps console setup, `!webhook connect`, `!webhook status`, a signed route-token AcornOps webhook alert, duplicate webhook suppression, and bot restart persistence against Compose Postgres.
+Live-smoke `!login`, `!status`, workspace/target selection, `!resources`, `!findings`, `!workflows`, `!workflow run 1`, workflow SSE output and a same-session thread follow-up, `!chat new`, a threaded question/reply, concurrent chat/workflow threads, thread-local `!chat end`, webhook setup/delivery/deduplication, and bot restart persistence against Compose Postgres.
 
 ## Commands
 

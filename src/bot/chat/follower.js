@@ -16,7 +16,7 @@ export function createRunFollowerRegistry({
   const active = new Map();
 
   return {
-    start({ identity, sessionId, runId, messageId = "", channelId, rootId = "" }) {
+    start({ identity, sessionId, runId, messageId = "", channelId, rootId = "", kind = "chat" }) {
       if (!identity?.externalUserId || !runId || !sessionId || !channelId) {
         return false;
       }
@@ -34,6 +34,7 @@ export function createRunFollowerRegistry({
         messageId,
         channelId,
         rootId,
+        kind,
         key,
         controller,
         finalPosted: false
@@ -250,7 +251,7 @@ async function postTerminalResult({
 
   const message = status === "completed"
     ? await completedRunMessage({ acornOpsClient, entry })
-    : terminalRunMessage(status);
+    : terminalRunMessage(status, entry.kind);
 
   try {
     if (!entry.controller.signal.aborted && message) {
@@ -284,6 +285,10 @@ async function completedRunMessage({ acornOpsClient, entry }) {
     return inlineAnswer;
   }
 
+  if (entry.kind === "workflow") {
+    return "AcornOps completed the workflow, but I could not load its result yet.";
+  }
+
   if (typeof acornOpsClient.listSessionMessages !== "function") {
     return "AcornOps finished, but I could not load the assistant reply yet.";
   }
@@ -297,13 +302,14 @@ async function completedRunMessage({ acornOpsClient, entry }) {
   }
 }
 
-function terminalRunMessage(status) {
+function terminalRunMessage(status, kind = "chat") {
+  const subject = kind === "workflow" ? "workflow" : "response";
   if (status === "failed") {
-    return "AcornOps could not complete that response.";
+    return `AcornOps could not complete that ${subject}.`;
   }
 
   if (status === "cancelled") {
-    return "AcornOps cancelled that response.";
+    return `AcornOps cancelled that ${subject}.`;
   }
 
   return "";

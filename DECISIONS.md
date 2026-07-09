@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-07-09: Run external workflows in dedicated Mattermost threads
+
+- Decision: Expose active read-only workflows through `!workflows` and `!workflow run <number|id> [key=value...]`. Each accepted launch creates a root post named `**Workflow launched: <name>**`; streamed output and plain-text follow-ups use the same persisted AcornOps workflow session. `!chat end` closes either conversation kind.
+- Reason: Workflow runs can outlive a command response and need the same visible, concurrent conversation boundary already proven by assistant chat threads. The supplied AcornOps contract also requires exact context grants and returns final workflow output on the generic run resource.
+- Consequence: Thread records now carry a `chat` or `workflow` kind plus workflow id, workspace id, and launch inputs. Target bindings always come from the current bot selection, only one run is followed per thread, and the bot continues to deny mutation, scheduling, approval, cancellation, read-write, paused/draft, and approval-gated workflow operations. Workflow message idempotency and restart-time follower recovery remain backend/future-work limitations.
+
 ## 2026-07-07: Use AcornOps-owned subscription state for Mattermost webhook routes
 
 - Decision: Mattermost users get one bot-owned delivery URL through `!webhook create`, configure that URL in AcornOps console, then run `!webhook connect` so the bot claims AcornOps subscription metadata and signing secrets over authenticated TLS. `!webhook status` refreshes live AcornOps subscription state and falls back to cached state only with a stale warning.

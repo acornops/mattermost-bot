@@ -299,6 +299,29 @@ export class AcornOpsClient {
     );
   }
 
+  async listWorkflows(identity, workspaceId) {
+    return this.getExternalResource(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/workflows`
+    );
+  }
+
+  async createWorkflowSession(identity, workflowId, { workspaceId, approvedContextGrants }) {
+    return this.postExternalResource(
+      identity,
+      `/api/v1/workflows/${encodeURIComponent(workflowId)}/sessions`,
+      { workspaceId, approvedContextGrants }
+    );
+  }
+
+  async postWorkflowSessionMessage(identity, sessionId, { workspaceId, content, inputs = {} }) {
+    return this.postExternalResource(
+      identity,
+      `/api/v1/workflow-sessions/${encodeURIComponent(sessionId)}/messages`,
+      { workspaceId, content, inputs }
+    );
+  }
+
   async getRun(identity, runId) {
     return this.getExternalResource(identity, `/api/v1/runs/${encodeURIComponent(runId)}`);
   }

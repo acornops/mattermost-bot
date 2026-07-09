@@ -41,12 +41,33 @@ why is the development cluster unhealthy?
 | `!resources` | Lists resources for the selected target. |
 | `!findings` | Lists findings for the selected target. |
 | `!investigations` | Lists investigations in the current workspace. |
+| `!workflows` | Lists active read-only workflows available in the current workspace. |
+| `!workflow run <number\|id> [key=value...]` | Launches a workflow and creates a dedicated result thread. Quote values containing spaces. |
 | `!chat new [title]` | Starts a new read-only troubleshooting chat and posts a Mattermost thread for it. |
-| `!chat end` | Inside a chat thread, closes only that chat and stops following its active answer. |
+| `!chat end` | Inside a chat or workflow thread, closes that thread and stops following its active run. |
 | `!webhook create` | Creates or shows your AcornOps delivery URL for the current Mattermost destination. |
 | `!webhook connect` | Connects AcornOps console-created subscriptions for that delivery URL. |
 | `!webhook status` | Shows your current webhook alert route and live AcornOps subscription state when available. |
 | `!webhook disconnect` | Removes your webhook alert route. |
+
+## Workflow Threads
+
+List and launch workflows after selecting a workspace:
+
+```text
+!workflows
+!workflow run 1
+```
+
+Declared workflow inputs use `key=value`. Quote values containing spaces:
+
+```text
+!workflow run 1 reason="check production pods"
+```
+
+The bot supplies target bindings from the currently selected target; typed input cannot override them. After AcornOps accepts the launch, the bot posts `**Workflow launched: <name>**` as a new Mattermost root post. Streamed results and plain-text follow-ups stay in that thread and use the same workflow session.
+
+Each workflow thread allows one active run at a time. Use `!chat end` in the thread to close it. Only active, read-only, non-approval-gated workflows returned by AcornOps are available; the bot cannot mutate, schedule, approve, cancel, or launch read-write workflows.
 
 ## Chat Threads
 

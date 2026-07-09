@@ -1883,6 +1883,138 @@ test("handleBotMessage allows chat end inside a chat thread", async () => {
   assert.equal(commandContextStore.getChatThread("channel-1", "root-1").status, "closed");
 });
 
+test("handleBotMessage lists workflows for the current workspace", async () => {
+  const commandContextStore = selectedClusterContext();
+  const response = await handleBotMessage({
+    text: "!workflows",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "D",
+    commandContextStore,
+    acornOpsClient: {
+      async listWorkflows(identity, workspaceId) {
+        assert.deepEqual(identity, externalIdentity());
+        assert.equal(workspaceId, "workspace-1");
+        return {
+          items: [{
+            id: "cluster-triage",
+            name: "Cluster triage",
+            description: "Inspect the selected cluster."
+          }]
+        };
+      }
+    }
+  });
+
+  assert.match(response, /Available AcornOps workflows:/);
+  assert.match(response, /1\. Cluster triage \(cluster-triage\)/);
+  assert.deepEqual(commandContextStore.get("mattermost-user-1").workflows, [{
+    id: "cluster-triage",
+    name: "Cluster triage"
+  }]);
+});
+
+test("handleBotMessage launches a workflow with grants, quoted inputs, and selected target", async () => {
+  const commandContextStore = selectedClusterContext();
+  const result = await handleBotMessageResult({
+    text: '!workflow run 1 reason="check production pods"',
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "D",
+    commandContextStore,
+    acornOpsClient: workflowClient()
+  });
+
+  assert.equal(
+    result.message,
+    "Workflow “Cluster triage” was launched successfully. Follow the thread below for results and replies."
+  );
+  assert.deepEqual(result.effects, [{
+    type: "createWorkflowThread",
+    kind: "workflow",
+    identity: externalIdentity(),
+    workflowId: "cluster-triage",
+    workflowName: "Cluster triage",
+    workspaceId: "workspace-1",
+    workflowInputs: {
+      reason: "check production pods",
+      clusterId: "cluster-1"
+    },
+    session: {
+      id: "workflow-session-1"
+    },
+    runId: "run-1",
+    messageId: "workflow-message-1"
+  }]);
+});
+
+test("handleBotMessage routes workflow thread replies to the same session", async () => {
+  const commandContextStore = selectedClusterContext();
+  const thread = registerThreadChat(commandContextStore, {
+    kind: "workflow",
+    sessionId: "workflow-session-1",
+    sessionName: "Cluster triage",
+    title: "Cluster triage",
+    workflowId: "cluster-triage",
+    workspaceId: "workspace-1",
+    workflowInputs: {
+      clusterId: "cluster-1"
+    }
+  });
+  const result = await handleBotMessageResult({
+    text: "focus on failed pods",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    threadChat: thread,
+    acornOpsClient: {
+      async postWorkflowSessionMessage(identity, sessionId, body) {
+        assert.deepEqual(identity, externalIdentity());
+        assert.equal(sessionId, "workflow-session-1");
+        assert.deepEqual(body, {
+          workspaceId: "workspace-1",
+          content: "focus on failed pods",
+          inputs: { clusterId: "cluster-1" }
+        });
+        return {
+          message_id: "workflow-message-2",
+          run_id: "run-2",
+          status: "queued"
+        };
+      }
+    }
+  });
+
+  assert.match(result.message, /Workflow follow-up sent/);
+  assert.equal(result.effects[0].kind, "workflow");
+  assert.equal(result.effects[0].runId, "run-2");
+  assert.equal(
+    commandContextStore.getChatThread("channel-1", "root-1").activeRun.id,
+    "run-2"
+  );
+});
+
+test("handleBotMessage closes workflow threads with chat end", async () => {
+  const commandContextStore = selectedClusterContext();
+  const thread = registerThreadChat(commandContextStore, {
+    kind: "workflow",
+    workflowId: "cluster-triage",
+    workspaceId: "workspace-1"
+  });
+
+  const result = await handleBotMessageResult({
+    text: "!chat end",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    threadChat: thread
+  });
+
+  assert.match(result.message, /Workflow thread closed/);
+  assert.equal(commandContextStore.getChatThread("channel-1", "root-1").status, "closed");
+  assert.equal(result.effects[0].type, "abortActiveRun");
+});
+
 function selectedClusterContext() {
   const commandContextStore = createInMemoryCommandContextStore();
   commandContextStore.selectWorkspace("mattermost-user-1", {
@@ -1907,6 +2039,72 @@ function registerThreadChat(commandContextStore, options = {}) {
     status: "open",
     ...options
   });
+}
+
+function workflowClient() {
+  return {
+    async listWorkflows(identity, workspaceId) {
+      assert.deepEqual(identity, externalIdentity());
+      assert.equal(workspaceId, "workspace-1");
+      return {
+        items: [{
+          id: "cluster-triage",
+          name: "Cluster triage",
+          status: "active",
+          starterPrompt: "Triage the selected cluster.",
+          inputs: [{
+            name: "reason",
+            type: "text",
+            required: true
+          }],
+          policy: {
+            mode: "read_only",
+            approvalRequirements: []
+          },
+          steps: [{
+            requiredInputs: ["reason"],
+            contextGrants: ["workspace_metadata", "target_inventory"],
+            approvalRequired: false,
+            targetBinding: {
+              type: "selected_cluster",
+              targetType: "kubernetes",
+              inputName: "clusterId"
+            }
+          }]
+        }]
+      };
+    },
+    async createWorkflowSession(identity, workflowId, body) {
+      assert.deepEqual(identity, externalIdentity());
+      assert.equal(workflowId, "cluster-triage");
+      assert.deepEqual(body, {
+        workspaceId: "workspace-1",
+        approvedContextGrants: ["workspace_metadata", "target_inventory"]
+      });
+      return {
+        session: {
+          id: "workflow-session-1"
+        }
+      };
+    },
+    async postWorkflowSessionMessage(identity, sessionId, body) {
+      assert.deepEqual(identity, externalIdentity());
+      assert.equal(sessionId, "workflow-session-1");
+      assert.deepEqual(body, {
+        workspaceId: "workspace-1",
+        content: "Triage the selected cluster.",
+        inputs: {
+          reason: "check production pods",
+          clusterId: "cluster-1"
+        }
+      });
+      return {
+        message_id: "workflow-message-1",
+        run_id: "run-1",
+        status: "queued"
+      };
+    }
+  };
 }
 
 function selectedVmContext() {

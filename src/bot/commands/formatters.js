@@ -64,6 +64,28 @@ export function formatWorkspaceDetail({ workspace, context, userId, userName, se
   return lines.join("\n");
 }
 
+export function formatWorkflowPage({ page, context, userId, userName }) {
+  const items = Array.isArray(page?.items) ? page.items : [];
+  const lines = [
+    ...formatContextLines(context, { userId, userName }),
+    "Available AcornOps workflows:"
+  ];
+
+  if (items.length === 0) {
+    lines.push("- No active read-only workflows are available in this workspace.");
+    return lines.join("\n");
+  }
+
+  for (const [index, workflow] of items.entries()) {
+    const name = workflow.name ?? workflow.id ?? "Unnamed workflow";
+    const id = workflow.id && workflow.id !== name ? ` (${workflow.id})` : "";
+    const description = singleLine(workflow.description ?? "");
+    lines.push(`${index + 1}. ${name}${id}${description ? ` - ${description}` : ""}`);
+  }
+  lines.push("Run one with `!workflow run 1` and add declared inputs as `key=value`.");
+  return lines.join("\n");
+}
+
 function formatWorkspaceSummary(workspace) {
   const name = workspace.name ?? workspace.displayName ?? workspace.slug ?? workspace.id ?? "Unnamed workspace";
   const id = workspace.id && workspace.id !== name ? ` (${workspace.id})` : "";

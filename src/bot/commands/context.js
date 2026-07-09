@@ -35,11 +35,22 @@ export function createInMemoryCommandContextStore({ initialState = {} } = {}) {
       return nextContext;
     },
 
+    rememberWorkflows(externalUserId, workflows) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const nextContext = {
+        ...context,
+        workflows: workflows.map(workflowReference)
+      };
+      contexts.set(externalUserId, nextContext);
+      return nextContext;
+    },
+
     selectWorkspace(externalUserId, workspace) {
       const context = contexts.get(externalUserId) ?? emptyContext();
       const nextContext = {
         ...context,
         currentWorkspace: workspaceReference(workspace),
+        workflows: [],
         currentCluster: null,
         currentVm: null,
         targets: [],
@@ -360,6 +371,12 @@ export function createNullCommandContextStore() {
         workspaces: workspaces.map(workspaceReference)
       };
     },
+    rememberWorkflows(_externalUserId, workflows) {
+      return {
+        ...emptyContext(),
+        workflows: workflows.map(workflowReference)
+      };
+    },
     selectWorkspace(_externalUserId, workspace) {
       return {
         ...emptyContext(),
@@ -511,6 +528,10 @@ export function resolveWorkspaceReference(reference, context) {
   return workspaceReference({ id: reference, name: "" });
 }
 
+export function resolveWorkflowReference(reference, context) {
+  return resolveReference(reference, null, context.workflows, workflowReference);
+}
+
 export function resolveClusterReference(reference, context) {
   return resolveReference(reference, context.currentCluster, context.clusters, clusterReference);
 }
@@ -530,6 +551,7 @@ export function resolveSessionReference(reference, context) {
 function emptyContext() {
   return {
     workspaces: [],
+    workflows: [],
     currentWorkspace: null,
     clusters: [],
     currentCluster: null,
@@ -549,6 +571,13 @@ function workspaceReference(workspace) {
   return {
     id: workspace.id ?? "",
     name: workspace.name ?? workspace.displayName ?? workspace.slug ?? ""
+  };
+}
+
+function workflowReference(workflow) {
+  return {
+    id: workflow.id ?? workflow.workflowId ?? "",
+    name: workflow.name ?? workflow.title ?? ""
   };
 }
 
@@ -601,8 +630,20 @@ function chatThreadReference(thread) {
     title: thread.title ?? thread.sessionName ?? thread.session_name ?? thread.name ?? "",
     number: Number.isInteger(thread.number) ? thread.number : Number.parseInt(thread.number ?? "0", 10) || 0,
     status: thread.status ?? "open",
+    kind: thread.kind ?? thread.threadKind ?? thread.thread_kind ?? "chat",
+    workflowId: thread.workflowId ?? thread.workflow_id ?? "",
+    workspaceId: thread.workspaceId ?? thread.workspace_id ?? "",
+    workflowInputs: normalizeWorkflowInputs(
+      thread.workflowInputs ?? thread.workflow_inputs ?? {}
+    ),
     activeRun: thread.activeRun ? runReference(thread.activeRun) : null
   };
+}
+
+function normalizeWorkflowInputs(inputs) {
+  return inputs && typeof inputs === "object" && !Array.isArray(inputs)
+    ? { ...inputs }
+    : {};
 }
 
 function webhookRouteReference(route) {

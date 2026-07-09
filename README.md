@@ -29,6 +29,7 @@ The Mattermost bot gives Mattermost users a chat entry point into AcornOps:
 3. `!status` resolves the linked AcornOps identity for the observed Mattermost user.
 4. Read commands call AcornOps control-plane APIs with service authentication and `x-acornops-external-user-id`.
 5. `!chat new` creates a dedicated Mattermost thread for each read-only AcornOps assistant session.
+6. `!workflows` lists available read-only workflows, and `!workflow run 1` launches one in its own threaded session.
 
 The bot never asks users for AcornOps passwords in Mattermost and does not store AcornOps browser sessions, cookies, OIDC tokens, refresh tokens, or raw link tokens.
 
@@ -115,6 +116,8 @@ Commands are plain Mattermost messages, not slash commands. Command words requir
 - `!findings`: list findings for the selected target
 - `!investigations`: list workspace investigations
 - `!chat new [title]`: create a read-only troubleshooting chat for the selected target and post a dedicated Mattermost root thread
+- `!workflows`: list active read-only workflows in the current workspace
+- `!workflow run <number|id> [key=value...]`: launch a workflow and post its streamed result in a dedicated Mattermost thread
 - `!chat end`: inside a chat thread, close only that chat and stop following its active answer
 - `!webhook create`: create or show the current user's AcornOps webhook delivery URL for the current Mattermost destination
 - `!webhook connect`: claim AcornOps console-created subscription metadata and signing secrets for that delivery URL

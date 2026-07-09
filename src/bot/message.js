@@ -6,6 +6,7 @@ import {
   resolveSessionReference,
   resolveTargetReference,
   resolveVirtualMachineReference,
+  resolveWorkflowReference,
   resolveWorkspaceReference
 } from "./commands/context.js";
 import {
@@ -31,6 +32,7 @@ import {
   formatTargetPage,
   formatVirtualMachineDetail,
   formatVirtualMachinePage,
+  formatWorkflowPage,
   formatWorkspaceDetail,
   formatWorkspacePage,
   normalizeListResponse,
@@ -52,6 +54,10 @@ import {
   followRunForAnswer,
   formatChatPendingResponse
 } from "./chat/runs.js";
+import {
+  parseWorkflowRunArguments,
+  prepareWorkflowLaunch
+} from "./commands/workflows.js";
 
 const commandReferenceUrl = "https://github.com/acornops/mattermost-bot/wiki/Mattermost-Bot-Commands";
 
@@ -65,6 +71,7 @@ const helpText = [
   "- `!workspaces` lists workspaces; `!workspace 1` selects one.",
   "- `!targets` lists Kubernetes and VM targets; `!target 1` selects one.",
   "- `!resources`, `!findings`, and `!investigations` inspect the selected context.",
+  "- `!workflows` lists read-only workflows; `!workflow run 1` launches one.",
   "- `!chat new` starts a read-only AcornOps chat thread for the selected target.",
   "- `!chat end` closes the current chat thread when sent inside that thread.",
   "- `!help filters` shows common filters.",
@@ -144,6 +151,17 @@ export async function handleBotMessageResult({
   const normalizedText = normalizeBotText(text, botUsername);
   const rawAction = firstCommandWord(normalizedText);
   if (threadChat) {
+    if (threadChat.kind === "workflow") {
+      return handleWorkflowThreadMessage({
+        normalizedText,
+        rawAction,
+        userId,
+        channelType,
+        acornOpsClient,
+        commandContextStore,
+        threadChat
+      });
+    }
     return handleThreadChatMessage({
       normalizedText,
       rawAction,
@@ -225,6 +243,28 @@ export async function handleBotMessageResult({
       channelType,
       acornOpsClient,
       commandContextStore,
+    });
+  }
+
+  if (action === "workflows") {
+    return handleWorkflows({
+      commandArgs,
+      userId,
+      userName,
+      channelType,
+      acornOpsClient,
+      commandContextStore
+    });
+  }
+
+  if (action === "workflow") {
+    return handleWorkflow({
+      normalizedText,
+      userId,
+      userName,
+      channelType,
+      acornOpsClient,
+      commandContextStore
     });
   }
 
@@ -462,6 +502,113 @@ async function handleThreadChatMessage({
     sourceMessageId,
     threadChat
   });
+}
+
+async function handleWorkflowThreadMessage({
+  normalizedText,
+  rawAction,
+  userId,
+  channelType,
+  acornOpsClient,
+  commandContextStore,
+  threadChat
+}) {
+  if (threadChat.externalUserId !== userId) {
+    return "This AcornOps workflow thread belongs to another Mattermost user.";
+  }
+  if (threadChat.status === "closed") {
+    return "This AcornOps workflow thread is closed. Launch another with `!workflow run <number|id>`.";
+  }
+  if (!normalizedText.trim()) {
+    return "Reply with a workflow follow-up, or send `!chat end` to close this thread.";
+  }
+  if (rawAction?.startsWith("/")) {
+    return "Commands do not use `/`. In this workflow thread, reply normally or send `!chat end`.";
+  }
+  if (rawAction?.startsWith("!")) {
+    const action = rawAction.slice(1);
+    const commandArgs = commandArguments(normalizedText);
+    if (action === "chat" && commandArgs[0] === "end") {
+      commandContextStore.closeChatThread(
+        threadChat.channelId,
+        threadChat.rootId,
+        threadChat.externalUserId
+      );
+      return {
+        message: "Workflow thread closed. The AcornOps workflow session remains available in AcornOps.",
+        effects: [{
+          type: "abortActiveRun",
+          externalUserId: threadChat.externalUserId,
+          channelId: threadChat.channelId,
+          rootId: threadChat.rootId
+        }]
+      };
+    }
+    return "This workflow thread accepts follow-up messages or `!chat end`. Run other commands in the main bot conversation.";
+  }
+
+  const auth = requireExternalDataCommand({
+    channelType,
+    acornOpsClient,
+    userId,
+    commandLabel: "workflow"
+  });
+  if (auth.response) {
+    return auth.response;
+  }
+  const currentThread = commandContextStore.getChatThread?.(
+    threadChat.channelId,
+    threadChat.rootId
+  ) ?? threadChat;
+  if (currentThread.activeRun) {
+    return "AcornOps is still running this workflow. Wait for the result, or use `!chat end` to stop following it.";
+  }
+
+  try {
+    const result = await acornOpsClient.postWorkflowSessionMessage(
+      auth.identity,
+      currentThread.sessionId,
+      {
+        workspaceId: currentThread.workspaceId,
+        content: normalizedText,
+        inputs: currentThread.workflowInputs
+      }
+    );
+    const runId = result.run_id ?? result.runId ?? "";
+    const messageId = result.message_id ?? result.messageId ?? "";
+    if (!runId) {
+      return "AcornOps accepted the workflow follow-up, but did not return a run to follow.";
+    }
+    commandContextStore.rememberLatestRun(auth.identity.externalUserId, {
+      id: runId,
+      sessionId: currentThread.sessionId,
+      status: result.status ?? "accepted"
+    });
+    commandContextStore.rememberActiveRunForChat?.(
+      currentThread.channelId,
+      currentThread.rootId,
+      {
+        id: runId,
+        sessionId: currentThread.sessionId,
+        status: "streaming"
+      }
+    );
+    return {
+      message: "Workflow follow-up sent. I’ll post the result in this thread when it’s ready.",
+      effects: [{
+        type: "followRun",
+        kind: "workflow",
+        identity: auth.identity,
+        sessionId: currentThread.sessionId,
+        runId,
+        messageId,
+        channelId: currentThread.channelId,
+        rootId: currentThread.rootId
+      }]
+    };
+  } catch (error) {
+    return dataErrorText(error, "workflow follow-up");
+  }
 }
 
 async function handleLogin({ userId, userName, acornOpsClient }) {
@@ -819,6 +966,149 @@ async function handleTargetDetail({
     });
   } catch (error) {
     return dataErrorText(error, "target");
+  }
+}
+
+async function handleWorkflows({
+  commandArgs,
+  userId,
+  userName,
+  channelType,
+  acornOpsClient,
+  commandContextStore
+}) {
+  if (commandArgs.length > 0) {
+    return "`!workflows` does not accept arguments.";
+  }
+  const auth = requireExternalDataCommand({
+    channelType,
+    acornOpsClient,
+    userId,
+    commandLabel: "workflows"
+  });
+  if (auth.response) {
+    return auth.response;
+  }
+  const context = commandContextStore.get(auth.identity.externalUserId);
+  if (!context.currentWorkspace) {
+    return "Choose a workspace first: send `!workspaces`, then `!workspace 1`.";
+  }
+
+  try {
+    const page = await acornOpsClient.listWorkflows(
+      auth.identity,
+      context.currentWorkspace.id
+    );
+    commandContextStore.rememberWorkflows(
+      auth.identity.externalUserId,
+      page.items ?? []
+    );
+    return formatWorkflowPage({
+      page,
+      context: commandContextStore.get(auth.identity.externalUserId),
+      userId,
+      userName
+    });
+  } catch (error) {
+    return dataErrorText(error, "workflows");
+  }
+}
+
+async function handleWorkflow({
+  normalizedText,
+  userId,
+  userName,
+  channelType,
+  acornOpsClient,
+  commandContextStore
+}) {
+  const parsed = parseWorkflowRunArguments(normalizedText);
+  if (parsed.error) {
+    return parsed.error;
+  }
+  const auth = requireExternalDataCommand({
+    channelType,
+    acornOpsClient,
+    userId,
+    commandLabel: "workflow"
+  });
+  if (auth.response) {
+    return auth.response;
+  }
+  let context = commandContextStore.get(auth.identity.externalUserId);
+  if (!context.currentWorkspace) {
+    return "Choose a workspace first: send `!workspaces`, then `!workspace 1`.";
+  }
+
+  try {
+    const page = await acornOpsClient.listWorkflows(
+      auth.identity,
+      context.currentWorkspace.id
+    );
+    commandContextStore.rememberWorkflows(
+      auth.identity.externalUserId,
+      page.items ?? []
+    );
+    context = commandContextStore.get(auth.identity.externalUserId);
+    const reference = resolveWorkflowReference(parsed.reference, context);
+    const workflow = (page.items ?? []).find((item) => item.id === reference?.id);
+    if (!workflow) {
+      return "That workflow is not available. Send `!workflows` to refresh the list.";
+    }
+
+    const launch = prepareWorkflowLaunch({
+      workflow,
+      providedInputs: parsed.inputs,
+      currentTarget: context.currentTarget
+    });
+    if (launch.error) {
+      return launch.error;
+    }
+    const sessionResponse = await acornOpsClient.createWorkflowSession(
+      auth.identity,
+      workflow.id,
+      {
+        workspaceId: context.currentWorkspace.id,
+        approvedContextGrants: launch.approvedContextGrants
+      }
+    );
+    const session = sessionResponse.session ?? sessionResponse;
+    const result = await acornOpsClient.postWorkflowSessionMessage(
+      auth.identity,
+      session.id,
+      {
+        workspaceId: context.currentWorkspace.id,
+        content: launch.content,
+        inputs: launch.inputs
+      }
+    );
+    const runId = result.run_id ?? result.runId ?? "";
+    if (!runId) {
+      return "AcornOps created the workflow session, but did not return a run to follow.";
+    }
+    const workflowName = workflow.name ?? workflow.id;
+    commandContextStore.rememberLatestRun(auth.identity.externalUserId, {
+      id: runId,
+      sessionId: session.id,
+      status: result.status ?? "accepted"
+    });
+    return {
+      message: `Workflow “${workflowName}” was launched successfully. Follow the thread below for results and replies.`,
+      effects: [{
+        type: "createWorkflowThread",
+        kind: "workflow",
+        identity: auth.identity,
+        workflowId: workflow.id,
+        workflowName,
+        workspaceId: context.currentWorkspace.id,
+        workflowInputs: launch.inputs,
+        session,
+        runId,
+        messageId: result.message_id ?? result.messageId ?? ""
+      }]
+    };
+  } catch (error) {
+    return dataErrorText(error, "workflow");
   }
 }
 

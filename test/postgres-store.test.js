@@ -33,6 +33,10 @@ test("Postgres command context store migrates, loads, and persists state", async
               title: "Investigate Prod",
               chat_number: 2,
               status: "open",
+              thread_kind: "workflow",
+              workflow_id: "cluster-triage",
+              workspace_id: "workspace-1",
+              workflow_inputs: { clusterId: "cluster-1" },
               active_run: null
             }
           ]
@@ -88,6 +92,10 @@ test("Postgres command context store migrates, loads, and persists state", async
     name: "Platform"
   });
   assert.equal(store.getChatThread("channel-1", "root-1").sessionId, "session-1");
+  assert.equal(store.getChatThread("channel-1", "root-1").kind, "workflow");
+  assert.deepEqual(store.getChatThread("channel-1", "root-1").workflowInputs, {
+    clusterId: "cluster-1"
+  });
   assert.equal(store.getWebhookRoute("user-1").channelId, "channel-1");
   assert.equal(store.getWebhookRoute("user-1").subscriptions[0].webhookId, "webhook-1");
   assert.equal(store.getWebhookRouteByTokenHash("token-hash").externalUserId, "user-1");
@@ -113,6 +121,7 @@ test("Postgres command context store migrates, loads, and persists state", async
 
   assert.equal(queries.some((query) => query.sql.includes("CREATE TABLE IF NOT EXISTS bot_user_contexts")), true);
   assert.equal(queries.some((query) => query.sql.includes("ADD COLUMN IF NOT EXISTS route_token_hash")), true);
+  assert.equal(queries.some((query) => query.sql.includes("ADD COLUMN IF NOT EXISTS thread_kind")), true);
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO bot_user_contexts")), true);
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO bot_webhook_routes")), true);
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO bot_inbound_events")), true);

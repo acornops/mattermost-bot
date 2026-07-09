@@ -184,6 +184,33 @@ export async function handlePostedEvent({
         number: effect.number,
         status: "open"
       });
+    } else if (effect.type === "createWorkflowThread") {
+      const threadRoot = await client.createPost({
+        channelId: post.channel_id,
+        message: `**Workflow launched: ${effect.workflowName}**`
+      });
+      commandContextStore.registerChatThread?.(effect.identity.externalUserId, {
+        channelId: post.channel_id,
+        rootId: threadRoot.id,
+        sessionId: effect.session?.id ?? effect.session?.sessionId ?? "",
+        sessionName: effect.workflowName,
+        title: effect.workflowName,
+        number: 0,
+        status: "open",
+        kind: "workflow",
+        workflowId: effect.workflowId,
+        workspaceId: effect.workspaceId,
+        workflowInputs: effect.workflowInputs
+      });
+      followers.start({
+        kind: "workflow",
+        identity: effect.identity,
+        sessionId: effect.session?.id ?? effect.session?.sessionId ?? "",
+        runId: effect.runId,
+        messageId: effect.messageId,
+        channelId: post.channel_id,
+        rootId: threadRoot.id
+      });
     }
   }
 

@@ -344,6 +344,55 @@ test("assistant session endpoints always post read-only runs", async () => {
   });
 });
 
+test("workflow endpoints list, create sessions, and launch messages with external auth", async () => {
+  const requests = [];
+  const client = new AcornOpsClient({
+    baseUrl: "http://acornops/",
+    externalIntegrationToken: "chat-token",
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({
+        items: [],
+        session: { id: "workflow-session-1" },
+        run_id: "run-1"
+      }), {
+        status: init.method === "POST" ? 201 : 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  });
+
+  await client.listWorkflows(externalIdentity(), "workspace-1");
+  await client.createWorkflowSession(externalIdentity(), "cluster-triage", {
+    workspaceId: "workspace-1",
+    approvedContextGrants: ["workspace_metadata", "target_inventory"]
+  });
+  await client.postWorkflowSessionMessage(externalIdentity(), "workflow-session-1", {
+    workspaceId: "workspace-1",
+    content: "Triage the cluster.",
+    inputs: { clusterId: "cluster-1" }
+  });
+
+  assert.deepEqual(requests.map((request) => request.url), [
+    "http://acornops/api/v1/workspaces/workspace-1/workflows",
+    "http://acornops/api/v1/workflows/cluster-triage/sessions",
+    "http://acornops/api/v1/workflow-sessions/workflow-session-1/messages"
+  ]);
+  assert.deepEqual(JSON.parse(requests[1].init.body), {
+    workspaceId: "workspace-1",
+    approvedContextGrants: ["workspace_metadata", "target_inventory"]
+  });
+  assert.deepEqual(JSON.parse(requests[2].init.body), {
+    workspaceId: "workspace-1",
+    content: "Triage the cluster.",
+    inputs: { clusterId: "cluster-1" }
+  });
+  for (const request of requests) {
+    assert.equal(request.init.headers.authorization, "Bearer chat-token");
+    assert.equal(request.init.headers["x-acornops-external-user-id"], "mattermost-user-1");
+  }
+});
+
 test("parseServerSentEvents parses event/data pairs and heartbeat comments", async () => {
   const chunks = [
     ": heartbeat\n\n",
