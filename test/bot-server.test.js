@@ -300,7 +300,7 @@ test("AcornOps route webhook formats issue lifecycle events with issue details",
 
   assert.equal(result.status, 202);
   assert.equal(posts.length, 1);
-  assert.match(posts[0].message, /AcornOps issue alert: Resolved/);
+  assert.match(posts[0].message, /🚨 \*\*AcornOps issue alert: Resolved\*\*/);
   assert.match(posts[0].message, /\*\*Payments pod crash looping\*\*/);
   assert.match(posts[0].message, /Severity: \*\*CRITICAL\*\*/);
   assert.match(posts[0].message, /Summary: Latest snapshot reports pod payments-abc in namespace payments as CrashLoopBackOff\. Restart count: 6\./);

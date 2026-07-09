@@ -297,7 +297,7 @@ function formatIssueWebhookAlert(payload, { type, alertTimeZone }) {
   const summary = dedupeRepeatedSentences(compactText(data.summary, 1000));
   const action = issueEventAction(type);
   const lines = [
-    `### AcornOps issue alert: ${action}`,
+    `🚨 **AcornOps issue alert: ${action}**`,
     `**${title}**`,
     `- Severity: **${severity.toUpperCase()}**`,
     `- Status: ${status}`
