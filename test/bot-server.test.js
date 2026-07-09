@@ -240,8 +240,114 @@ test("AcornOps route webhook verifies signature, deduplicates, and posts to rout
   assert.equal(posts.length, 1);
   assert.equal(posts[0].channelId, "channel-1");
   assert.equal(posts[0].rootId, "root-1");
+  assert.match(posts[0].message, /AcornOps info alert/);
   assert.match(posts[0].message, /run.failed.v1/);
   assert.match(posts[0].message, /Provider unavailable/);
+});
+
+test("AcornOps route webhook formats issue lifecycle events with issue details", async () => {
+  const posts = [];
+  const commandContextStore = createInMemoryCommandContextStore();
+  const routeToken = "route-token";
+  const signingSecret = "webhook-secret";
+  commandContextStore.upsertWebhookRoute("user-1", {
+    channelId: "channel-1",
+    routeTokenHash: hashSecret(routeToken),
+    subscriptions: [
+      {
+        workspaceId: "workspace-1",
+        webhookId: "webhook-1",
+        eventTypes: ["issue.resolved.v1"],
+        signingSecret
+      }
+    ]
+  });
+  const body = {
+    id: "event-issue-1",
+    type: "issue.resolved.v1",
+    workspaceId: "workspace-1",
+    targetId: "target-1",
+    subject: { type: "issue", id: "issue-1" },
+    occurredAt: "2026-07-10T01:10:00.000Z",
+    data: {
+      previousStatus: "recovering",
+      status: "resolved",
+      lifecycleVersion: 3,
+      issueType: "kubernetes_pod_unhealthy",
+      severity: "critical",
+      title: "Payments pod crash looping",
+      summary: "The payments deployment recovered after repeated restart failures.",
+      scopeKind: "namespace",
+      scopeName: "payments",
+      objectKind: "pod",
+      objectName: "payments-abc",
+      reason: "CrashLoopBackOff",
+      firstSeenAt: "2026-07-10T00:00:00.000Z",
+      lastSeenAt: "2026-07-10T00:30:00.000Z",
+      resolvedAt: "2026-07-10T01:10:00.000Z",
+      occurrenceCount: 5,
+      reopenedCount: 1,
+      stateAsOf: "2026-07-10T01:10:00.000Z"
+    }
+  };
+
+  const result = await handleAcornOpsRouteWebhook({
+    routeToken,
+    ...signedWebhookInput(body, signingSecret),
+    commandContextStore,
+    mattermostClient: fakeMattermostClient(posts)
+  });
+
+  assert.equal(result.status, 202);
+  assert.equal(posts.length, 1);
+  assert.match(posts[0].message, /AcornOps issue alert: Resolved/);
+  assert.match(posts[0].message, /\*\*Payments pod crash looping\*\*/);
+  assert.match(posts[0].message, /Severity: \*\*CRITICAL\*\*/);
+  assert.match(posts[0].message, /Summary: The payments deployment recovered/);
+  assert.match(posts[0].message, /Resolved: 2026-07-10 01:10:00 UTC/);
+  assert.match(posts[0].message, /Last seen: 2026-07-10 00:30:00 UTC/);
+});
+
+test("AcornOps route webhook formats generic events with createdAt timestamp fallback", async () => {
+  const posts = [];
+  const commandContextStore = createInMemoryCommandContextStore();
+  const routeToken = "route-token";
+  const signingSecret = "webhook-secret";
+  commandContextStore.upsertWebhookRoute("user-1", {
+    channelId: "channel-1",
+    routeTokenHash: hashSecret(routeToken),
+    subscriptions: [
+      {
+        workspaceId: "workspace-1",
+        webhookId: "webhook-1",
+        eventTypes: ["agent.disconnected.v1"],
+        signingSecret
+      }
+    ]
+  });
+  const body = {
+    id: "event-agent-1",
+    type: "agent.disconnected.v1",
+    createdAt: "2026-07-10T02:00:00.000Z",
+    workspaceId: "workspace-1",
+    subject: { type: "agent", id: "agent-1" },
+    data: {
+      title: "Agent disconnected"
+    }
+  };
+
+  const result = await handleAcornOpsRouteWebhook({
+    routeToken,
+    ...signedWebhookInput(body, signingSecret),
+    commandContextStore,
+    mattermostClient: fakeMattermostClient(posts)
+  });
+
+  assert.equal(result.status, 202);
+  assert.match(posts[0].message, /AcornOps info alert/);
+  assert.match(posts[0].message, /\*\*Agent disconnected\*\*/);
+  assert.match(posts[0].message, /Occurred: 2026-07-10 02:00:00 UTC/);
+  assert.match(posts[0].message, /Subject: agent agent-1/);
 });
 
 test("AcornOps route webhook rejects stale or invalid signatures", async () => {
@@ -312,6 +418,9 @@ function signedWebhookInput(body, secret) {
       "acornops-timestamp": timestamp,
       "acornops-signature": `v1=${signature}`
   };
+  if (body.type) {
+    headers["acornops-event-type"] = body.type;
+  }
   if (body.id) {
     headers["acornops-event-id"] = body.id;
   }

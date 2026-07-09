@@ -3,6 +3,11 @@ import http from "node:http";
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
+const ISSUE_EVENT_TYPES = new Set([
+  "issue.created.v1",
+  "issue.reopened.v1",
+  "issue.resolved.v1"
+]);
 
 export function createBotHttpServer({
   host = "0.0.0.0",
@@ -227,6 +232,10 @@ export async function handleAcornOpsRouteWebhook({
   }
 
   const payload = parseJson(rawBody);
+  const eventType = headerValue(headers, "acornops-event-type");
+  if (eventType && payload && typeof payload === "object" && !payload.type) {
+    payload.type = eventType;
+  }
   const eventId = headerValue(headers, "acornops-event-id") || payload.id || "";
   if (!eventId) {
     return {
@@ -246,7 +255,7 @@ export async function handleAcornOpsRouteWebhook({
   await mattermostClient.createPost({
     channelId: route.channelId,
     rootId: route.rootId,
-    message: formatWebhookAlert(payload)
+    message: formatWebhookAlert(payload, { receivedAt: new Date().toISOString() })
   });
   return {
     status: 202,
@@ -267,27 +276,157 @@ function webhookSigningSecrets(route) {
   return [...new Set(secrets)];
 }
 
-function formatWebhookAlert(payload) {
-  const subject = payload.subject
-    ? `${payload.subject.type ?? "subject"} ${payload.subject.id ?? ""}`.trim()
-    : "event";
+function formatWebhookAlert(payload, { receivedAt = new Date().toISOString() } = {}) {
+  const type = compactText(payload.type, 120) || "unknown";
+  if (ISSUE_EVENT_TYPES.has(type)) {
+    return formatIssueWebhookAlert(payload, type);
+  }
+
+  return formatInfoWebhookAlert(payload, { receivedAt, type });
+}
+
+function formatIssueWebhookAlert(payload, type) {
+  const data = objectValue(payload.data);
+  const title = compactText(data.title, 240) || compactText(data.issueType, 120) || "Untitled issue";
+  const severity = compactText(data.severity, 80) || "unknown";
+  const status = compactText(data.status, 80) || "unknown";
+  const summary = compactText(data.summary, 1000);
+  const action = issueEventAction(type);
   const lines = [
-    "AcornOps alert:",
-    `- Type: ${payload.type ?? "unknown"}`,
-    `- Subject: ${subject}`,
-    `- Workspace: ${payload.workspaceId ?? "unknown"}`
+    `### AcornOps issue alert: ${action}`,
+    `**${title}**`,
+    `- Severity: **${severity.toUpperCase()}**`,
+    `- Status: ${status}`
   ];
-  if (payload.targetId || payload.clusterId) {
-    lines.push(`- Target: ${payload.targetId ?? payload.clusterId}`);
+
+  if (summary) {
+    lines.push(`- Summary: ${summary}`);
   }
-  if (payload.occurredAt) {
-    lines.push(`- Occurred: ${payload.occurredAt}`);
+  const primaryTimestamp = type === "issue.resolved.v1" ? data.resolvedAt : data.lastSeenAt;
+  const primaryLabel = type === "issue.resolved.v1" ? "Resolved" : "Last seen";
+  if (primaryTimestamp) {
+    lines.push(`- ${primaryLabel}: ${formatTimestamp(primaryTimestamp)}`);
   }
-  const message = payload.data?.message ?? payload.data?.errorMessage ?? "";
-  if (message) {
-    lines.push(`- Message: ${String(message).replace(/\s+/g, " ").trim().slice(0, 500)}`);
+  if (type === "issue.resolved.v1" && data.lastSeenAt) {
+    lines.push(`- Last seen: ${formatTimestamp(data.lastSeenAt)}`);
   }
+  if (data.firstSeenAt) {
+    lines.push(`- First seen: ${formatTimestamp(data.firstSeenAt)}`);
+  }
+  addOptionalLine(lines, "Scope", formatNamedPair(data.scope, data.scopeKind, data.scopeName));
+  addOptionalLine(lines, "Object", formatNamedPair(data.object, data.objectKind, data.objectName));
+  addOptionalLine(lines, "Reason", compactText(data.reason, 255));
+  addOptionalLine(lines, "Workspace", compactText(payload.workspaceId, 160));
+  addOptionalLine(lines, "Target", compactText(payload.targetId ?? payload.clusterId, 160));
+  addOptionalLine(lines, "Issue", subjectText(payload.subject));
+
   return lines.join("\n");
+}
+
+function formatInfoWebhookAlert(payload, { receivedAt, type }) {
+  const lines = [
+    "### AcornOps info alert",
+    `**${genericWebhookTitle(payload, type)}**`,
+    `- Type: ${type}`,
+    `- Occurred: ${formatTimestamp(genericOccurredAt(payload, receivedAt))}`
+  ];
+
+  addOptionalLine(lines, "Workspace", compactText(payload.workspaceId, 160));
+  addOptionalLine(lines, "Target", compactText(payload.targetId ?? payload.clusterId, 160));
+  addOptionalLine(lines, "Subject", subjectText(payload.subject));
+  const message = compactText(payload.data?.message ?? payload.data?.errorMessage, 500);
+  if (message && message !== lines[1].replace(/^\*\*|\*\*$/g, "")) {
+    lines.push(`- Message: ${message}`);
+  }
+
+  return lines.join("\n");
+}
+
+function issueEventAction(type) {
+  if (type === "issue.created.v1") {
+    return "Created";
+  }
+  if (type === "issue.reopened.v1") {
+    return "Reopened";
+  }
+  if (type === "issue.resolved.v1") {
+    return "Resolved";
+  }
+  return "Updated";
+}
+
+function genericWebhookTitle(payload, type) {
+  const data = objectValue(payload.data);
+  return (
+    compactText(payload.title, 160) ||
+    compactText(data.title, 160) ||
+    compactText(data.message, 160) ||
+    compactText(data.errorMessage, 160) ||
+    subjectText(payload.subject) ||
+    type
+  );
+}
+
+function genericOccurredAt(payload, receivedAt) {
+  const data = objectValue(payload.data);
+  return (
+    payload.occurredAt ??
+    data.occurredAt ??
+    payload.createdAt ??
+    data.createdAt ??
+    payload.timestamp ??
+    data.timestamp ??
+    receivedAt
+  );
+}
+
+function formatNamedPair(value, kind, name) {
+  if (value && typeof value === "object") {
+    return [compactText(value.kind, 120), compactText(value.name ?? value.id, 255)].filter(Boolean).join(" ");
+  }
+  if (value) {
+    return compactText(value, 255);
+  }
+  return [compactText(kind, 120), compactText(name, 255)].filter(Boolean).join(" ");
+}
+
+function subjectText(subject) {
+  if (!subject || typeof subject !== "object") {
+    return "";
+  }
+  return [compactText(subject.type, 80) || "subject", compactText(subject.id, 160)].filter(Boolean).join(" ");
+}
+
+function addOptionalLine(lines, label, value) {
+  if (value) {
+    lines.push(`- ${label}: ${value}`);
+  }
+}
+
+function compactText(value, limit) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "object") {
+    return "";
+  }
+  return String(value).replace(/\s+/g, " ").trim().slice(0, limit);
+}
+
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function formatTimestamp(value) {
+  const text = compactText(value, 120);
+  if (!text) {
+    return "";
+  }
+  const time = Date.parse(text);
+  if (!Number.isFinite(time)) {
+    return text;
+  }
+  return new Date(time).toISOString().replace("T", " ").replace(/(?:\.000)?Z$/, " UTC");
 }
 
 function validWebhookTimestamp(timestamp) {

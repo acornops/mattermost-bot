@@ -195,7 +195,8 @@ The bot can run one built-in HTTP listener:
 
 - `GET /healthz` returns basic readiness.
 - `POST /mattermost/actions` handles interactive Mattermost button callbacks. Workspace and target selection verify the action secret and acting Mattermost user before updating that user's current context. The callback returns a quiet Mattermost-compatible HTTP 200 response and posts one visible bot message in the main conversation with the success or failure result.
-- `POST /acornops/webhooks/routes/:routeToken` handles signed AcornOps webhook deliveries. The route token identifies the Mattermost destination, and the handler verifies `AcornOps-Timestamp` plus `AcornOps-Signature`, rejects stale timestamps, requires and deduplicates `AcornOps-Event-Id`, and posts a concise alert to Mattermost.
+- `POST /acornops/webhooks/routes/:routeToken` handles signed AcornOps webhook deliveries. The route token identifies the Mattermost destination, and the handler verifies `AcornOps-Timestamp` plus `AcornOps-Signature`, rejects stale timestamps, requires and deduplicates `AcornOps-Event-Id`, and posts the alert to Mattermost.
+- Issue lifecycle events `issue.created.v1`, `issue.reopened.v1`, and `issue.resolved.v1` render as rich Mattermost issue alerts with title, emphasized severity, summary, and issue timestamps. Created and reopened alerts emphasize `lastSeenAt`; resolved alerts emphasize `resolvedAt` and include `lastSeenAt` when available. Other event types render as generic AcornOps info alerts with title and occurred timestamp fallback.
 
 Mattermost and AcornOps must be able to reach `BOT_PUBLIC_BASE_URL` for interactive actions and webhooks in any live environment.
 

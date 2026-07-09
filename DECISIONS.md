@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-07-10: Render issue webhook alerts around lifecycle semantics
+
+- Decision: Mattermost webhook posts treat `issue.created.v1`, `issue.reopened.v1`, and `issue.resolved.v1` as first-class issue alerts. Created and reopened alerts emphasize `lastSeenAt`; resolved alerts emphasize `resolvedAt` and include `lastSeenAt` only as supporting context. Other webhook events continue to post as generic AcornOps info alerts.
+- Reason: The local AcornOps issue webhook contract describes issue payloads as bounded issue snapshots with `stateAsOf` as the authoritative snapshot time. The control-plane source sets `lastSeenAt` when issue evidence is observed and sets `resolvedAt` when an issue becomes resolved, so `resolvedAt` is the more useful primary timestamp for resolved notifications.
+- Consequence: Alert formatting now depends on webhook event type, but signature verification, event idempotency, and user route resolution remain unchanged. Future issue event variants should make their lifecycle timestamp choice explicit before being added to the rich formatter.
+
 ## 2026-07-09: Run external workflows in dedicated Mattermost threads
 
 - Decision: Expose active read-only workflows through `!workflows` and `!workflow run <number|id> [key=value...]`. Each accepted launch creates a root post named `**Workflow launched: <name>**`; streamed output and plain-text follow-ups use the same persisted AcornOps workflow session. `!chat end` closes either conversation kind.
