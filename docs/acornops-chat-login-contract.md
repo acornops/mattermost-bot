@@ -73,10 +73,12 @@ Successful response:
 
 Bot behavior:
 
+- Resolve the current link first. If already linked, tell the user they are linked and do not create a new link URL.
 - Return `linkUrl` exactly as AcornOps returns it.
 - Tell the user the link expires in 10 minutes.
 - Do not rewrite the link to a control-plane endpoint.
 - Do not log the raw link URL or token in normal logs.
+- When a link URL is returned, preserve existing bot context and mark login validation pending. The next authenticated command resolves once and clears context only if the AcornOps account fingerprint changed.
 
 ## Status
 
@@ -139,6 +141,7 @@ The bot no longer:
 - Calls `GET /api/v1/auth/chat/integration/login/{id}`.
 - Calls the superseded `POST /api/v1/auth/chat/integration/link` or `POST /api/v1/auth/chat/integration/resolve` paths.
 - Builds plain AcornOps OIDC login links.
-- Stores bot-side login state or AcornOps sessions.
+- Stores bot-side AcornOps sessions or transaction-style login state.
 - Mints or accepts bot-side AcornOps user ids.
 - Stores browser sessions, OIDC tokens, refresh tokens, or raw external integration link tokens.
+- Stores raw AcornOps user ids; account-switch detection uses a hash of AcornOps `user.id`.

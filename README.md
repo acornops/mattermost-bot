@@ -25,7 +25,7 @@ The bot is part of the official AcornOps offering. Full-system deployment wiring
 The Mattermost bot gives Mattermost users a chat entry point into AcornOps:
 
 1. Users talk to `@acorn-ops-bot` in a direct message or mention it in a channel.
-2. `!login` creates an AcornOps external integration account-link request.
+2. `!login` resolves the current AcornOps external integration link and creates an account-link request only when relogin is needed.
 3. `!status` resolves the linked AcornOps identity for the observed Mattermost user.
 4. Read commands call AcornOps control-plane APIs with service authentication and `x-acornops-external-user-id`.
 5. `!chat new` creates a dedicated Mattermost thread for each read-only AcornOps assistant session.
@@ -41,7 +41,7 @@ This repository owns:
 - `!`-prefixed bot command parsing for `@acorn-ops-bot`
 - external integration link and resolve calls to AcornOps
 - read-only workspace, target, resource, finding, investigation, and threaded assistant command surfaces
-- persistent command context for numbered workspaces, targets, sessions, chat-thread mappings, active streamed assistant runs, and user-level webhook routes
+- persistent command context for numbered workspaces, targets, sessions, chat-thread mappings, active streamed assistant runs, login-triggered account validation, and user-level webhook routes
 - optional inbound HTTP callbacks for Mattermost interactive actions and AcornOps alert webhooks
 - repo-local lint, build, and test verification
 
@@ -105,7 +105,8 @@ Commands are plain Mattermost messages, not slash commands. Command words requir
 
 - `!help`: show the short common workflow
 - `!help filters`: show supported filters and finite values
-- `!login`: create an AcornOps account-link request; direct-message only
+- `!login`: check the current AcornOps link and create an account-link request when relogin is needed; direct-message only
+- `!login reset`: clear bot workspace/target/thread context, then create a fresh account-link request
 - `!status`: show linked or unlinked account state plus current context
 - `!workspaces`: list accessible workspaces, with selection buttons when callback config is present
 - `!workspaces 1`: show workspace details without changing current workspace
@@ -193,7 +194,7 @@ Do not run overlapping local stacks on the same host ports.
 - Store the Mattermost bot token and AcornOps external integration service token in the deployment secret manager, not in committed files.
 - Keep the external integration token scoped to the installed Mattermost integration.
 - Run behind the deployment topology owned by `acornops-deployment`.
-- Use Postgres through `BOT_DATABASE_URL` for restart-resilient command context, chat-thread mappings, active run records, user webhook routes, and inbound webhook idempotency.
+- Use Postgres through `BOT_DATABASE_URL` for restart-resilient command context, chat-thread mappings, active run records, login-triggered account validation state, user webhook routes, and inbound webhook idempotency.
 - `BOT_PUBLIC_BASE_URL` must be reachable by Mattermost for interactive actions and by AcornOps for webhook deliveries.
 - Webhook delivery URLs include an opaque route token. AcornOps console-created subscriptions send signed deliveries to that URL; `!webhook connect` claims the AcornOps subscription metadata and signing secrets over authenticated TLS. Signing secrets are stored in bot Postgres as deployment-secret data so HMAC validation can run.
 - Treat channel responses as potentially visible to the whole channel. Login remains direct-message-only; read and assistant commands are intentionally channel-capable.

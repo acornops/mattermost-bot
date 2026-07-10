@@ -240,6 +240,54 @@ export function createInMemoryCommandContextStore({ initialState = {} } = {}) {
       return nextContext;
     },
 
+    rememberAccountFingerprint(externalUserId, accountFingerprint) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const nextContext = {
+        ...context,
+        accountFingerprint: accountFingerprint ?? "",
+        loginValidationPending: false
+      };
+      contexts.set(externalUserId, nextContext);
+      return nextContext;
+    },
+
+    markLoginValidationPending(externalUserId) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const nextContext = {
+        ...context,
+        loginValidationPending: true
+      };
+      contexts.set(externalUserId, nextContext);
+      return nextContext;
+    },
+
+    clearLoginValidationPending(externalUserId) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const nextContext = {
+        ...context,
+        loginValidationPending: false
+      };
+      contexts.set(externalUserId, nextContext);
+      return nextContext;
+    },
+
+    resetAccountContext(externalUserId, { clearAccountFingerprint = false } = {}) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const nextContext = {
+        ...emptyContext(),
+        accountFingerprint: clearAccountFingerprint ? "" : context.accountFingerprint,
+        loginValidationPending: context.loginValidationPending,
+        contextGeneration: (context.contextGeneration ?? 0) + 1
+      };
+      contexts.set(externalUserId, nextContext);
+      for (const [key, thread] of chatThreads.entries()) {
+        if (thread.externalUserId === externalUserId) {
+          chatThreads.delete(key);
+        }
+      }
+      return nextContext;
+    },
+
     nextChatNumber(externalUserId) {
       const next = (chatCounters.get(externalUserId) ?? 0) + 1;
       chatCounters.set(externalUserId, next);
@@ -469,6 +517,28 @@ export function createNullCommandContextStore() {
     clearActiveRun() {
       return emptyContext();
     },
+    rememberAccountFingerprint(_externalUserId, accountFingerprint) {
+      return {
+        ...emptyContext(),
+        accountFingerprint: accountFingerprint ?? ""
+      };
+    },
+    markLoginValidationPending() {
+      return {
+        ...emptyContext(),
+        loginValidationPending: true
+      };
+    },
+    clearLoginValidationPending() {
+      return emptyContext();
+    },
+    resetAccountContext(_externalUserId, { clearAccountFingerprint = false } = {}) {
+      return {
+        ...emptyContext(),
+        accountFingerprint: clearAccountFingerprint ? "" : emptyContext().accountFingerprint,
+        contextGeneration: 1
+      };
+    },
     nextChatNumber() {
       return 1;
     },
@@ -563,7 +633,10 @@ function emptyContext() {
     currentSession: null,
     chatActive: false,
     latestRun: null,
-    activeRun: null
+    activeRun: null,
+    accountFingerprint: "",
+    loginValidationPending: false,
+    contextGeneration: 0
   };
 }
 

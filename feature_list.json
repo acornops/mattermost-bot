@@ -589,6 +589,29 @@
       },
       "evidence": "Implemented on 2026-07-10. Local AcornOps docs/source confirmed lastSeenAt is the last observed issue evidence timestamp, while resolvedAt is set when an issue becomes resolved. Updated route webhook alert formatting in src/bot/server.js to render rich issue lifecycle alerts for issue.created.v1, issue.reopened.v1, and issue.resolved.v1; generic non-issue deliveries now render as AcornOps info alerts using occurredAt, createdAt, timestamp, then webhook received time. Focused node --test test/bot-server.test.js passed with 13 tests. npm run verify:bot passed with lint, build, and 133 tests. Final ./init.sh passed with harness verification, lint, build, and 133 tests. Follow-up on 2026-07-10 removed ID-only workspace, target, issue, and subject lines from alert notices; added BOT_ALERT_TIME_ZONE with default Asia/Singapore; rendered alert timestamps in the configured timezone; and defensively collapsed repeated adjacent summary sentences such as duplicate Restart count lines. Focused node --test test/config.test.js test/bot-server.test.js passed with 19 tests. npm run verify:bot passed with lint, build, and 133 tests.",
       "notes": "Live Mattermost rendering and signed AcornOps webhook delivery still need smoke testing against running local services. The duplicate restart-count source was traced to the AcornOps control-plane snapshot finding already including Restart count before target issue derivation appends it again; the bot now prevents duplicated adjacent summary sentences from appearing in Mattermost."
+    },
+    {
+      "id": "B20",
+      "priority": 28,
+      "area": "bot",
+      "title": "Validate login-triggered context against AcornOps account changes",
+      "user_visible_behavior": "When a Mattermost user relinks after expiry, the bot preserves context for the same AcornOps account but resets stale workspace, target, and thread context if the relink completes against a different AcornOps account.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus live account-switch smoke when services are available",
+        "steps": [
+          "Store a hashed AcornOps account fingerprint and login-validation-pending flag in command context.",
+          "Make !login resolve the current link before creating a link URL.",
+          "Preserve context while an unlinked or expired user completes a new login URL.",
+          "Resolve once on the next authenticated command after !login and reset context only when the account fingerprint changes.",
+          "Make !login reset explicitly clear command context before returning a new login URL.",
+          "Reject stale Mattermost action buttons after a context reset.",
+          "Leave webhook routes untouched.",
+          "Add automated tests and run ./init.sh."
+        ]
+      },
+      "evidence": "Implemented on 2026-07-10. Added accountFingerprint, loginValidationPending, and contextGeneration to command context; resetAccountContext clears workspace/target/session/list/run state and chat/workflow thread mappings while leaving webhook routes intact. !login now resolves first, returns an already-linked message for linked users, creates a link URL and marks validation pending for unlinked users, and supports !login reset. The next authenticated command after a pending login resolves once, preserves context for the same AcornOps user fingerprint, or resets context before command execution if the fingerprint changed. Mattermost workspace/target button payloads include contextGeneration and stale callbacks are rejected after resets. Focused node --test test/bot-message.test.js test/bot-runner.test.js test/bot-server.test.js test/command-context.test.js test/postgres-store.test.js test/run-follower.test.js passed with 107 tests. npm run lint, npm run build, npm test with 139 tests, and final ./init.sh with 139 tests passed.",
+      "notes": "The bot stores a hash of AcornOps user.id, not the raw AcornOps user id. Live smoke should cover same-account relogin after expiry and different-account relink. Webhook route cleanup remains out of scope for this feature."
     }
   ]
 }

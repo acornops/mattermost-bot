@@ -239,6 +239,37 @@ test("command context stores workflow thread launch context", () => {
   assert.deepEqual(thread.workflowInputs, { clusterId: "cluster-1" });
 });
 
+test("command context resets account-scoped selections and thread mappings", () => {
+  const store = createInMemoryCommandContextStore();
+  store.rememberAccountFingerprint("user-1", "fingerprint-1");
+  store.selectWorkspace("user-1", { id: "workspace-1", name: "Platform" });
+  store.selectTarget("user-1", {
+    id: "target-1",
+    name: "Prod",
+    targetType: "kubernetes"
+  });
+  store.registerChatThread("user-1", {
+    channelId: "channel-1",
+    rootId: "root-1",
+    sessionId: "session-1",
+    sessionName: "Investigate Prod"
+  });
+  store.upsertWebhookRoute("user-1", {
+    channelId: "channel-2",
+    routeTokenHash: "token-hash",
+    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
+  });
+
+  const context = store.resetAccountContext("user-1");
+
+  assert.equal(context.currentWorkspace, null);
+  assert.equal(context.currentTarget, null);
+  assert.equal(context.accountFingerprint, "fingerprint-1");
+  assert.equal(context.contextGeneration, 1);
+  assert.equal(store.getChatThread("channel-1", "root-1"), null);
+  assert.equal(store.getWebhookRoute("user-1").channelId, "channel-2");
+});
+
 test("command context tracks user-level webhook routes and inbound event ids", () => {
   const store = createInMemoryCommandContextStore();
 

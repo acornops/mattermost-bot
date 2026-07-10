@@ -144,6 +144,11 @@ function handleWorkspaceAction({
   context,
   commandContextStore
 }) {
+  const stale = staleActionContext({ actingUserId, context, commandContextStore });
+  if (stale) {
+    return stale;
+  }
+
   const workspace = context.workspace ?? {};
   if (!workspace.id) {
     return actionFailure("Workspace selection failed: missing workspace id.");
@@ -158,6 +163,11 @@ function handleTargetAction({
   context,
   commandContextStore
 }) {
+  const stale = staleActionContext({ actingUserId, context, commandContextStore });
+  if (stale) {
+    return stale;
+  }
+
   const target = context.target ?? {};
   if (!target.id) {
     return actionFailure("Target selection failed: missing target id.");
@@ -174,6 +184,18 @@ function handleTargetAction({
 
   commandContextStore.selectTarget(actingUserId, target);
   return actionSuccess(`Target changed successfully: ${target.name || target.id}`);
+}
+
+function staleActionContext({ actingUserId, context, commandContextStore }) {
+  if (!Object.hasOwn(context, "contextGeneration")) {
+    return null;
+  }
+  const expected = Number.parseInt(context.contextGeneration, 10) || 0;
+  const actual = commandContextStore.get(actingUserId).contextGeneration ?? 0;
+  if (expected !== actual) {
+    return actionFailure("Selection failed: your bot context changed. Send `!workspaces` or `!targets` again.");
+  }
+  return null;
 }
 
 function actionSuccess(message) {

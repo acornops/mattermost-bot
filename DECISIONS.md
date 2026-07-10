@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-07-10: Validate bot context on login-triggered account changes
+
+- Decision: The Mattermost bot stores a hashed AcornOps account fingerprint, `loginValidationPending`, and a context generation per Mattermost user. `!login` resolves the current link before creating a link URL. If the user is unlinked or expired, the bot preserves context and marks validation pending; the next authenticated command resolves once and resets context only if the AcornOps user fingerprint changed. `!login reset` remains the explicit immediate context reset path.
+- Reason: Resolving the account on every command adds avoidable overhead, while resetting on every `!login` would break normal 30-day same-account reauthentication. Login-triggered validation catches the account-switch case at the point users must already relogin, without adding a backend callback or broad command-time resolve.
+- Consequence: Context resets clear workspace, target, session, remembered lists, run pointers, and chat/workflow thread mappings, and abort in-process followers for that Mattermost user. Webhook routes are intentionally left untouched. Mattermost action buttons include context generation so old workspace/target buttons cannot restore stale context after a reset. The bot stores only a hash of AcornOps `user.id`, not the raw AcornOps user id.
+
 ## 2026-07-10: Render issue webhook alerts around lifecycle semantics
 
 - Decision: Mattermost webhook posts treat `issue.created.v1`, `issue.reopened.v1`, and `issue.resolved.v1` as first-class issue alerts. Created and reopened alerts emphasize `lastSeenAt`; resolved alerts emphasize `resolvedAt` and include `lastSeenAt` only as supporting context. Other webhook events continue to post as generic AcornOps info alerts. Alert notices omit ID-only workspace, target, issue, and subject lines. Alert timestamps render in `BOT_ALERT_TIME_ZONE`, defaulting to `Asia/Singapore`.

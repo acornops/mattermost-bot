@@ -151,6 +151,8 @@ export async function handlePostedEvent({
         channelId: effect.channelId ?? "",
         rootId: effect.rootId ?? ""
       });
+    } else if (effect.type === "abortUserRuns") {
+      followers.abortAllForUser(effect.externalUserId);
     }
   }
 

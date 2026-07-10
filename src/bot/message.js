@@ -211,7 +211,13 @@ export async function handleBotMessageResult({
       return `For account login, send me a direct message with \`login\`.`;
     }
 
-    return handleLogin({ userId, userName, acornOpsClient });
+    return handleLogin({
+      commandArgs,
+      userId,
+      userName,
+      acornOpsClient,
+      commandContextStore
+    });
   }
 
   if (action === "status") {
@@ -548,9 +554,10 @@ async function handleWorkflowThreadMessage({
     return "This workflow thread accepts follow-up messages or `!chat end`. Run other commands in the main bot conversation.";
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "workflow"
   });
@@ -612,7 +619,7 @@ async function handleWorkflowThreadMessage({
   }
 }
 
-async function handleLogin({ userId, userName, acornOpsClient }) {
+async function handleLogin({ commandArgs, userId, userName, acornOpsClient, commandContextStore }) {
   if (!isAcornOpsChatAuthConfigured(acornOpsClient)) {
     return "AcornOps login is not configured. Set `ACORNOPS_API_BASE_URL` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN`, then restart the bot.";
   }
@@ -622,15 +629,101 @@ async function handleLogin({ userId, userName, acornOpsClient }) {
     return missingIdentityText();
   }
 
+  const resetRequested = commandArgs[0] === "reset";
+  if (commandArgs.length > 1 || (commandArgs.length === 1 && !resetRequested)) {
+    return "`!login` accepts no arguments, or `!login reset` to clear bot context before linking again.";
+  }
+
+  if (resetRequested) {
+    commandContextStore.resetAccountContext?.(identity.externalUserId, {
+      clearAccountFingerprint: true
+    });
+    const link = await createLoginLinkAndMarkPending({
+      identity,
+      userName,
+      acornOpsClient,
+      commandContextStore
+    });
+    return {
+      message: formatLoginLinkResponse({
+        link,
+        userId,
+        userName,
+        prefixLines: ["Mattermost bot context has been reset."]
+      }),
+      effects: [{
+        type: "abortUserRuns",
+        externalUserId: identity.externalUserId
+      }]
+    };
+  }
+
+  const result = await acornOpsClient.resolveExternalIntegrationLink(identity);
+  if (result.status === "linked") {
+    const validation = reconcileResolvedAccount({
+      identity,
+      result,
+      commandContextStore
+    });
+    if (validation.changed) {
+      return accountChangedResetResponse(identity.externalUserId);
+    }
+
+    const user = result.user ?? {};
+    const linkedUser = [user.displayName, user.email].filter(Boolean).join(" / ");
+    return [
+      "Your Mattermost account is already linked to AcornOps.",
+      linkedUser ? `Linked account: ${linkedUser}` : "",
+      "Use `!login reset` only when you want to clear bot context before linking again."
+    ].filter(Boolean).join("\n");
+  }
+
+  if (result.status !== "unlinked") {
+    return `AcornOps returned unknown account-link status ${JSON.stringify(result.status)}.`;
+  }
+
+  const link = await createLoginLinkAndMarkPending({
+    identity,
+    userName,
+    acornOpsClient,
+    commandContextStore
+  });
+  return formatLoginLinkResponse({
+    link,
+    userId,
+    userName,
+    prefixLines: [
+      "Complete this AcornOps login, then retry your bot command.",
+      "Existing bot context is preserved unless the completed login uses a different AcornOps account."
+    ]
+  });
+}
+
+async function createLoginLinkAndMarkPending({
+  identity,
+  userName,
+  acornOpsClient,
+  commandContextStore
+}) {
   const link = await acornOpsClient.createExternalIntegrationLink(linkIdentityForUser(identity, userName));
-  return [
+  commandContextStore.markLoginValidationPending?.(identity.externalUserId);
+  return link;
+}
+
+function formatLoginLinkResponse({ link, userId, userName, prefixLines = [] }) {
+  const lines = [...prefixLines];
+  if (lines.length > 0) {
+    lines.push("");
+  }
+  lines.push(
     "AcornOps account link:",
     link.linkUrl,
     "",
     `Mattermost user: ${identityLabel({ userId, userName })}`,
     "This link expires in 10 minutes.",
     "No AcornOps password should be typed into Mattermost."
-  ].join("\n");
+  );
+  return lines.join("\n");
 }
 
 async function handleStatus({ userId, userName, acornOpsClient, commandContextStore }) {
@@ -644,8 +737,25 @@ async function handleStatus({ userId, userName, acornOpsClient, commandContextSt
   }
 
   const result = await acornOpsClient.resolveExternalIntegrationLink(identity);
-  const context = commandContextStore.get(identity.externalUserId);
   if (result.status === "linked") {
+    const validation = commandContextStore.get(identity.externalUserId).loginValidationPending
+      ? reconcileResolvedAccount({ identity, result, commandContextStore })
+      : rememberResolvedAccountIfMissing({ identity, result, commandContextStore });
+    if (validation.changed) {
+      return {
+        message: [
+          "AcornOps bot status:",
+          "- Acornops: linked to a different AcornOps account.",
+          "- Context: reset. Send `!workspaces` to choose context for this account."
+        ].join("\n"),
+        effects: [{
+          type: "abortUserRuns",
+          externalUserId: identity.externalUserId
+        }]
+      };
+    }
+
+    const context = commandContextStore.get(identity.externalUserId);
     const user = result.user ?? {};
     const linkedUser = [user.displayName, user.email].filter(Boolean).join(" / ");
     const current = `Workspace: ${formatReferenceName(context.currentWorkspace)}    |    Target: ${formatReferenceName(selectedContextTarget(context))}`;
@@ -684,9 +794,10 @@ async function handleWorkspaces({
     return parsedArgs.error;
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "workspaces"
   });
@@ -718,6 +829,7 @@ async function handleWorkspaces({
     const attachments = workspaceSelectionAttachments({
       page,
       identity: auth.identity,
+      context: commandContextStore.get(auth.identity.externalUserId),
       botPublicBaseUrl,
       mattermostActionSecret
     });
@@ -748,9 +860,10 @@ async function handleTargets({
     return parsedArgs.error;
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "targets"
   });
@@ -792,6 +905,7 @@ async function handleTargets({
     const attachments = targetSelectionAttachments({
       page,
       identity: auth.identity,
+      context: currentContext,
       workspace: currentContext.currentWorkspace,
       botPublicBaseUrl,
       mattermostActionSecret
@@ -811,6 +925,7 @@ async function handleTargets({
 function workspaceSelectionAttachments({
   page,
   identity,
+  context,
   botPublicBaseUrl,
   mattermostActionSecret
 }) {
@@ -838,6 +953,7 @@ function workspaceSelectionAttachments({
               action: "select_workspace",
               secret: mattermostActionSecret,
               externalUserId: identity.externalUserId,
+              contextGeneration: context?.contextGeneration ?? 0,
               workspace: {
                 id,
                 name
@@ -853,6 +969,7 @@ function workspaceSelectionAttachments({
 function targetSelectionAttachments({
   page,
   identity,
+  context,
   workspace,
   botPublicBaseUrl,
   mattermostActionSecret
@@ -882,6 +999,7 @@ function targetSelectionAttachments({
               action: "select_target",
               secret: mattermostActionSecret,
               externalUserId: identity.externalUserId,
+              contextGeneration: context?.contextGeneration ?? 0,
               workspace: {
                 id: workspace?.id ?? "",
                 name: workspace?.name ?? ""
@@ -911,9 +1029,10 @@ async function handleTarget({
     return "`target` requires exactly one target number or id.";
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "target"
   });
@@ -981,9 +1100,10 @@ async function handleWorkflows({
   if (commandArgs.length > 0) {
     return "`!workflows` does not accept arguments.";
   }
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "workflows"
   });
@@ -1027,9 +1147,10 @@ async function handleWorkflow({
   if (parsed.error) {
     return parsed.error;
   }
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "workflow"
   });
@@ -1125,9 +1246,10 @@ async function handleWorkspace({
     return "`workspace` accepts at most one workspace number or id.";
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "workspace"
   });
@@ -1213,9 +1335,10 @@ async function handleClusters({
     return "`clusters` accepts at most one cluster number or id.";
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "clusters"
   });
@@ -1268,9 +1391,10 @@ async function handleCluster({
     return "`cluster` requires exactly one cluster number or id.";
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "cluster"
   });
@@ -1340,9 +1464,10 @@ async function handleResources({
     return parsedArgs.error;
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "resources"
   });
@@ -1403,9 +1528,10 @@ async function handleFindings({
     return parsedArgs.error;
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "findings"
   });
@@ -1468,9 +1594,10 @@ async function handleInvestigations({
     return parsedArgs.error;
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "investigations"
   });
@@ -1513,9 +1640,10 @@ async function handleVirtualMachines({
     return "`vms` accepts at most one VM number or id.";
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "vms"
   });
@@ -1566,9 +1694,10 @@ async function handleVirtualMachine({
     return "`vm` requires exactly one VM number or id.";
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "vm"
   });
@@ -1637,9 +1766,10 @@ async function handleSessions({
     return "`sessions` does not accept arguments yet.";
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "sessions"
   });
@@ -1685,9 +1815,10 @@ async function handleSession({
   acornOpsClient,
   commandContextStore,
 }) {
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "session"
   });
@@ -1771,9 +1902,10 @@ async function handleMessages({
     return "`messages` accepts at most one session number or id.";
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "messages"
   });
@@ -1868,8 +2000,9 @@ async function handleWebhook({
       return "No webhook route exists yet. Run `!webhook create`, then paste the delivery URL into the AcornOps console.";
     }
 
-    const auth = requireExternalDataCommand({
+    const auth = await requireExternalDataCommand({
       acornOpsClient,
+      commandContextStore,
       userId,
       commandLabel: "webhook connect"
     });
@@ -2147,9 +2280,10 @@ async function handleChat({
     return "`!chat` supports `new`. Send `!chat end` inside a chat thread to close it.";
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "chat"
   });
@@ -2212,9 +2346,10 @@ async function handleChatQuestion({
     return "Send a question in this chat thread, or use `!chat end` to close it.";
   }
 
-  const auth = requireExternalDataCommand({
+  const auth = await requireExternalDataCommand({
     channelType,
     acornOpsClient,
+    commandContextStore,
     userId,
     commandLabel: "chat"
   });
@@ -2381,8 +2516,61 @@ function linkIdentityForUser(identity, userName) {
   };
 }
 
-function requireExternalDataCommand({
+function rememberResolvedAccountIfMissing({ identity, result, commandContextStore }) {
+  const fingerprint = accountFingerprintForResolveResult(result);
+  if (!fingerprint) {
+    return { changed: false };
+  }
+
+  const context = commandContextStore.get(identity.externalUserId);
+  if (!context.accountFingerprint) {
+    commandContextStore.rememberAccountFingerprint?.(identity.externalUserId, fingerprint);
+  }
+  return { changed: false };
+}
+
+function reconcileResolvedAccount({ identity, result, commandContextStore }) {
+  const fingerprint = accountFingerprintForResolveResult(result);
+  if (!fingerprint) {
+    return { changed: false };
+  }
+
+  const context = commandContextStore.get(identity.externalUserId);
+  const previousFingerprint = context.accountFingerprint;
+  if (previousFingerprint && previousFingerprint !== fingerprint) {
+    commandContextStore.resetAccountContext?.(identity.externalUserId, {
+      clearAccountFingerprint: true
+    });
+    commandContextStore.rememberAccountFingerprint?.(identity.externalUserId, fingerprint);
+    return { changed: true };
+  }
+
+  commandContextStore.rememberAccountFingerprint?.(identity.externalUserId, fingerprint);
+  return { changed: false };
+}
+
+function accountFingerprintForResolveResult(result) {
+  const acornOpsUserId = result?.user?.id ?? "";
+  return acornOpsUserId ? sha256(`acornops-user:${acornOpsUserId}`) : "";
+}
+
+function accountChangedResetResponse(externalUserId) {
+  return {
+    message: [
+      "AcornOps account changed.",
+      "I reset your Mattermost bot context so old workspace, target, and chat-thread selections are not reused.",
+      "Send `!workspaces` to choose context for this account."
+    ].join("\n"),
+    effects: [{
+      type: "abortUserRuns",
+      externalUserId
+    }]
+  };
+}
+
+async function requireExternalDataCommand({
   acornOpsClient,
+  commandContextStore = nullCommandContextStore,
   userId,
   commandLabel
 }) {
@@ -2398,6 +2586,32 @@ function requireExternalDataCommand({
     return {
       response: missingIdentityText()
     };
+  }
+
+  const context = commandContextStore.get(identity.externalUserId);
+  if (context.loginValidationPending) {
+    const result = await acornOpsClient.resolveExternalIntegrationLink(identity);
+    if (result.status === "unlinked") {
+      return {
+        response: "Your AcornOps login is not complete yet. Open the latest link from `!login`, finish signing in, then retry this command."
+      };
+    }
+    if (result.status !== "linked") {
+      return {
+        response: `AcornOps returned unknown account-link status ${JSON.stringify(result.status)}.`
+      };
+    }
+
+    const validation = reconcileResolvedAccount({
+      identity,
+      result,
+      commandContextStore
+    });
+    if (validation.changed) {
+      return {
+        response: accountChangedResetResponse(identity.externalUserId)
+      };
+    }
   }
 
   return { identity };

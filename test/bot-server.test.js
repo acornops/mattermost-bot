@@ -194,6 +194,36 @@ test("Mattermost action rejects stale target buttons after workspace changes", (
   assert.equal(commandContextStore.get("user-1").currentTarget, null);
 });
 
+test("Mattermost action rejects stale buttons after context reset", () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.selectWorkspace("user-1", {
+    id: "workspace-1",
+    name: "Platform"
+  });
+  commandContextStore.resetAccountContext("user-1");
+
+  const result = handleMattermostAction({
+    payload: {
+      user_id: "user-1",
+      context: {
+        action: "select_workspace",
+        externalUserId: "user-1",
+        contextGeneration: 0,
+        workspace: {
+          id: "workspace-1",
+          name: "Platform"
+        }
+      }
+    },
+    commandContextStore
+  });
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, {});
+  assert.match(result.message, /context changed/);
+  assert.equal(commandContextStore.get("user-1").currentWorkspace, null);
+});
+
 test("AcornOps route webhook verifies signature, deduplicates, and posts to route destination", async () => {
   const posts = [];
   const commandContextStore = createInMemoryCommandContextStore();

@@ -192,6 +192,13 @@ function wrapPersistentStore({ memory, db, logger }) {
     return result;
   };
 
+  store.resetAccountContext = (externalUserId, options = {}) => {
+    const result = memory.resetAccountContext(externalUserId, options);
+    persistContext(db, memory, externalUserId).catch(logPersistenceError(logger));
+    deleteChatThreadsForUser(db, externalUserId).catch(logPersistenceError(logger));
+    return result;
+  };
+
   store.upsertWebhookRoute = (externalUserId, route) => {
     const result = memory.upsertWebhookRoute(externalUserId, route);
     persistWebhookRoute(db, result).catch(logPersistenceError(logger));
@@ -253,7 +260,10 @@ const contextMutationMethods = [
   "endChat",
   "rememberLatestRun",
   "rememberActiveRun",
-  "clearActiveRun"
+  "clearActiveRun",
+  "rememberAccountFingerprint",
+  "markLoginValidationPending",
+  "clearLoginValidationPending"
 ];
 
 async function persistContext(db, memory, externalUserId, chatCounter = null) {
@@ -387,6 +397,10 @@ async function persistWebhookRoute(db, route) {
 
 async function deleteWebhookRoute(db, externalUserId) {
   await db.query("DELETE FROM bot_webhook_routes WHERE external_user_id = $1", [externalUserId]);
+}
+
+async function deleteChatThreadsForUser(db, externalUserId) {
+  await db.query("DELETE FROM bot_chat_threads WHERE external_user_id = $1", [externalUserId]);
 }
 
 function logPersistenceError(logger) {

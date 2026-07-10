@@ -85,6 +85,16 @@ export function createRunFollowerRegistry({
       }
     },
 
+    abortAllForUser(externalUserId) {
+      for (const [key, entry] of active.entries()) {
+        if (entry.identity.externalUserId === externalUserId) {
+          entry.controller.abort();
+          active.delete(key);
+        }
+      }
+      commandContextStore.clearActiveRun?.(externalUserId);
+    },
+
     has(externalUserId, { channelId = "", rootId = "" } = {}) {
       return active.has(activeKey(externalUserId, channelId, rootId));
     }

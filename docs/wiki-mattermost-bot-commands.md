@@ -31,7 +31,8 @@ why is the development cluster unhealthy?
 | --- | --- |
 | `!help` | Shows the short command help in Mattermost. |
 | `!help filters` | Shows commonly used filters and allowed values. |
-| `!login` | Creates an AcornOps account-link URL. Use this in a direct message. |
+| `!login` | Checks your AcornOps link and creates an account-link URL when relogin is needed. Use this in a direct message. |
+| `!login reset` | Clears bot workspace, target, and chat/workflow thread context before creating a fresh account-link URL. |
 | `!status` | Shows your link status and current bot context. |
 | `!workspaces` | Lists AcornOps workspaces you can access and may include selection buttons. |
 | `!workspace 1` | Selects a workspace from the latest `!workspaces` result. |
@@ -202,6 +203,7 @@ AcornOps must send webhook deliveries to the route URL with `AcornOps-Event-Id`,
 
 - The bot never asks you to type your AcornOps password into Mattermost.
 - `!login` should be used in a direct message with the bot.
+- Normal `!login` preserves bot context for same-account relogin. If the completed login uses a different AcornOps account, the bot resets context on the next authenticated command.
 - Assistant chats are read-only.
 - The bot cannot approve changes, cancel runs, rotate agent keys, manage targets, read logs, or call AcornOps admin/internal APIs.
 - Channel responses are visible to the channel. Use a direct message for quieter troubleshooting.

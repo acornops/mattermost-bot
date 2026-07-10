@@ -45,6 +45,7 @@
 - `B17`: Move webhook setup to AcornOps-owned subscription state.
 - `B18`: Add workflow listing, launching, and threaded runs.
 - `B19`: Enrich AcornOps webhook alert messages.
+- `B20`: Validate login-triggered context against AcornOps account changes.
 
 ## In Progress
 
@@ -52,7 +53,9 @@
 
 ## Known Issues
 
-- `login` direct messages now call AcornOps `POST /api/v1/auth/external-integrations/link` with `externalUserId` set to the Mattermost post author's `user_id` and optional `externalDisplayName` from the Mattermost sender name.
+- `login` direct messages first call AcornOps `POST /api/v1/auth/external-integrations/resolve`. Already-linked users are told they are linked and `!login reset` is the explicit context reset path. Unlinked or expired users receive a fresh AcornOps account-link URL from `POST /api/v1/auth/external-integrations/link`; bot context is preserved while login completion is pending.
+- `!login reset` clears the Mattermost user's workspace, target, session, remembered-list, run, and chat/workflow thread context before returning a fresh account-link URL. Webhook routes are intentionally left untouched.
+- After `!login` returns a link URL, the next authenticated command resolves the AcornOps link once. If the linked AcornOps account fingerprint matches the stored hash, context is preserved; if it differs, the bot resets context before running the command and asks the user to choose workspace/target again.
 - `status` now calls AcornOps `POST /api/v1/auth/external-integrations/resolve` and reports concise linked/unlinked account state plus current workspace/target names. It intentionally omits the Mattermost user id, backend AcornOps user id, and old chat/session selection line.
 - Context-bearing command replies now start with `Current: Workspace: <name>    |    Target: <name>` followed by a divider before the command-specific response body.
 - The bot accepts commands with a `!` prefix on the command word only, such as `!login`, `!workspaces`, and `!chat new`. Slash-prefixed commands return guidance to use `!`; unprefixed main-conversation messages nudge users toward `!help`.
@@ -90,6 +93,7 @@
 - `docker-compose.yml` runs the bot plus a bundled `bot-postgres` service, defaults `BOT_DATABASE_URL` to that database, defaults host-local Mattermost and AcornOps URLs to `http://host.docker.internal:8065` and `http://host.docker.internal:8081`, and defaults `BOT_PUBLIC_BASE_URL` to `http://host.docker.internal:8080`; deployment orchestration still belongs in `acornops-deployment`.
 - The most recent live account-link smoke passed after the earlier user-id-only update; the 2026-06-23 external-integrations endpoint move is covered by automated tests but still needs live smoke.
 - The bot remembers only lightweight command context: numbered workspaces, targets, clusters, VMs, sessions, current workspace, one selected target, chat-thread mappings, active run pointers, webhook routes, and inbound event ids. It does not store AcornOps browser sessions, cookies, tokens, or link URLs.
+- For account-switch detection, the bot stores only a hash of AcornOps `user.id`, a pending-login validation flag, and a context generation number. Mattermost action buttons carry the context generation and stale button callbacks are rejected after resets.
 - K3s was a completed local learning stage. Its repo-local readiness script has been removed from the active production bot harness; historical K3s notes remain for traceability.
 - Mattermost local setup is documented through the official Docker Compose deployment without NGINX, but the current host readiness probe on 2026-06-30 failed because `localhost:8065` was not listening.
 - Mattermost remains an explicit local service; `./init.sh` verifies repo and bot code but does not start Docker Compose.
@@ -104,6 +108,13 @@
 ## Session Log
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
+
+### 2026-07-10 - Login-triggered context validation
+
+- Goal: Prevent stale Mattermost bot workspace, target, session, and thread context from carrying across an AcornOps account switch without resolving the account on every command.
+- Completed: Added hashed AcornOps account fingerprints, a login-validation-pending flag, and context generations to command context. Changed `!login` to resolve first, return an already-linked message for linked users, preserve context while unlinked/expired users complete a new login URL, and support `!login reset` for explicit context clearing. The next authenticated command after a pending login resolves once, preserves context for the same AcornOps user, or resets context before command execution if the fingerprint changed. Context reset removes chat/workflow thread mappings and aborts active run followers for that Mattermost user, while leaving webhook routes untouched. Workspace/target action buttons now carry context generation and stale callbacks are rejected after reset.
+- Verification run: Baseline `./init.sh` passed before changes with harness verification, lint, build, and 133 tests. Focused `node --test test/bot-message.test.js test/bot-runner.test.js test/bot-server.test.js test/command-context.test.js test/postgres-store.test.js test/run-follower.test.js` passed with 107 tests. `npm run lint`, `npm run build`, and full `npm test` passed with 139 tests. Final `./init.sh` passed with harness verification, lint, build, and 139 tests.
+- Known risks: Same-account expiry relogin and different-account relink still need live smoke against running Mattermost and AcornOps services.
 
 ### 2026-07-10 - Rich AcornOps webhook alert formatting
 

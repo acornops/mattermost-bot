@@ -4,7 +4,7 @@ Initially checked on 2026-06-04 against `/Users/ryangoh/Desktop/Development/acor
 
 This inventory is a maintained reference for CSIT bot work. The account-link section was updated on 2026-06-23 from the current AcornOps external integration contract.
 
-Do not implement bot behavior from the superseded proposal that used chat-login transactions or bot-side pending login state. The current bot contract is recorded in `docs/acornops-chat-login-contract.md`.
+Do not implement bot behavior from the superseded proposal that used chat-login transactions or bot-side AcornOps session state. The current bot contract is recorded in `docs/acornops-chat-login-contract.md`.
 
 ## Source Files
 
@@ -159,7 +159,7 @@ Internal execution endpoints exist under `/internal/v1` when internal transport 
 
 ## External Integration Account Linking
 
-The older proposed Mattermost chat-login transaction flow has been superseded. The bot no longer creates AcornOps OIDC URLs, stores pending login state, polls transaction ids, or receives AcornOps session tokens.
+The older proposed Mattermost chat-login transaction flow has been superseded. The bot no longer creates AcornOps OIDC URLs, stores transaction-style pending login state, polls transaction ids, or receives AcornOps session tokens. The Mattermost bot may store a lightweight login-validation-pending flag and hashed AcornOps account fingerprint to protect command context across relogin.
 
 The CSIT bot exposes `login` in Mattermost. That command calls AcornOps to create a short-lived external integration browser link:
 

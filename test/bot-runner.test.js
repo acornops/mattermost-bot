@@ -134,6 +134,10 @@ test("handlePostedEvent creates AcornOps account link for direct message login p
   const result = await handlePostedEvent({
     client,
     acornOpsClient: {
+      async resolveExternalIntegrationLink(input) {
+        assert.deepEqual(input, { externalUserId: "user-1" });
+        return { status: "unlinked" };
+      },
       async createExternalIntegrationLink(input) {
         assert.deepEqual(input, linkIdentity("user-1"));
         return {

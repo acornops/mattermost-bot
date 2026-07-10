@@ -75,12 +75,18 @@ test("handleBotMessage rejects slash-prefixed commands", async () => {
 });
 
 test("handleBotMessage creates an AcornOps account link for direct login", async () => {
+  const commandContextStore = selectedClusterContext();
   const response = await handleBotMessage({
     text: "!login",
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
+    commandContextStore,
     acornOpsClient: {
+      async resolveExternalIntegrationLink(input) {
+        assert.deepEqual(input, externalIdentity());
+        return { status: "unlinked" };
+      },
       async createExternalIntegrationLink(input) {
         assert.deepEqual(input, linkIdentity());
         return {
@@ -95,6 +101,175 @@ test("handleBotMessage creates an AcornOps account link for direct login", async
   assert.match(response, /https:\/\/console\.acornops\.dev\/integrations\/external\/link\?token=intlink_123/);
   assert.match(response, /This link expires in 10 minutes\./);
   assert.match(response, /No AcornOps password should be typed into Mattermost\./);
+  assert.equal(commandContextStore.get("mattermost-user-1").loginValidationPending, true);
+  assert.equal(commandContextStore.get("mattermost-user-1").currentWorkspace.id, "workspace-1");
+});
+
+test("handleBotMessage login stores linked account fingerprint without resetting context", async () => {
+  const commandContextStore = selectedClusterContext();
+  const response = await handleBotMessage({
+    text: "!login",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "D",
+    commandContextStore,
+    acornOpsClient: {
+      async resolveExternalIntegrationLink(input) {
+        assert.deepEqual(input, externalIdentity());
+        return linkedAccount("acorn-user-1");
+      },
+      async createExternalIntegrationLink() {
+        throw new Error("createExternalIntegrationLink should not be called");
+      }
+    }
+  });
+  const context = commandContextStore.get("mattermost-user-1");
+
+  assert.match(response, /already linked/);
+  assert.equal(context.currentWorkspace.id, "workspace-1");
+  assert.equal(context.currentTarget.id, "cluster-1");
+  assert.match(context.accountFingerprint, /^[a-f0-9]{64}$/);
+  assert.notEqual(context.accountFingerprint, "acorn-user-1");
+  assert.equal(context.loginValidationPending, false);
+});
+
+test("handleBotMessage login reset clears context and leaves webhook routes", async () => {
+  const commandContextStore = selectedClusterContext();
+  commandContextStore.registerChatThread("mattermost-user-1", {
+    channelId: "channel-1",
+    rootId: "root-1",
+    sessionId: "session-1",
+    sessionName: "Investigate Prod"
+  });
+  commandContextStore.upsertWebhookRoute("mattermost-user-1", {
+    channelId: "channel-2",
+    routeTokenHash: "token-hash",
+    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
+  });
+
+  const response = await handleBotMessage({
+    text: "!login reset",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "D",
+    commandContextStore,
+    acornOpsClient: {
+      async resolveExternalIntegrationLink() {
+        throw new Error("resolveExternalIntegrationLink should not be called for login reset");
+      },
+      async createExternalIntegrationLink(input) {
+        assert.deepEqual(input, linkIdentity());
+        return {
+          linkUrl: "https://console.acornops.dev/integrations/external/link?token=intlink_reset"
+        };
+      }
+    }
+  });
+  const context = commandContextStore.get("mattermost-user-1");
+
+  assert.match(response, /context has been reset/i);
+  assert.match(response, /intlink_reset/);
+  assert.equal(context.currentWorkspace, null);
+  assert.equal(context.currentTarget, null);
+  assert.equal(context.loginValidationPending, true);
+  assert.equal(context.accountFingerprint, "");
+  assert.equal(context.contextGeneration, 1);
+  assert.equal(commandContextStore.getChatThread("channel-1", "root-1"), null);
+  assert.equal(commandContextStore.getWebhookRoute("mattermost-user-1").channelId, "channel-2");
+});
+
+test("handleBotMessage validates pending login once and preserves same-account context", async () => {
+  const commandContextStore = selectedClusterContext();
+  await handleBotMessage({
+    text: "!login",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "D",
+    commandContextStore,
+    acornOpsClient: {
+      async resolveExternalIntegrationLink() {
+        return linkedAccount("acorn-user-1");
+      }
+    }
+  });
+  commandContextStore.markLoginValidationPending("mattermost-user-1");
+
+  const response = await handleBotMessage({
+    text: "!targets",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "D",
+    commandContextStore,
+    acornOpsClient: {
+      async resolveExternalIntegrationLink(input) {
+        assert.deepEqual(input, externalIdentity());
+        return linkedAccount("acorn-user-1");
+      },
+      async listTargets(input, workspaceId) {
+        assert.equal(workspaceId, "workspace-1");
+        return { items: [{ id: "target-1", name: "Prod", targetType: "kubernetes" }] };
+      }
+    }
+  });
+  const context = commandContextStore.get("mattermost-user-1");
+
+  assert.match(response, /AcornOps targets/);
+  assert.equal(context.currentWorkspace.id, "workspace-1");
+  assert.equal(context.loginValidationPending, false);
+});
+
+test("handleBotMessage resets stale context after pending login switches accounts", async () => {
+  const commandContextStore = selectedClusterContext();
+  await handleBotMessage({
+    text: "!login",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "D",
+    commandContextStore,
+    acornOpsClient: {
+      async resolveExternalIntegrationLink() {
+        return linkedAccount("acorn-user-1");
+      }
+    }
+  });
+  commandContextStore.registerChatThread("mattermost-user-1", {
+    channelId: "channel-1",
+    rootId: "root-1",
+    sessionId: "session-1",
+    sessionName: "Investigate Prod"
+  });
+  commandContextStore.upsertWebhookRoute("mattermost-user-1", {
+    channelId: "channel-2",
+    routeTokenHash: "token-hash",
+    deliveryUrl: "https://bot.example.com/acornops/webhooks/routes/token"
+  });
+  commandContextStore.markLoginValidationPending("mattermost-user-1");
+
+  const response = await handleBotMessage({
+    text: "!targets",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "D",
+    commandContextStore,
+    acornOpsClient: {
+      async resolveExternalIntegrationLink(input) {
+        assert.deepEqual(input, externalIdentity());
+        return linkedAccount("acorn-user-2");
+      },
+      async listTargets() {
+        throw new Error("listTargets should not be called after account switch");
+      }
+    }
+  });
+  const context = commandContextStore.get("mattermost-user-1");
+
+  assert.match(response, /account changed/i);
+  assert.equal(context.currentWorkspace, null);
+  assert.equal(context.currentTarget, null);
+  assert.equal(context.loginValidationPending, false);
+  assert.equal(context.contextGeneration, 1);
+  assert.equal(commandContextStore.getChatThread("channel-1", "root-1"), null);
+  assert.equal(commandContextStore.getWebhookRoute("mattermost-user-1").channelId, "channel-2");
 });
 
 test("handleBotMessage refuses login without complete Mattermost identity", async () => {
@@ -304,6 +479,7 @@ test("handleBotMessage adds workspace selection actions when callback URL is con
               action: "select_workspace",
               secret: "action-secret",
               externalUserId: "mattermost-user-1",
+              contextGeneration: 0,
               workspace: {
                 id: "workspace-1",
                 name: "Platform"
@@ -848,6 +1024,7 @@ test("handleBotMessage adds target selection actions when callback URL is config
               action: "select_target",
               secret: "action-secret",
               externalUserId: "mattermost-user-1",
+              contextGeneration: 0,
               workspace: {
                 id: "workspace-1",
                 name: "Platform"
@@ -2158,6 +2335,17 @@ function linkIdentity() {
   return {
     ...externalIdentity(),
     externalDisplayName: "alice"
+  };
+}
+
+function linkedAccount(id) {
+  return {
+    status: "linked",
+    user: {
+      id,
+      email: `${id}@example.com`,
+      displayName: id
+    }
   };
 }
 

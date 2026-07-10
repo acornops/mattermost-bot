@@ -73,6 +73,8 @@
 ## Changes This Session
 
 - Implemented the Mattermost bot UX and alert roadmap: `!` command parsing, threaded multi-chat routing, Postgres-backed command context, inbound HTTP server, Mattermost workspace buttons, and user-level AcornOps webhook routes/alert delivery.
+- Added login-triggered account validation for bot context: `!login` resolves first, preserves context while expired/unlinked users complete a new link, stores only a hash of AcornOps `user.id`, and validates once on the next authenticated command. Same-account relogin keeps context; different-account relink resets workspace/target/session/run context and chat/workflow thread mappings while leaving webhook routes untouched. `!login reset` explicitly clears context before returning a fresh link URL, and stale Mattermost workspace/target buttons are rejected after resets.
+- Verification for login-triggered account validation passed on 2026-07-10: focused login/context/action/follower tests passed with 107 tests, `npm test` passed with 139 tests, and final `./init.sh` passed with 139 tests.
 - Fixed the smoke-test follow-ups: workspace button actions now include Mattermost-compatible button type/id payloads and expected action failures return HTTP 200 structured errors; Compose includes a healthy bundled `bot-postgres` database with default bot DB URL; webhook registration now returns signed per-route delivery credentials instead of using the old global signed endpoint.
 - Added target selection buttons for `!targets` using the existing `/mattermost/actions` callback path. Workspace and target actions now return quiet HTTP 200 action responses and post one visible success/failure bot message in the main conversation. Live Mattermost logs confirmed local Docker button callbacks require `AllowedUntrustedInternalConnections=host.docker.internal`.
 - Shortened context-bearing command replies and `!status`: the repeated Mattermost identity block was replaced by a compact workspace/target header, `!status` now reports only account state plus current workspace/target, and stale bare-command examples were updated to `!` command examples.
@@ -127,6 +129,7 @@
 ## Still Broken Or Unverified
 
 - Live smoke for target button clicks still needs to run after rebuilding/restarting the bot. The user confirmed workspace buttons work once Mattermost allows `host.docker.internal` through `AllowedUntrustedInternalConnections`.
+- Live smoke still needs to cover same-account relogin after external-link expiry and different-account relink to confirm context preservation/reset behavior against real AcornOps.
 - AcornOps-side webhook setup requires coordinated control-plane work to implement or map `docs/acornops-mattermost-webhook-contract.md`; live `!webhook connect` and live status refresh cannot succeed until that contract exists.
 - Active SSE network followers are still process-local while running; persisted active-run records do not yet have a restart recovery worker.
 - The exact Mattermost post ids and AcornOps response snippets from the passing live account-link smoke are not recorded in this repository.

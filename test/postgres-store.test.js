@@ -115,6 +115,8 @@ test("Postgres command context store migrates, loads, and persists state", async
       }
     ]
   });
+  store.rememberAccountFingerprint("user-1", "fingerprint-1");
+  store.resetAccountContext("user-1");
   assert.equal(await store.rememberInboundEvent("event-2"), true);
 
   await new Promise((resolve) => setImmediate(resolve));
@@ -125,6 +127,10 @@ test("Postgres command context store migrates, loads, and persists state", async
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO bot_user_contexts")), true);
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO bot_webhook_routes")), true);
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO bot_inbound_events")), true);
+  assert.equal(queries.some((query) => query.sql.includes("DELETE FROM bot_chat_threads WHERE external_user_id = $1")), true);
+  assert.equal(store.get("user-1").currentWorkspace, null);
+  assert.equal(store.get("user-1").accountFingerprint, "fingerprint-1");
+  assert.equal(store.getWebhookRoute("user-1").channelId, "channel-2");
 });
 
 function quietLogger() {
