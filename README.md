@@ -83,6 +83,7 @@ Environment variables:
 | `MATTERMOST_BOT_TOKEN` | Mattermost bot access token. | Required |
 | `MATTERMOST_BOT_USERNAME` | Bot username used for mention detection. | `acorn-ops-bot` |
 | `ACORNOPS_API_BASE_URL` | AcornOps control-plane base URL. | `http://localhost:8081` |
+| `ACORNOPS_CONSOLE_BASE_URL` | Browser console base URL used for manual write-approval links. | Empty |
 | `EXTERNAL_INTEGRATION_SERVICE_TOKEN` | AcornOps service token for this installed external integration. | Required for AcornOps-backed commands |
 | `BOT_DATABASE_URL` | Optional Postgres URL for persistent bot command context, chat threads, active runs, webhook routes, and inbound idempotency. Compose supplies a bundled Postgres URL; empty uses in-memory state for local tests. | Empty |
 | `BOT_HTTP_HOST` | Host for the optional inbound bot HTTP listener. | `0.0.0.0` |
@@ -102,6 +103,8 @@ Local `.env` files are loaded without overriding existing process environment va
 ## Commands
 
 Commands are plain Mattermost messages, not slash commands. Command words require `!`; arguments do not. Slash-prefixed input returns guidance to use `!`.
+
+`!chat new` creates a read-only thread. `!chat new --write [title]` refreshes the selected workspace and starts a read-write thread only when AcornOps returns `permissions.create_read_write_runs: true` for the linked user and integration. Write tools still pause for manual approval; the bot links to the AcornOps approval page and continues following the run, but never approves or rejects requests itself.
 
 - `!help`: show the short common workflow
 - `!help filters`: show supported filters and finite values

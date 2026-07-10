@@ -73,7 +73,7 @@ const helpText = [
   "- `!targets` lists Kubernetes and VM targets; `!target 1` selects one.",
   "- `!resources`, `!findings`, and `!investigations` inspect the selected context.",
   "- `!workflows` lists read-only workflows; `!workflow run 1` launches one.",
-  "- `!chat new` starts a read-only AcornOps chat thread for the selected target.",
+  "- `!chat new` starts a read-only chat; `!chat new --write` requests a write-capable chat when permitted.",
   "- `!chat end` closes the current chat thread when sent inside that thread.",
   "- `!help filters` shows common filters.",
   "",
@@ -2291,13 +2291,27 @@ async function handleChat({
     return auth.response;
   }
 
-  const title = commandArgs.slice(1).join(" ").trim();
+  const writeRequested = commandArgs[1] === "--write";
+  const title = commandArgs.slice(writeRequested ? 2 : 1).join(" ").trim();
   const previousContext = commandContextStore.get(auth.identity.externalUserId);
   if (previousContext.activeRun) {
     return activeRunResponseText();
   }
 
   try {
+    const toolAccessMode = writeRequested ? "read_write" : "read_only";
+    if (writeRequested) {
+      if (!previousContext.currentWorkspace?.id) {
+        return "Choose a workspace first: send `!workspaces`, then `!workspace 1`.";
+      }
+      const workspace = await acornOpsClient.getWorkspace(
+        auth.identity,
+        previousContext.currentWorkspace.id
+      );
+      if (workspace.permissions?.create_read_write_runs !== true) {
+        return "Read-write runs are not enabled for your linked account in this workspace. You can still start a read-only chat with `!chat new`.";
+      }
+    }
     const { session } = await createSessionForSelectedTarget({
       identity: auth.identity,
       acornOpsClient,
@@ -2309,6 +2323,7 @@ async function handleChat({
     const lines = [
       ...formatContextLines(commandContextStore.get(auth.identity.externalUserId), { userId, userName }),
       "New chat has been started.",
+      `Access: ${writeRequested ? "read-write" : "read-only"}.`,
       "Reply in the thread below to send questions to that chat."
     ];
     return {
@@ -2320,7 +2335,9 @@ async function handleChat({
           session,
           title: chatTitle,
           number: chatNumber,
-          userId
+          userId,
+          workspaceId: previousContext.currentWorkspace?.id ?? "",
+          toolAccessMode
         }
       ]
     };
@@ -2395,7 +2412,8 @@ async function handleChatQuestion({
     });
     const result = await acornOpsClient.postSessionMessage(auth.identity, session.id, {
       content: question,
-      clientMessageId
+      clientMessageId,
+      toolAccessMode: currentThreadChat?.toolAccessMode ?? "read_only"
     });
     const runId = result.run_id ?? result.runId ?? "";
     const messageId = result.message_id ?? result.messageId ?? "";
@@ -2448,6 +2466,7 @@ async function handleChatQuestion({
             sessionId: session.id,
             runId,
             messageId,
+            workspaceId: currentThreadChat?.workspaceId ?? context.currentWorkspace?.id ?? "",
             channelId: currentThreadChat?.channelId ?? "",
             rootId: currentThreadChat?.rootId ?? ""
           }
@@ -2457,7 +2476,7 @@ async function handleChatQuestion({
 
     return formatChatPendingResponse(followed.status);
   } catch (error) {
-    return chatMessageErrorText(error);
+    return chatMessageErrorText(error, currentThreadChat?.toolAccessMode ?? "read_only");
   }
 }
 

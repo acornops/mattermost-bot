@@ -44,16 +44,21 @@ export function dataErrorText(error, label) {
   return `AcornOps ${label} could not be loaded. Try again later or check the bot logs.`;
 }
 
-export function chatMessageErrorText(error) {
+export function chatMessageErrorText(error, toolAccessMode = "read_only") {
   const status = httpStatusFromError(error);
+  const modeLabel = toolAccessMode === "read_write" ? "read-write" : "read-only";
   if (status === 400) {
     const details = acornOpsErrorDetails(error);
     const reason = [details.code, details.message].filter(Boolean).join(": ");
     if (reason) {
-      return `AcornOps could not start the read-only chat run (${reason}). Reply in this thread to try again, or use \`!chat end\` to close it.`;
+      return `AcornOps could not start the ${modeLabel} chat run (${reason}). Reply in this thread to try again, or use \`!chat end\` to close it.`;
     }
 
-    return "AcornOps could not start the read-only chat run (HTTP 400). Reply in this thread to try again, or use `!chat end` to close it; check the AcornOps logs for the rejected request reason.";
+    return `AcornOps could not start the ${modeLabel} chat run (HTTP 400). Reply in this thread to try again, or use \`!chat end\` to close it; check the AcornOps logs for the rejected request reason.`;
+  }
+
+  if (status === 403 && toolAccessMode === "read_write") {
+    return "AcornOps did not allow a read-write run for your linked account in this workspace. The integration configuration, workspace grant, or workspace role may no longer permit it. Start a read-only chat with `!chat new` if needed.";
   }
 
   return dataErrorText(error, "chat message");

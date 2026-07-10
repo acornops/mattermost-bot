@@ -287,13 +287,13 @@ export class AcornOpsClient {
     );
   }
 
-  async postSessionMessage(identity, sessionId, { content, clientMessageId }) {
+  async postSessionMessage(identity, sessionId, { content, clientMessageId, toolAccessMode = "read_only" }) {
     return this.postExternalResource(
       identity,
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/messages`,
       {
         content,
-        toolAccessMode: "read_only",
+        toolAccessMode,
         clientMessageId
       }
     );

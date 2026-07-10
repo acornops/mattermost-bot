@@ -612,6 +612,27 @@
       },
       "evidence": "Implemented on 2026-07-10. Added accountFingerprint, loginValidationPending, and contextGeneration to command context; resetAccountContext clears workspace/target/session/list/run state and chat/workflow thread mappings while leaving webhook routes intact. !login now resolves first, returns an already-linked message for linked users, creates a link URL and marks validation pending for unlinked users, and supports !login reset. The next authenticated command after a pending login resolves once, preserves context for the same AcornOps user fingerprint, or resets context before command execution if the fingerprint changed. Mattermost workspace/target button payloads include contextGeneration and stale callbacks are rejected after resets. Focused node --test test/bot-message.test.js test/bot-runner.test.js test/bot-server.test.js test/command-context.test.js test/postgres-store.test.js test/run-follower.test.js passed with 107 tests. npm run lint, npm run build, npm test with 139 tests, and final ./init.sh with 139 tests passed.",
       "notes": "The bot stores a hash of AcornOps user.id, not the raw AcornOps user id. Live smoke should cover same-account relogin after expiry and different-account relink. Webhook route cleanup remains out of scope for this feature."
+    },
+    {
+      "id": "B21",
+      "priority": 29,
+      "area": "bot",
+      "title": "Enable permission-gated read-write chat runs",
+      "user_visible_behavior": "Authorized users can explicitly start a read-write Mattermost chat, follow manual approval links into AcornOps, see approval status changes, and receive the final result in the same thread.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus live read-write approval smoke when services are available",
+        "steps": [
+          "Add !chat new --write with an effective workspace permission preflight.",
+          "Persist the thread tool access mode in memory and Postgres.",
+          "Send read_write for messages in write-enabled threads while keeping read_only as default.",
+          "Render approval request links and approval resolution events without ending SSE following.",
+          "Keep approval decisions unavailable to the bot.",
+          "Add automated tests and run ./init.sh."
+        ]
+      },
+      "evidence": "Implemented on 2026-07-10. Added explicit !chat new --write [title] with a fresh GET workspace effective-permission preflight for create_read_write_runs. Persisted toolAccessMode and workspaceId per Mattermost thread in memory and Postgres, passed read_write on every message in enabled threads, and kept read_only as the default. Added ACORNOPS_CONSOLE_BASE_URL and SSE handling for tool_approval_requested, approved, rejected, and expired events; approval requests link to /workspaces/{workspaceId}/approvals?runId={runId}&approvalId={approvalId}, resolution events do not end the follower, and final output remains in the same thread. Focused chat/follower tests passed with 75 tests. Final ./init.sh passed with harness verification, lint, build, and 144 tests.",
+      "notes": "Production deployments must configure ACORNOPS_CONSOLE_BASE_URL and opt the external integration client, linked user's workspace grant, and role into create_read_write_runs. Workflows remain read-only."
     }
   ]
 }

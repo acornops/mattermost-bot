@@ -36,6 +36,7 @@ test("Postgres command context store migrates, loads, and persists state", async
               thread_kind: "workflow",
               workflow_id: "cluster-triage",
               workspace_id: "workspace-1",
+              tool_access_mode: "read_write",
               workflow_inputs: { clusterId: "cluster-1" },
               active_run: null
             }
@@ -93,6 +94,7 @@ test("Postgres command context store migrates, loads, and persists state", async
   });
   assert.equal(store.getChatThread("channel-1", "root-1").sessionId, "session-1");
   assert.equal(store.getChatThread("channel-1", "root-1").kind, "workflow");
+  assert.equal(store.getChatThread("channel-1", "root-1").toolAccessMode, "read_write");
   assert.deepEqual(store.getChatThread("channel-1", "root-1").workflowInputs, {
     clusterId: "cluster-1"
   });

@@ -204,6 +204,7 @@ test("command context tracks chat threads and per-thread active runs", () => {
     kind: "chat",
     workflowId: "",
     workspaceId: "",
+    toolAccessMode: "read_only",
     workflowInputs: {},
     activeRun: null
   });

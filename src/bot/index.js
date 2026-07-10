@@ -31,6 +31,7 @@ const runner = createMattermostBotRunner({
   websocketFactory: (url) => new WebSocket(url),
   botUsername: config.mattermostBotUsername,
   commandContextStore,
+  acornOpsConsoleUrl: config.acornOpsConsoleUrl,
   botPublicBaseUrl: config.botPublicBaseUrl,
   mattermostActionSecret: config.mattermostActionSecret
 });

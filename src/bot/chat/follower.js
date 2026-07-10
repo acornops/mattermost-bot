@@ -7,6 +7,7 @@ export function createRunFollowerRegistry({
   acornOpsClient,
   commandContextStore,
   postFollowUp,
+  acornOpsConsoleUrl = "",
   logger = console,
   reconnectAttempts = numberFromEnv("RUN_STREAM_RECONNECT_ATTEMPTS", DEFAULT_RECONNECT_ATTEMPTS),
   reconnectDelayMs = numberFromEnv("RUN_STREAM_RECONNECT_DELAY_MS", DEFAULT_RECONNECT_DELAY_MS, { allowZero: true }),
@@ -16,7 +17,7 @@ export function createRunFollowerRegistry({
   const active = new Map();
 
   return {
-    start({ identity, sessionId, runId, messageId = "", channelId, rootId = "", kind = "chat" }) {
+    start({ identity, sessionId, runId, messageId = "", workspaceId = "", channelId, rootId = "", kind = "chat" }) {
       if (!identity?.externalUserId || !runId || !sessionId || !channelId) {
         return false;
       }
@@ -32,12 +33,15 @@ export function createRunFollowerRegistry({
         sessionId,
         runId,
         messageId,
+        workspaceId,
         channelId,
         rootId,
         kind,
         key,
         controller,
-        finalPosted: false
+        finalPosted: false,
+        notifiedApprovalIds: new Set(),
+        notifiedApprovalStatuses: new Set()
       };
       active.set(key, entry);
       const activeRun = {
@@ -56,6 +60,7 @@ export function createRunFollowerRegistry({
         acornOpsClient,
         commandContextStore,
         postFollowUp,
+        acornOpsConsoleUrl,
         logger,
         reconnectAttempts,
         reconnectDelayMs,
@@ -110,6 +115,7 @@ async function followRun({
   acornOpsClient,
   commandContextStore,
   postFollowUp,
+  acornOpsConsoleUrl,
   logger,
   reconnectAttempts,
   reconnectDelayMs,
@@ -127,7 +133,9 @@ async function followRun({
     try {
       const streamStatus = await streamUntilTerminal({
         acornOpsClient,
-        entry
+        entry,
+        postFollowUp,
+        acornOpsConsoleUrl
       });
       if (streamStatus) {
         status = streamStatus;
@@ -194,7 +202,7 @@ async function followRun({
   }
 }
 
-async function streamUntilTerminal({ acornOpsClient, entry }) {
+async function streamUntilTerminal({ acornOpsClient, entry, postFollowUp, acornOpsConsoleUrl }) {
   if (typeof acornOpsClient.streamRun !== "function") {
     return "";
   }
@@ -203,6 +211,11 @@ async function streamUntilTerminal({ acornOpsClient, entry }) {
     signal: entry.controller.signal
   });
   for await (const event of events) {
+    if (event.event === "tool_approval_requested") {
+      await postApprovalRequest({ event, entry, postFollowUp, acornOpsConsoleUrl });
+    } else if (["tool_approval_approved", "tool_approval_rejected", "tool_approval_expired"].includes(event.event)) {
+      await postApprovalStatus({ event, entry, postFollowUp });
+    }
     const status = terminalStatusFromEvent(event);
     if (status) {
       return status;
@@ -210,6 +223,59 @@ async function streamUntilTerminal({ acornOpsClient, entry }) {
   }
 
   return "";
+}
+
+async function postApprovalStatus({ event, entry, postFollowUp }) {
+  const payload = event.data?.payload ?? event.data ?? {};
+  const approvalId = payload.approval_id ?? payload.approvalId ?? "";
+  const key = `${approvalId}:${event.event}`;
+  if (entry.notifiedApprovalStatuses.has(key)) {
+    return;
+  }
+  entry.notifiedApprovalStatuses.add(key);
+  const label = event.event.replace("tool_approval_", "");
+  await postFollowUp({
+    channelId: entry.channelId,
+    rootId: entry.rootId,
+    message: `AcornOps write request ${label}. ${label === "approved" ? "The bot is continuing to watch this run." : "The bot will keep watching for the run's final status."}`
+  });
+}
+
+async function postApprovalRequest({ event, entry, postFollowUp, acornOpsConsoleUrl }) {
+  const payload = event.data?.payload ?? event.data ?? {};
+  const approvalId = payload.approval_id ?? payload.approvalId ?? "";
+  if (!approvalId || entry.notifiedApprovalIds.has(approvalId)) {
+    return;
+  }
+  entry.notifiedApprovalIds.add(approvalId);
+
+  const tool = String(payload.tool ?? "write operation").trim();
+  const summary = String(payload.summary ?? "").trim();
+  const lines = [
+    `AcornOps is waiting for manual approval to run **${tool}**${summary ? `: ${summary}` : "."}`
+  ];
+  const approvalUrl = buildApprovalUrl(acornOpsConsoleUrl, entry.workspaceId, entry.runId, approvalId);
+  if (approvalUrl) {
+    lines.push(`[Review this request in AcornOps](${approvalUrl}). The bot will keep watching and continue when the approval status changes.`);
+  } else {
+    lines.push("Open the AcornOps approval inbox to review it. The bot will keep watching and continue when the approval status changes.");
+  }
+  lines.push("This bot cannot approve or reject write requests.");
+  await postFollowUp({ channelId: entry.channelId, rootId: entry.rootId, message: lines.join("\n") });
+}
+
+function buildApprovalUrl(baseUrl, workspaceId, runId, approvalId) {
+  if (!baseUrl || !workspaceId || !runId || !approvalId) {
+    return "";
+  }
+  try {
+    const url = new URL(`/workspaces/${encodeURIComponent(workspaceId)}/approvals`, `${baseUrl.replace(/\/$/, "")}/`);
+    url.searchParams.set("runId", runId);
+    url.searchParams.set("approvalId", approvalId);
+    return url.toString();
+  } catch {
+    return "";
+  }
 }
 
 async function fallbackPollUntilTerminal({

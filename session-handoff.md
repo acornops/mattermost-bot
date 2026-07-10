@@ -1,5 +1,7 @@
 # Session Handoff
 
+- On 2026-07-10, added permission-gated read-write chats through `!chat new --write [title]`, persisted per-thread tool access mode, browser-console approval links from `ACORNOPS_CONSOLE_BASE_URL`, approval resolution notices, and continued SSE following through the final result. Final `./init.sh` passed with 144 tests. Live approval smoke remains outstanding.
+
 ## Currently Verified
 
 - Current implementation includes rich AcornOps webhook alert formatting: `issue.created.v1`, `issue.reopened.v1`, and `issue.resolved.v1` render as Mattermost issue alerts with title, bold severity, summary, and issue timestamps. Resolved alerts use `resolvedAt` as the primary timestamp because AcornOps source shows `lastSeenAt` is evidence last observed. Alert notices omit ID-only workspace, target, issue, and subject lines; timestamps render in `BOT_ALERT_TIME_ZONE`, defaulting to `Asia/Singapore`/SGT; and repeated adjacent summary sentences are collapsed before posting. Generic events still post as AcornOps info alerts using `occurredAt`, `createdAt`, `timestamp`, then receive time. Final `./init.sh` passed on 2026-07-10 with 133 tests.
@@ -51,7 +53,7 @@
 - `!targets` calls `GET /api/v1/workspaces/{workspaceId}/targets?limit=50` for the current workspace, remembers lightweight target references, and attaches target selection buttons when `BOT_PUBLIC_BASE_URL` is configured; `!target 1` selects a generic Kubernetes or VM target.
 - `!clusters`/`!cluster 1` and `!vms`/`!vm 1` remain compatibility shortcuts for Kubernetes and VM-specific target paths.
 - `!resources` and `!findings` use the currently selected target. `!investigations` uses the current workspace.
-- `!chat new [title]` creates a read-only troubleshooting session for the selected target, posts an acknowledgement, then posts a Mattermost root thread. Replies in that thread route to the matching AcornOps session without requiring `!`.
+- `!chat new [title]` creates a read-only troubleshooting thread. `!chat new --write [title]` checks effective workspace permission and creates a persisted read-write thread. Approval requests link to the AcornOps console, and approval resolution plus the final run result remain in the thread; the bot never decides approvals.
 - `!workflows` lists active read-only workflows for the current workspace. `!workflow run <number|id> [key=value...]` launches one with exact context grants and selected target bindings, creates a dedicated root, and streams final output there. Plain replies continue the same workflow session.
 - Long-running chat answers are followed over AcornOps SSE through `GET /api/v1/runs/{runId}/stream`; final assistant answers are posted back to the same Mattermost channel when AcornOps completes.
 - V1 follows one active streamed run per chat thread. A second question in the same thread is rejected while one answer is active.

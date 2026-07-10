@@ -390,6 +390,7 @@ test("handlePostedEvent starts a run follower for pending chat answers", async (
         sessionId: "session-1",
         runId: "run-1",
         messageId: "message-1",
+        workspaceId: "",
         channelId: "channel-1",
         rootId: "root-chat-1"
       }

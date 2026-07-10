@@ -68,6 +68,10 @@ export async function followRunForAnswer({ acornOpsClient, identity, session, ru
       return { status };
     }
 
+    if (status === "waiting_for_approval") {
+      return { status };
+    }
+
     if (attempt < attempts - 1 && pollIntervalMs > 0) {
       await sleep(pollIntervalMs);
     }

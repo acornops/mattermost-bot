@@ -1456,6 +1456,51 @@ test("handleBotMessage starts chat mode with chat new", async () => {
   });
 });
 
+test("handleBotMessage starts a read-write chat only with effective workspace permission", async () => {
+  const commandContextStore = selectedClusterContext();
+  const response = await handleBotMessageResult({
+    text: "!chat new --write Restart API safely",
+    userId: "mattermost-user-1",
+    userName: "alice",
+    channelType: "D",
+    commandContextStore,
+    acornOpsClient: {
+      async getWorkspace(_identity, workspaceId) {
+        assert.equal(workspaceId, "workspace-1");
+        return { id: workspaceId, permissions: { create_read_write_runs: true } };
+      },
+      async createKubernetesClusterSession(_identity, workspaceId, clusterId, body) {
+        assert.equal(workspaceId, "workspace-1");
+        assert.equal(clusterId, "cluster-1");
+        assert.equal(body.title, "Restart API safely");
+        return { id: "session-write", title: body.title };
+      }
+    }
+  });
+
+  assert.match(response.message, /Access: read-write/);
+  assert.equal(response.effects[0].toolAccessMode, "read_write");
+  assert.equal(response.effects[0].workspaceId, "workspace-1");
+});
+
+test("handleBotMessage denies a read-write chat when effective workspace permission is absent", async () => {
+  const commandContextStore = selectedClusterContext();
+  const response = await handleBotMessage({
+    text: "!chat new --write",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    acornOpsClient: {
+      async getWorkspace() {
+        return { permissions: { create_read_write_runs: false } };
+      }
+    }
+  });
+
+  assert.match(response, /Read-write runs are not enabled/);
+  assert.match(response, /`!chat new`/);
+});
+
 test("handleBotMessage treats free text as a question while chat mode is active", async () => {
   const commandContextStore = selectedClusterContext();
   const threadChat = registerThreadChat(commandContextStore);
@@ -1471,7 +1516,7 @@ test("handleBotMessage treats free text as a question while chat mode is active"
       async postSessionMessage(input, sessionId, body) {
         assert.equal(sessionId, "session-1");
         assert.equal(body.content, "why is the pod unhealthy?");
-        assert.equal(body.toolAccessMode, undefined);
+        assert.equal(body.toolAccessMode, "read_only");
         assert.match(body.clientMessageId, /^mm-local-[A-Za-z0-9._~-]+$/);
         assert.doesNotMatch(body.clientMessageId, /:/);
         return {
@@ -1510,6 +1555,34 @@ test("handleBotMessage treats free text as a question while chat mode is active"
     status: "completed",
     sessionId: "session-1"
   });
+});
+
+test("handleBotMessage posts read-write mode for replies in a write-enabled thread", async () => {
+  const commandContextStore = selectedClusterContext();
+  const threadChat = registerThreadChat(commandContextStore, {
+    workspaceId: "workspace-1",
+    toolAccessMode: "read_write"
+  });
+
+  const response = await handleBotMessageResult({
+    text: "restart the workload after checking it",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    threadChat,
+    acornOpsClient: {
+      async postSessionMessage(_identity, _sessionId, body) {
+        assert.equal(body.toolAccessMode, "read_write");
+        return { message_id: "message-write", run_id: "run-write" };
+      },
+      async getRun() {
+        return { id: "run-write", status: "waiting_for_approval", sessionId: "session-1" };
+      }
+    }
+  });
+
+  assert.match(response.message, /I'll post the answer here when it's ready/);
+  assert.equal(response.effects[0].workspaceId, "workspace-1");
 });
 
 test("handleBotMessage polls chat run before falling back", async () => {
@@ -1666,6 +1739,7 @@ test("handleBotMessageResult returns follow-up metadata for streamed chat runs",
         sessionId: "session-1",
         runId: "run-1",
         messageId: "message-1",
+        workspaceId: "",
         channelId: "channel-1",
         rootId: "root-1"
       }

@@ -46,6 +46,7 @@
 - `B18`: Add workflow listing, launching, and threaded runs.
 - `B19`: Enrich AcornOps webhook alert messages.
 - `B20`: Validate login-triggered context against AcornOps account changes.
+- `B21`: Enable permission-gated read-write chat runs.
 
 ## In Progress
 
@@ -72,7 +73,8 @@
 - Accepted workflow launches create a Mattermost root post exactly like `**Workflow launched: Cluster triage**`. Generic run SSE results and plain-text follow-ups stay in that thread and use the same persisted AcornOps workflow session.
 - Workflow and chat threads each allow one active run and both close with `!chat end`. The bot does not mutate, schedule, approve, cancel, or run read-write/paused/draft/approval-gated workflows.
 - Workflow launch HTTP 400 responses surface AcornOps' safe error code and message. The current local smoke environment returns `AI_PROVIDER_CREDENTIAL_MISSING`; an AI provider API key must be configured in AcornOps AI Settings before a workflow can execute.
-- `!chat new [title]` creates a read-only troubleshooting session for the selected target, posts an acknowledgement, then posts a Mattermost root thread such as `Chat #1 - Investigate Pods`.
+- `!chat new [title]` creates a read-only troubleshooting thread. `!chat new --write [title]` refreshes the selected workspace's effective `create_read_write_runs` permission and creates a persisted read-write thread only when AcornOps permits it.
+- Read-write approval requests are linked to the AcornOps console through `ACORNOPS_CONSOLE_BASE_URL`. The SSE follower reports approval resolution and remains connected for the terminal run result; the bot cannot approve or reject requests.
 - Registered chat-thread replies route to the matching AcornOps session by Mattermost `channel_id + root_id` and do not require `!`. Assistant replies and long-running SSE follow-ups are posted with the chat thread `root_id`.
 - Chat question `clientMessageId` values are stable per Mattermost post id when available, so websocket retries are idempotent while repeated identical questions in separate Mattermost posts create distinct AcornOps messages/runs.
 - If a chat run does not complete inside the brief immediate polling window, the bot follows `GET /api/v1/runs/{runId}/stream` with SSE and posts the final assistant answer back to the same Mattermost thread.
@@ -108,6 +110,13 @@
 ## Session Log
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
+
+### 2026-07-10 - Permission-gated read-write chat runs
+
+- Goal: Enable external-integration users with effective `create_read_write_runs` permission to explicitly start write-capable Mattermost chats while keeping approval decisions in the AcornOps browser console.
+- Completed: Added `!chat new --write [title]` with a fresh workspace permission preflight, persisted read-only/read-write mode and workspace id with each chat thread in memory and Postgres, and sent the persisted mode on all thread messages. Added `ACORNOPS_CONSOLE_BASE_URL`; approval-request SSE events now post the run-specific AcornOps approval link, approved/rejected/expired events post status updates, and the follower stays active for the final result. The bot never calls approval-decision endpoints. Read-only remains the default and workflow restrictions are unchanged.
+- Verification run: Focused `node --test test/bot-message.test.js test/run-follower.test.js` passed with 75 tests. Final `./init.sh` passed with harness verification, lint, build, and 144 tests.
+- Known risks: Live approval smoke still requires an AcornOps deployment whose external integration client, user-approved workspace grant, and linked user's role all permit `create_read_write_runs`, plus a configured AI provider and write tool that reaches an approval gate.
 
 ### 2026-07-10 - Login-triggered context validation
 

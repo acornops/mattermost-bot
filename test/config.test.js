@@ -14,6 +14,7 @@ test("readBotConfig applies local development defaults", () => {
     mattermostToken: "",
     mattermostBotUsername: DEFAULT_MATTERMOST_BOT_USERNAME,
     acornOpsUrl: DEFAULT_ACORNOPS_API_BASE_URL,
+    acornOpsConsoleUrl: "",
     externalIntegrationServiceToken: "",
     botDatabaseUrl: "",
     botHttpHost: "0.0.0.0",
@@ -40,6 +41,10 @@ test("readBotConfig reads Mattermost deployment configuration", () => {
 
   assert.equal(config.mattermostUrl, "https://mattermost.example.com");
   assert.equal(config.mattermostToken, "bot-token");
+});
+
+test("readBotConfig reads the AcornOps console URL for approval links", () => {
+  assert.equal(readBotConfig({ ACORNOPS_CONSOLE_BASE_URL: "https://console.acornops.dev" }).acornOpsConsoleUrl, "https://console.acornops.dev");
 });
 
 test("readBotConfig reads only the external integration service token", () => {

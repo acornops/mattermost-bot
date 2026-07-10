@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-07-10: Opt in to read-write chats per thread and keep approvals browser-owned
+
+- Decision: Keep `!chat new` read-only and add explicit `!chat new --write [title]`. Before creating the thread, refresh the selected workspace and require effective `permissions.create_read_write_runs`. Persist the chosen tool access mode with the thread and use it for every session message.
+- Reason: AcornOps computes this permission from the linked user's workspace role, the registered integration client ceiling, and the user-approved workspace grant. An explicit per-thread choice prevents ordinary troubleshooting conversations from unexpectedly gaining write capability.
+- Consequence: Read-write tool calls may pause for browser approval. Mattermost posts an AcornOps console link from `ACORNOPS_CONSOLE_BASE_URL`, reports approval resolution events, and keeps following the same SSE stream to completion. The bot never makes approval decisions, and AcornOps' message-time `403` remains authoritative if permission changes after preflight.
+
 ## 2026-07-10: Validate bot context on login-triggered account changes
 
 - Decision: The Mattermost bot stores a hashed AcornOps account fingerprint, `loginValidationPending`, and a context generation per Mattermost user. `!login` resolves the current link before creating a link URL. If the user is unlinked or expired, the bot preserves context and marks validation pending; the next authenticated command resolves once and resets context only if the AcornOps user fingerprint changed. `!login reset` remains the explicit immediate context reset path.

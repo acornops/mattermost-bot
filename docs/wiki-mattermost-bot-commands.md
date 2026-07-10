@@ -17,7 +17,9 @@ Send these messages to the bot:
 !chat new Investigate Pods
 ```
 
-After `!chat new`, the bot posts a dedicated Mattermost thread for that chat. Reply inside that thread to ask read-only AcornOps questions for the selected target. Thread replies do not need `!`. If the answer takes longer than the immediate response window, the bot posts the final answer in the same thread when AcornOps finishes.
+After `!chat new`, the bot posts a dedicated read-only Mattermost thread. Authorized users can instead use `!chat new --write [title]`; the bot checks the effective AcornOps workspace permission before creating a clearly labelled read-write thread. Thread replies do not need `!`.
+
+If a write tool needs approval, the bot posts a link to that run and approval in the AcornOps console. Approve or reject there while signed in to AcornOps. The bot cannot make the decision; it continues watching the run and reports the approval status and final result in the same Mattermost thread.
 
 Example:
 
@@ -45,6 +47,7 @@ why is the development cluster unhealthy?
 | `!workflows` | Lists active read-only workflows available in the current workspace. |
 | `!workflow run <number\|id> [key=value...]` | Launches a workflow and creates a dedicated result thread. Quote values containing spaces. |
 | `!chat new [title]` | Starts a new read-only troubleshooting chat and posts a Mattermost thread for it. |
+| `!chat new --write [title]` | Starts a read-write chat only when the linked user, workspace grant, and integration configuration permit it. |
 | `!chat end` | Inside a chat or workflow thread, closes that thread and stops following its active run. |
 | `!webhook create` | Creates or shows your AcornOps delivery URL for the current Mattermost destination. |
 | `!webhook connect` | Connects AcornOps console-created subscriptions for that delivery URL. |

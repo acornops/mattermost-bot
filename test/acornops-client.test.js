@@ -290,7 +290,7 @@ test("allowed external bot read endpoints use service auth and external user hea
   }
 });
 
-test("assistant session endpoints always post read-only runs", async () => {
+test("assistant session endpoints post the requested run access mode", async () => {
   const requests = [];
   const client = new AcornOpsClient({
     baseUrl: "http://acornops/",
@@ -321,7 +321,8 @@ test("assistant session endpoints always post read-only runs", async () => {
   await client.listSessionMessages(externalIdentity(), "session-1");
   await client.postSessionMessage(externalIdentity(), "session-1", {
     content: "Check health",
-    clientMessageId: "message-key"
+    clientMessageId: "message-key",
+    toolAccessMode: "read_write"
   });
   await client.getRun(externalIdentity(), "run-1");
   await client.listRunEvents(externalIdentity(), "run-1");
@@ -339,7 +340,7 @@ test("assistant session endpoints always post read-only runs", async () => {
   ]);
   assert.deepEqual(JSON.parse(requests[6].init.body), {
     content: "Check health",
-    toolAccessMode: "read_only",
+    toolAccessMode: "read_write",
     clientMessageId: "message-key"
   });
 });

@@ -134,6 +134,45 @@ test("run follower reads workflow output from the terminal run", async () => {
   assert.equal(sessionMessageCalls, 0);
 });
 
+test("run follower links approval requests and keeps streaming after approval", async () => {
+  const posts = [];
+  const registry = createRunFollowerRegistry({
+    acornOpsClient: {
+      async streamRun() {
+        return asyncEvents([
+          {
+            event: "tool_approval_requested",
+            data: { payload: { approval_id: "approval-1", tool: "restart_workload", summary: "Restart payments-api" } }
+          },
+          { event: "tool_approval_approved", data: { payload: { approval_id: "approval-1" } } },
+          { event: "run_completed", data: { status: "completed" } }
+        ]);
+      },
+      async getRun() {
+        return { id: "run-1", status: "completed", sessionId: "session-1" };
+      },
+      async listSessionMessages() {
+        return { items: [{ role: "assistant", runId: "run-1", content: "Restart completed." }] };
+      }
+    },
+    commandContextStore: createInMemoryCommandContextStore(),
+    acornOpsConsoleUrl: "https://console.acornops.dev/",
+    postFollowUp: async (post) => posts.push(post),
+    logger: quietLogger(),
+    reconnectDelayMs: 0,
+    fallbackPollIntervalMs: 0,
+    fallbackPollMaxMs: 0
+  });
+
+  registry.start({ ...followOptions(), workspaceId: "workspace-1", rootId: "root-1" });
+  await waitFor(() => posts.length === 3);
+
+  assert.match(posts[0].message, /waiting for manual approval/);
+  assert.match(posts[0].message, /https:\/\/console\.acornops\.dev\/workspaces\/workspace-1\/approvals\?runId=run-1&approvalId=approval-1/);
+  assert.match(posts[1].message, /write request approved/);
+  assert.equal(posts[2].message, "Restart completed.");
+});
+
 test("run follower abort prevents stale final posts", async () => {
   let releaseStream;
   const streamStarted = new Promise((resolve) => {

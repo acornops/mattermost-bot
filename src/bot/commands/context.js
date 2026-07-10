@@ -706,6 +706,7 @@ function chatThreadReference(thread) {
     kind: thread.kind ?? thread.threadKind ?? thread.thread_kind ?? "chat",
     workflowId: thread.workflowId ?? thread.workflow_id ?? "",
     workspaceId: thread.workspaceId ?? thread.workspace_id ?? "",
+    toolAccessMode: thread.toolAccessMode ?? thread.tool_access_mode ?? "read_only",
     workflowInputs: normalizeWorkflowInputs(
       thread.workflowInputs ?? thread.workflow_inputs ?? {}
     ),

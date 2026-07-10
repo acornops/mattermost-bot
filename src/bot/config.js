@@ -9,6 +9,7 @@ export function readBotConfig(env = process.env) {
     mattermostToken: env.MATTERMOST_BOT_TOKEN || "",
     mattermostBotUsername: env.MATTERMOST_BOT_USERNAME || DEFAULT_MATTERMOST_BOT_USERNAME,
     acornOpsUrl: env.ACORNOPS_API_BASE_URL || DEFAULT_ACORNOPS_API_BASE_URL,
+    acornOpsConsoleUrl: env.ACORNOPS_CONSOLE_BASE_URL || "",
     externalIntegrationServiceToken: env.EXTERNAL_INTEGRATION_SERVICE_TOKEN || "",
     botDatabaseUrl: env.BOT_DATABASE_URL || "",
     botHttpHost: env.BOT_HTTP_HOST || "0.0.0.0",

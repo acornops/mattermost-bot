@@ -46,6 +46,7 @@ async function migrate(db) {
       thread_kind TEXT NOT NULL DEFAULT 'chat',
       workflow_id TEXT NOT NULL DEFAULT '',
       workspace_id TEXT NOT NULL DEFAULT '',
+      tool_access_mode TEXT NOT NULL DEFAULT 'read_only',
       workflow_inputs JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -55,6 +56,7 @@ async function migrate(db) {
   await db.query("ALTER TABLE bot_chat_threads ADD COLUMN IF NOT EXISTS thread_kind TEXT NOT NULL DEFAULT 'chat'");
   await db.query("ALTER TABLE bot_chat_threads ADD COLUMN IF NOT EXISTS workflow_id TEXT NOT NULL DEFAULT ''");
   await db.query("ALTER TABLE bot_chat_threads ADD COLUMN IF NOT EXISTS workspace_id TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE bot_chat_threads ADD COLUMN IF NOT EXISTS tool_access_mode TEXT NOT NULL DEFAULT 'read_only'");
   await db.query("ALTER TABLE bot_chat_threads ADD COLUMN IF NOT EXISTS workflow_inputs JSONB NOT NULL DEFAULT '{}'::jsonb");
   await db.query(`
     CREATE TABLE IF NOT EXISTS bot_webhook_routes (
@@ -123,6 +125,7 @@ async function loadState(db) {
       kind: row.thread_kind,
       workflowId: row.workflow_id,
       workspaceId: row.workspace_id,
+      toolAccessMode: row.tool_access_mode,
       workflowInputs: row.workflow_inputs,
       activeRun: row.active_run
     })),
@@ -306,10 +309,11 @@ async function persistThread(db, thread) {
         thread_kind,
         workflow_id,
         workspace_id,
+        tool_access_mode,
         workflow_inputs,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
       ON CONFLICT (channel_id, root_id) DO UPDATE SET
         external_user_id = EXCLUDED.external_user_id,
         session_id = EXCLUDED.session_id,
@@ -321,6 +325,7 @@ async function persistThread(db, thread) {
         thread_kind = EXCLUDED.thread_kind,
         workflow_id = EXCLUDED.workflow_id,
         workspace_id = EXCLUDED.workspace_id,
+        tool_access_mode = EXCLUDED.tool_access_mode,
         workflow_inputs = EXCLUDED.workflow_inputs,
         updated_at = NOW()
     `,
@@ -337,6 +342,7 @@ async function persistThread(db, thread) {
       thread.kind,
       thread.workflowId,
       thread.workspaceId,
+      thread.toolAccessMode,
       thread.workflowInputs
     ]
   );

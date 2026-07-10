@@ -11,6 +11,7 @@ export function createMattermostBotRunner({
   botUsername = DEFAULT_MATTERMOST_BOT_USERNAME,
   commandContextStore = createInMemoryCommandContextStore(),
   runFollowerRegistry = null,
+  acornOpsConsoleUrl = "",
   botPublicBaseUrl = "",
   mattermostActionSecret = ""
 }) {
@@ -20,6 +21,7 @@ export function createMattermostBotRunner({
     postFollowUp: async ({ channelId, message, rootId = "" }) => {
       await client.createPost({ channelId, message, rootId });
     },
+    acornOpsConsoleUrl,
     logger
   });
 
@@ -92,6 +94,7 @@ export async function handlePostedEvent({
   botUsername = DEFAULT_MATTERMOST_BOT_USERNAME,
   commandContextStore = createInMemoryCommandContextStore(),
   runFollowerRegistry = null,
+  acornOpsConsoleUrl = "",
   botPublicBaseUrl = "",
   mattermostActionSecret = "",
   logger = console
@@ -142,6 +145,7 @@ export async function handlePostedEvent({
     postFollowUp: async ({ channelId, message, rootId = "" }) => {
       await client.createPost({ channelId, message, rootId });
     },
+    acornOpsConsoleUrl,
     logger
   });
 
@@ -175,7 +179,7 @@ export async function handlePostedEvent({
       const title = effect.title || effect.session?.title || effect.session?.name || effect.session?.id || "AcornOps chat";
       const threadRoot = await client.createPost({
         channelId: post.channel_id,
-        message: `Chat #${effect.number} - ${title}`
+        message: `Chat #${effect.number} - ${title}${effect.toolAccessMode === "read_write" ? " (read-write)" : ""}`
       });
       commandContextStore.registerChatThread?.(effect.identity.externalUserId, {
         channelId: post.channel_id,
@@ -184,7 +188,9 @@ export async function handlePostedEvent({
         sessionName: effect.session?.title ?? effect.session?.name ?? title,
         title,
         number: effect.number,
-        status: "open"
+        status: "open",
+        workspaceId: effect.workspaceId,
+        toolAccessMode: effect.toolAccessMode
       });
     } else if (effect.type === "createWorkflowThread") {
       const threadRoot = await client.createPost({
