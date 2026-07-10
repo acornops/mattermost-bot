@@ -240,7 +240,7 @@ test("AcornOps route webhook verifies signature, deduplicates, and posts to rout
   assert.equal(posts.length, 1);
   assert.equal(posts[0].channelId, "channel-1");
   assert.equal(posts[0].rootId, "root-1");
-  assert.match(posts[0].message, /AcornOps info alert/);
+  assert.match(posts[0].message, /🔔 \*\*AcornOps info alert\*\*/);
   assert.match(posts[0].message, /run.failed.v1/);
   assert.match(posts[0].message, /Provider unavailable/);
 });
@@ -300,7 +300,7 @@ test("AcornOps route webhook formats issue lifecycle events with issue details",
 
   assert.equal(result.status, 202);
   assert.equal(posts.length, 1);
-  assert.match(posts[0].message, /🚨 \*\*AcornOps issue alert: Resolved\*\*/);
+  assert.match(posts[0].message, /✅ \*\*AcornOps issue alert: Resolved\*\*/);
   assert.match(posts[0].message, /\*\*Payments pod crash looping\*\*/);
   assert.match(posts[0].message, /Severity: \*\*CRITICAL\*\*/);
   assert.match(posts[0].message, /Summary: Latest snapshot reports pod payments-abc in namespace payments as CrashLoopBackOff\. Restart count: 6\./);
@@ -310,6 +310,26 @@ test("AcornOps route webhook formats issue lifecycle events with issue details",
   assert.doesNotMatch(posts[0].message, /Workspace:/);
   assert.doesNotMatch(posts[0].message, /Target:/);
   assert.doesNotMatch(posts[0].message, /Issue:/);
+
+  const createdBody = {
+    ...body,
+    id: "event-issue-2",
+    type: "issue.created.v1",
+    data: {
+      ...body.data,
+      status: "active",
+      resolvedAt: null
+    }
+  };
+  const createdResult = await handleAcornOpsRouteWebhook({
+    routeToken,
+    ...signedWebhookInput(createdBody, signingSecret),
+    commandContextStore,
+    mattermostClient: fakeMattermostClient(posts)
+  });
+
+  assert.equal(createdResult.status, 202);
+  assert.match(posts[1].message, /🚨 \*\*AcornOps issue alert: Created\*\*/);
 });
 
 test("AcornOps route webhook formats generic events with createdAt timestamp fallback and configured timezone", async () => {
@@ -336,7 +356,9 @@ test("AcornOps route webhook formats generic events with createdAt timestamp fal
     workspaceId: "workspace-1",
     subject: { type: "agent", id: "agent-1" },
     data: {
-      title: "Agent disconnected"
+      title: "Agent disconnected",
+      summary: "The target agent stopped sending heartbeats.",
+      status: "disconnected"
     }
   };
 
@@ -349,8 +371,10 @@ test("AcornOps route webhook formats generic events with createdAt timestamp fal
   });
 
   assert.equal(result.status, 202);
-  assert.match(posts[0].message, /AcornOps info alert/);
-  assert.match(posts[0].message, /\*\*Agent disconnected\*\*/);
+  assert.match(posts[0].message, /🔔 \*\*AcornOps info alert\*\*/);
+  assert.match(posts[0].message, /Title: Agent disconnected/);
+  assert.match(posts[0].message, /Summary: The target agent stopped sending heartbeats\./);
+  assert.match(posts[0].message, /Status: disconnected/);
   assert.match(posts[0].message, /Occurred: 2026-07-09 22:00:00 GMT-4/);
   assert.doesNotMatch(posts[0].message, /Workspace:/);
   assert.doesNotMatch(posts[0].message, /Target:/);

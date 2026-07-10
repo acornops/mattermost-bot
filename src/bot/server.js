@@ -297,7 +297,7 @@ function formatIssueWebhookAlert(payload, { type, alertTimeZone }) {
   const summary = dedupeRepeatedSentences(compactText(data.summary, 1000));
   const action = issueEventAction(type);
   const lines = [
-    `🚨 **AcornOps issue alert: ${action}**`,
+    `${issueEventEmoji(type)} **AcornOps issue alert: ${action}**`,
     `**${title}**`,
     `- Severity: **${severity.toUpperCase()}**`,
     `- Status: ${status}`
@@ -325,15 +325,21 @@ function formatIssueWebhookAlert(payload, { type, alertTimeZone }) {
 }
 
 function formatInfoWebhookAlert(payload, { receivedAt, type, alertTimeZone }) {
+  const data = objectValue(payload.data);
+  const title = compactText(payload.title ?? data.title, 160);
+  const summary = dedupeRepeatedSentences(compactText(payload.summary ?? data.summary, 1000));
+  const status = compactText(payload.status ?? data.status, 80);
   const lines = [
-    "### AcornOps info alert",
-    `**${genericWebhookTitle(payload, type)}**`,
-    `- Type: ${type}`,
-    `- Occurred: ${formatTimestamp(genericOccurredAt(payload, receivedAt), alertTimeZone)}`
+    "🔔 **AcornOps info alert**",
+    `- Type: ${type}`
   ];
 
+  addOptionalLine(lines, "Title", title && title !== type ? title : "");
+  addOptionalLine(lines, "Summary", summary);
+  addOptionalLine(lines, "Status", status);
+  lines.push(`- Occurred: ${formatTimestamp(genericOccurredAt(payload, receivedAt), alertTimeZone)}`);
   const message = dedupeRepeatedSentences(compactText(payload.data?.message ?? payload.data?.errorMessage, 500));
-  if (message && message !== lines[1].replace(/^\*\*|\*\*$/g, "")) {
+  if (message && message !== title && message !== summary) {
     lines.push(`- Message: ${message}`);
   }
 
@@ -353,15 +359,8 @@ function issueEventAction(type) {
   return "Updated";
 }
 
-function genericWebhookTitle(payload, type) {
-  const data = objectValue(payload.data);
-  return (
-    compactText(payload.title, 160) ||
-    compactText(data.title, 160) ||
-    compactText(data.message, 160) ||
-    compactText(data.errorMessage, 160) ||
-    type
-  );
+function issueEventEmoji(type) {
+  return type === "issue.resolved.v1" ? "✅" : "🚨";
 }
 
 function genericOccurredAt(payload, receivedAt) {
