@@ -112,6 +112,15 @@
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
 
+### 2026-07-13 - Command documentation and GitHub wiki audit
+
+- Goal: Reconcile the implemented bot command surface, harness documentation, user-facing documentation, and public Mattermost command wiki.
+- Verified: Ran `./init.sh`; harness verification passed and all 148 bot tests passed before documentation changes.
+- Reviewed: Compared the top-level dispatch and thread command behavior in `src/bot/message.js`, command tests, `README.md`, runtime and project-direction notes, and `docs/wiki-mattermost-bot-commands.md`.
+- Updated: Added the implemented `!filters` alias and `!webhook recreate` to comprehensive command coverage, documented permission-gated `!chat new --write` accurately, clarified approval boundaries, and replaced stale unprefixed-command wording.
+- Published: Replaced the GitHub `Mattermost-Bot-Commands` wiki page with the repository reference and verified the rendered page on 2026-07-13.
+- Result: `docs/wiki-mattermost-bot-commands.md` is the repository source of truth for the comprehensive public command reference.
+
 ### 2026-07-13 - Webhook issue triage actions
 
 - Goal: Let Mattermost users launch the same issue-triage experience exposed by the AcornOps cluster overview from created and reopened webhook alerts.

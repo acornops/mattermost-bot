@@ -108,6 +108,7 @@ Commands are plain Mattermost messages, not slash commands. Command words requir
 
 - `!help`: show the short common workflow
 - `!help filters`: show supported filters and finite values
+- `!filters`: compatibility alias for `!help filters`
 - `!login`: check the current AcornOps link and create an account-link request when relogin is needed; direct-message only
 - `!login reset`: clear bot workspace/target/thread context, then create a fresh account-link request
 - `!status`: show linked or unlinked account state plus current context
@@ -121,6 +122,7 @@ Commands are plain Mattermost messages, not slash commands. Command words requir
 - `!findings`: list findings for the selected target
 - `!investigations`: list workspace investigations
 - `!chat new [title]`: create a read-only troubleshooting chat for the selected target and post a dedicated Mattermost root thread
+- `!chat new --write [title]`: create a permission-gated read-write chat for the selected target
 - `!workflows`: list active read-only workflows in the current workspace
 - `!workflow run <number|id> [key=value...]`: launch a workflow and post its streamed result in a dedicated Mattermost thread
 - `!chat end`: inside a chat thread, close only that chat and stop following its active answer

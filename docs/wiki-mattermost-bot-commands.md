@@ -1,6 +1,6 @@
 # Mattermost Bot Commands
 
-`@acorn-ops-bot` lets you inspect AcornOps workspaces and targets from Mattermost, then open a read-only troubleshooting chat for the target you selected.
+`@acorn-ops-bot` lets you inspect AcornOps workspaces and targets, launch read-only workflows, receive AcornOps alerts, and open troubleshooting chats from Mattermost. Chats are read-only by default; authorized users can explicitly request a permission-gated read-write chat.
 
 Use plain messages with `!` before the command word. Do not use slash commands. Arguments stay unprefixed, such as `!chat new Investigate Pods`.
 
@@ -52,6 +52,7 @@ why is the development cluster unhealthy?
 | `!webhook create` | Creates or shows your AcornOps delivery URL for the current Mattermost destination. |
 | `!webhook connect` | Connects AcornOps console-created subscriptions for that delivery URL. |
 | `!webhook status` | Shows your current webhook alert route and live AcornOps subscription state when available. |
+| `!webhook recreate` | Rotates your delivery URL route token. Update the URL in AcornOps afterward. |
 | `!webhook disconnect` | Removes your webhook alert route. |
 
 ## Workflow Threads
@@ -188,6 +189,12 @@ These commands still work, but most users should use chat threads instead:
 | `!messages` | Lists messages in the current session. |
 | `!ask <question>` | Sends one read-only assistant question. Prefer a chat thread. |
 
+## Command Aliases
+
+| Command | What it does |
+| --- | --- |
+| `!filters` | Alias for `!help filters`. |
+
 ## Webhook Alerts
 
 After AcornOps webhook intake is configured for the bot, users can route user-level alerts to Mattermost:
@@ -207,7 +214,8 @@ AcornOps must send webhook deliveries to the route URL with `AcornOps-Event-Id`,
 - The bot never asks you to type your AcornOps password into Mattermost.
 - `!login` should be used in a direct message with the bot.
 - Normal `!login` preserves bot context for same-account relogin. If the completed login uses a different AcornOps account, the bot resets context on the next authenticated command.
-- Assistant chats are read-only.
+- Assistant chats are read-only by default. `!chat new --write` is available only when AcornOps grants the linked user effective read-write-run permission for the selected workspace.
+- Read-write tools may require approval in AcornOps. The bot can link to an approval request and report its result, but cannot approve or reject it.
 - The bot cannot approve changes, cancel runs, rotate agent keys, manage targets, read logs, or call AcornOps admin/internal APIs.
 - Channel responses are visible to the channel. Use a direct message for quieter troubleshooting.
 

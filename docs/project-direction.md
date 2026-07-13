@@ -40,7 +40,7 @@ Historical learning stages already completed:
 - Use AcornOps `POST /api/v1/auth/external-integrations/link` for `login`.
 - Use AcornOps `POST /api/v1/auth/external-integrations/resolve` for `status`.
 - Keep Mattermost identity values sourced from events, not user-supplied chat text.
-- Accept plain commands without a leading slash. Keep `login` direct-message-only; allow authenticated read and read-only assistant commands from direct messages or channel mentions.
+- Accept `!`-prefixed bot commands rather than slash commands. Keep `!login` direct-message-only; allow authenticated read, workflow, assistant, and user webhook-routing commands from direct messages or channel mentions.
 - Use process-local command context for the current workspace, one selected target, active/paused chat mode, and active run follow-up state.
 
 ## Initial Stack
