@@ -5,6 +5,7 @@ import { createInMemoryCommandContextStore } from "../src/bot/commands/context.j
 import {
   createBotHttpServer,
   handleAcornOpsRouteWebhook,
+  handleIssueTriageAction,
   handleMattermostAction,
   hashSecret,
   postMattermostActionResponse,
@@ -362,6 +363,104 @@ test("AcornOps route webhook formats issue lifecycle events with issue details",
   assert.match(posts[1].message, /🚨 \*\*AcornOps issue alert: Created\*\*/);
 });
 
+test("created and reopened issue alerts include a Run Triage action", async () => {
+  const posts = [];
+  const commandContextStore = createInMemoryCommandContextStore();
+  const routeToken = "route-token";
+  const signingSecret = "webhook-secret";
+  commandContextStore.upsertWebhookRoute("user-1", {
+    channelId: "channel-1",
+    routeTokenHash: hashSecret(routeToken),
+    subscriptions: [{ workspaceId: "workspace-1", webhookId: "webhook-1", signingSecret }]
+  });
+  const body = {
+    id: "event-issue-1",
+    type: "issue.reopened.v1",
+    workspaceId: "workspace-1",
+    targetId: "cluster-1",
+    subject: { type: "issue", id: "issue-1" },
+    data: { title: "Pod unhealthy", severity: "critical", status: "active" }
+  };
+
+  await handleAcornOpsRouteWebhook({
+    routeToken,
+    ...signedWebhookInput(body, signingSecret),
+    commandContextStore,
+    mattermostClient: fakeMattermostClient(posts),
+    botPublicBaseUrl: "https://bot.example.com/",
+    mattermostActionSecret: "action-secret"
+  });
+
+  assert.equal(posts[0].attachments[0].actions[0].name, "Run Triage");
+  assert.deepEqual(posts[0].attachments[0].actions[0].integration.context, {
+    action: "run_issue_triage",
+    secret: "action-secret",
+    externalUserId: "user-1",
+    workspaceId: "workspace-1",
+    targetId: "cluster-1",
+    issueId: "issue-1",
+    eventId: "event-issue-1"
+  });
+});
+
+test("Run Triage links to a recent AcornOps cluster chat instead of creating another", async () => {
+  let createCalls = 0;
+  const result = await handleIssueTriageAction({
+    payload: triageActionPayload(),
+    mattermostActionSecret: "action-secret",
+    commandContextStore: createInMemoryCommandContextStore(),
+    mattermostClient: fakeMattermostClient(),
+    acornOpsConsoleUrl: "https://console.example.com/",
+    acornOpsClient: {
+      async listTargetIssues() { return { items: [triageIssue()] }; },
+      async getKubernetesCluster() { return { id: "cluster-1", name: "prod-cluster" }; },
+      async getTargetChatActivity() { return { recentActivity: [{ sessionId: "session-existing" }] }; },
+      async createKubernetesClusterSession() { createCalls += 1; }
+    }
+  });
+
+  assert.equal(createCalls, 0);
+  assert.match(result.message, /recent AcornOps chat already exists/);
+  assert.match(result.message, /\/workspaces\/workspace-1\/kubernetes-clusters\/cluster-1\/chat\?session=session-existing/);
+});
+
+test("Run Triage creates a cluster session, sends the console prompt, and streams in a Mattermost thread", async () => {
+  const posts = [];
+  const starts = [];
+  const commandContextStore = createInMemoryCommandContextStore();
+  const result = await handleIssueTriageAction({
+    payload: triageActionPayload(),
+    mattermostActionSecret: "action-secret",
+    commandContextStore,
+    mattermostClient: fakeMattermostClient(posts),
+    runFollowerRegistry: { start(input) { starts.push(input); return true; } },
+    acornOpsClient: {
+      async listTargetIssues() { return { items: [triageIssue()] }; },
+      async getKubernetesCluster() { return { id: "cluster-1", name: "prod-cluster" }; },
+      async getTargetChatActivity() { return { recentActivity: [] }; },
+      async createKubernetesClusterSession(_identity, workspaceId, clusterId, body) {
+        assert.equal(workspaceId, "workspace-1");
+        assert.equal(clusterId, "cluster-1");
+        assert.equal(body.title, "Triage: Pod unhealthy");
+        return { id: "session-new", title: body.title };
+      },
+      async postSessionMessage(_identity, sessionId, body) {
+        assert.equal(sessionId, "session-new");
+        assert.equal(body.content, 'Triage "Pod unhealthy" on prod-cluster. Severity: critical. Status: active. Scope: payments. Issue summary: Pod is crash looping');
+        assert.equal(body.toolAccessMode, "read_only");
+        return { runId: "run-1", messageId: "message-1" };
+      }
+    }
+  });
+
+  assert.match(result.message, /new Mattermost thread/);
+  assert.equal(posts[0].message, "**Triage started: Pod unhealthy**");
+  const thread = commandContextStore.getChatThread("channel-1", "post-1");
+  assert.equal(thread.sessionId, "session-new");
+  assert.equal(starts[0].runId, "run-1");
+  assert.equal(starts[0].rootId, "post-1");
+});
+
 test("AcornOps route webhook formats generic events with createdAt timestamp fallback and configured timezone", async () => {
   const posts = [];
   const commandContextStore = createInMemoryCommandContextStore();
@@ -488,6 +587,33 @@ function signedWebhookInput(body, secret) {
   return {
     rawBody,
     headers
+  };
+}
+
+function triageActionPayload() {
+  return {
+    user_id: "user-1",
+    channel_id: "channel-1",
+    context: {
+      action: "run_issue_triage",
+      secret: "action-secret",
+      externalUserId: "user-1",
+      workspaceId: "workspace-1",
+      targetId: "cluster-1",
+      issueId: "issue-1",
+      eventId: "event-1"
+    }
+  };
+}
+
+function triageIssue() {
+  return {
+    id: "issue-1",
+    title: "Pod unhealthy",
+    severity: "critical",
+    status: "active",
+    scopeName: "payments",
+    summary: "Pod is crash looping"
   };
 }
 

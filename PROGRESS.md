@@ -47,6 +47,7 @@
 - `B19`: Enrich AcornOps webhook alert messages.
 - `B20`: Validate login-triggered context against AcornOps account changes.
 - `B21`: Enable permission-gated read-write chat runs.
+- `B22`: Launch issue triage from webhook alerts.
 
 ## In Progress
 
@@ -110,6 +111,13 @@
 ## Session Log
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
+
+### 2026-07-13 - Webhook issue triage actions
+
+- Goal: Let Mattermost users launch the same issue-triage experience exposed by the AcornOps cluster overview from created and reopened webhook alerts.
+- Completed: Added a `Run Triage` action to created/reopened issue alerts. The callback verifies the alert recipient, reloads the issue from the target issues endpoint, gets cluster metadata, and checks recent target chat activity. Existing activity returns a deep link to the AcornOps cluster chat session. With no recent activity, the bot creates a Kubernetes cluster session, sends the console-equivalent prompt in read-only mode, creates and persists a Mattermost chat thread, and streams the run through the shared follower.
+- Verification run: Focused `node --test test/acornops-client.test.js test/bot-server.test.js` passed with 31 tests. Final `./init.sh` passed with harness verification, lint, build, and 148 tests.
+- Known risks: Live signed webhook delivery, Mattermost button rendering/callback behavior, recent-activity linking, and streamed assistant output still require running Mattermost and AcornOps services.
 
 ### 2026-07-10 - Permission-gated read-write chat runs
 

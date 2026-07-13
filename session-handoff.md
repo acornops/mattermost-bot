@@ -1,5 +1,6 @@
 # Session Handoff
 
+- On 2026-07-13, added `Run Triage` to created/reopened issue webhook alerts. The action reloads the issue, checks recent AcornOps target chat activity, links to an existing console session when present, or creates a read-only cluster session and streams it in a registered Mattermost thread. Final `./init.sh` passed with 148 tests; live signed-webhook/action smoke remains outstanding.
 - On 2026-07-10, added permission-gated read-write chats through `!chat new --write [title]`, persisted per-thread tool access mode, browser-console approval links from `ACORNOPS_CONSOLE_BASE_URL`, approval resolution notices, and continued SSE following through the final result. Final `./init.sh` passed with 144 tests. Live approval smoke remains outstanding.
 
 ## Currently Verified

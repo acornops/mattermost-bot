@@ -15,8 +15,12 @@ export function createBotHttpServer({
   port = 0,
   mattermostActionSecret = "",
   alertTimeZone = DEFAULT_ALERT_TIME_ZONE,
+  botPublicBaseUrl = "",
+  acornOpsConsoleUrl = "",
   commandContextStore,
   mattermostClient,
+  acornOpsClient = null,
+  runFollowerRegistry = null,
   logger = console
 }) {
   const server = http.createServer(async (req, res) => {
@@ -30,11 +34,17 @@ export function createBotHttpServer({
       if (req.method === "POST" && pathname === "/mattermost/actions") {
         const rawBody = await readBody(req);
         const payload = parseJson(rawBody);
-        const result = handleMattermostAction({
-          payload,
-          mattermostActionSecret,
-          commandContextStore
-        });
+        const result = payload.context?.action === "run_issue_triage"
+          ? await handleIssueTriageAction({
+              payload,
+              mattermostActionSecret,
+              commandContextStore,
+              mattermostClient,
+              acornOpsClient,
+              acornOpsConsoleUrl,
+              runFollowerRegistry
+            })
+          : handleMattermostAction({ payload, mattermostActionSecret, commandContextStore });
         await postMattermostActionResponse({
           payload,
           result,
@@ -56,6 +66,8 @@ export function createBotHttpServer({
           commandContextStore,
           mattermostClient,
           alertTimeZone
+          , botPublicBaseUrl,
+          mattermostActionSecret
         });
         sendJson(res, result.status, result.body);
         return;
@@ -236,7 +248,9 @@ export async function handleAcornOpsRouteWebhook({
   headers,
   commandContextStore,
   mattermostClient,
-  alertTimeZone = DEFAULT_ALERT_TIME_ZONE
+  alertTimeZone = DEFAULT_ALERT_TIME_ZONE,
+  botPublicBaseUrl = "",
+  mattermostActionSecret = ""
 }) {
   const routeTokenHash = hashSecret(routeToken);
   const route = commandContextStore.getWebhookRouteByTokenHash?.(routeTokenHash);
@@ -281,12 +295,144 @@ export async function handleAcornOpsRouteWebhook({
   await mattermostClient.createPost({
     channelId: route.channelId,
     rootId: route.rootId,
-    message: formatWebhookAlert(payload, { receivedAt: new Date().toISOString(), alertTimeZone })
+    message: formatWebhookAlert(payload, { receivedAt: new Date().toISOString(), alertTimeZone }),
+    attachments: issueTriageAttachments(payload, {
+      route,
+      botPublicBaseUrl,
+      mattermostActionSecret
+    })
   });
   return {
     status: 202,
     body: { status: "posted" }
   };
+}
+
+export async function handleIssueTriageAction({
+  payload,
+  mattermostActionSecret,
+  commandContextStore,
+  mattermostClient,
+  acornOpsClient,
+  acornOpsConsoleUrl = "",
+  runFollowerRegistry = null
+}) {
+  const context = payload.context ?? {};
+  const actingUserId = payload.user_id ?? payload.userId ?? "";
+  if (mattermostActionSecret && context.secret !== mattermostActionSecret) {
+    return actionFailure("This action is not authorized.");
+  }
+  if (!actingUserId || actingUserId !== context.externalUserId) {
+    return actionFailure("Only the Mattermost user who received this alert can run triage.");
+  }
+  if (!acornOpsClient) {
+    return actionFailure("AcornOps triage is not configured.");
+  }
+
+  const identity = { externalUserId: actingUserId };
+  const { workspaceId, targetId, issueId } = context;
+  try {
+    const [issuePage, cluster, activity] = await Promise.all([
+      acornOpsClient.listTargetIssues(identity, workspaceId, targetId),
+      acornOpsClient.getKubernetesCluster(identity, workspaceId, targetId),
+      acornOpsClient.getTargetChatActivity(identity, workspaceId, targetId)
+    ]);
+    const issues = issuePage.items ?? issuePage.data ?? [];
+    const issue = issues.find((item) => (item.id ?? item.issueId) === issueId);
+    if (!issue) {
+      return actionFailure("This issue is no longer available for triage.");
+    }
+
+    const existing = existingTargetChat(activity);
+    if (existing?.sessionId) {
+      const link = buildConsoleSessionUrl(acornOpsConsoleUrl, workspaceId, targetId, existing.sessionId);
+      return actionSuccess(link
+        ? `A recent AcornOps chat already exists for this cluster. Continue it here: ${link}`
+        : "A recent AcornOps chat already exists for this cluster. Open the cluster chat in AcornOps to continue it.");
+    }
+
+    const session = await acornOpsClient.createKubernetesClusterSession(identity, workspaceId, targetId, {
+      title: `Triage: ${issue.title || "Issue"}`
+    });
+    const sessionId = session.id ?? session.sessionId ?? "";
+    const prompt = buildIssueTriagePrompt(issue, cluster);
+    const accepted = await acornOpsClient.postSessionMessage(identity, sessionId, {
+      content: prompt,
+      clientMessageId: `mattermost-webhook-${context.eventId}`,
+      toolAccessMode: "read_only"
+    });
+    const runId = accepted.run_id ?? accepted.runId ?? "";
+    const messageId = accepted.message_id ?? accepted.messageId ?? "";
+    const channelId = payload.channel_id ?? payload.channelId ?? "";
+    const root = await mattermostClient.createPost({
+      channelId,
+      message: `**Triage started: ${issue.title || "AcornOps issue"}**`
+    });
+    commandContextStore.registerChatThread?.(actingUserId, {
+      channelId,
+      rootId: root.id,
+      sessionId,
+      sessionName: session.title ?? `Triage: ${issue.title || "Issue"}`,
+      title: session.title ?? `Triage: ${issue.title || "Issue"}`,
+      status: "open",
+      kind: "chat",
+      workspaceId,
+      toolAccessMode: "read_only"
+    });
+    runFollowerRegistry?.start({ identity, sessionId, runId, messageId, workspaceId, channelId, rootId: root.id });
+    return actionSuccess("Triage started in a new Mattermost thread.");
+  } catch (error) {
+    return actionFailure(`Triage could not be started: ${safeActionError(error)}`);
+  }
+}
+
+function existingTargetChat(activity) {
+  const entries = activity?.recentActivity ?? activity?.items ?? [];
+  return entries.find((entry) => entry.sessionId ?? entry.session_id) ?? null;
+}
+
+function buildConsoleSessionUrl(baseUrl, workspaceId, targetId, sessionId) {
+  if (!baseUrl) return "";
+  const base = baseUrl.replace(/\/$/, "");
+  return `${base}/workspaces/${encodeURIComponent(workspaceId)}/kubernetes-clusters/${encodeURIComponent(targetId)}/chat?session=${encodeURIComponent(sessionId)}`;
+}
+
+function buildIssueTriagePrompt(issue, cluster) {
+  const scope = issue.scopeName || issue.namespace || "cluster-wide";
+  return `Triage "${issue.title}" on ${cluster.name}. Severity: ${issue.severity}. Status: ${issue.status}. Scope: ${scope}. Issue summary: ${issue.summary}`;
+}
+
+function safeActionError(error) {
+  const text = error instanceof Error ? error.message : String(error);
+  return text.replace(/\s+/g, " ").slice(0, 300);
+}
+
+function issueTriageAttachments(payload, { route, botPublicBaseUrl, mattermostActionSecret }) {
+  if (!botPublicBaseUrl || !["issue.created.v1", "issue.reopened.v1"].includes(payload.type)) return undefined;
+  const workspaceId = payload.workspaceId ?? payload.data?.workspaceId ?? "";
+  const targetId = payload.targetId ?? payload.data?.targetId ?? "";
+  const issueId = payload.subject?.id ?? payload.issueId ?? payload.data?.issueId ?? payload.data?.id ?? "";
+  if (!route.externalUserId || !workspaceId || !targetId || !issueId) return undefined;
+  return [{
+    text: "Investigate this issue with AcornOps",
+    actions: [{
+      id: "runIssueTriage",
+      name: "Run Triage",
+      type: "button",
+      integration: {
+        url: `${botPublicBaseUrl.replace(/\/$/, "")}/mattermost/actions`,
+        context: {
+          action: "run_issue_triage",
+          secret: mattermostActionSecret,
+          externalUserId: route.externalUserId,
+          workspaceId,
+          targetId,
+          issueId,
+          eventId: payload.id ?? ""
+        }
+      }
+    }]
+  }];
 }
 
 function webhookSigningSecrets(route) {

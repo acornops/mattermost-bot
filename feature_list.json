@@ -633,6 +633,27 @@
       },
       "evidence": "Implemented on 2026-07-10. Added explicit !chat new --write [title] with a fresh GET workspace effective-permission preflight for create_read_write_runs. Persisted toolAccessMode and workspaceId per Mattermost thread in memory and Postgres, passed read_write on every message in enabled threads, and kept read_only as the default. Added ACORNOPS_CONSOLE_BASE_URL and SSE handling for tool_approval_requested, approved, rejected, and expired events; approval requests link to /workspaces/{workspaceId}/approvals?runId={runId}&approvalId={approvalId}, resolution events do not end the follower, and final output remains in the same thread. Focused chat/follower tests passed with 75 tests. Final ./init.sh passed with harness verification, lint, build, and 144 tests.",
       "notes": "Production deployments must configure ACORNOPS_CONSOLE_BASE_URL and opt the external integration client, linked user's workspace grant, and role into create_read_write_runs. Workflows remain read-only."
+    },
+    {
+      "id": "B22",
+      "priority": 30,
+      "area": "bot",
+      "title": "Launch issue triage from webhook alerts",
+      "user_visible_behavior": "Created and reopened issue alerts offer a Run Triage button that links to recent AcornOps cluster chat activity or starts a new read-only triage run in a Mattermost thread.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus live signed webhook/action smoke when services are available",
+        "steps": [
+          "Attach Run Triage only to issue.created.v1 and issue.reopened.v1 alerts.",
+          "Verify the acting Mattermost user and retrieve the current issue from the target issues endpoint.",
+          "Check recent target chat activity and link to the existing AcornOps console session when one exists.",
+          "Otherwise create a Kubernetes cluster session, post the console-equivalent triage prompt in read-only mode, and create a Mattermost chat thread.",
+          "Persist the thread mapping and stream the accepted run into it.",
+          "Add automated tests and run ./init.sh."
+        ]
+      },
+      "evidence": "Implemented on 2026-07-13. Created/reopened issue alerts now include an acting-user-bound Run Triage action. The callback reloads the issue through GET /api/v1/workspaces/{workspaceId}/targets/{targetId}/issues, loads cluster metadata, and checks GET /api/v1/workspaces/{workspaceId}/targets/{targetId}/chat-activity. Recent activity returns an AcornOps deep link; otherwise the bot creates a cluster session, posts the exact console triage prompt with read_only access, registers a Mattermost thread, and starts the shared SSE follower. Focused AcornOps client/server tests passed with 31 tests. Final ./init.sh passed with harness verification, lint, build, and 148 tests.",
+      "notes": "Duplicate avoidance follows AcornOps' recent target chat activity window, not issue-title matching. Production requires BOT_PUBLIC_BASE_URL, MATTERMOST_ACTION_SECRET, and ACORNOPS_CONSOLE_BASE_URL. Live signed webhook/button rendering and end-to-end assistant streaming still need smoke testing."
     }
   ]
 }

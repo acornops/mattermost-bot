@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-07-13: Reuse AcornOps target chat activity before webhook triage
+
+- Decision: Created and reopened issue alerts expose `Run Triage`. On click, the bot reloads the issue and checks AcornOps' recent target chat activity. If activity identifies a session, the bot links to the AcornOps cluster chat instead of creating another run. Otherwise it creates a read-only cluster session, sends the same prompt as the console, and streams it in a registered Mattermost thread.
+- Reason: AcornOps already defines recent target activity as the concurrency/context signal used by the browser console. Reusing it avoids brittle title matching and keeps duplicate-avoidance behavior aligned across clients.
+- Consequence: Duplicate detection is target-wide and bounded by AcornOps' configured recent-activity window. Console deep links use `ACORNOPS_CONSOLE_BASE_URL` plus `/workspaces/{workspaceId}/kubernetes-clusters/{clusterId}/chat?session={sessionId}`. The bot does not create a new session when recent activity exposes a session id.
+
 ## 2026-07-10: Opt in to read-write chats per thread and keep approvals browser-owned
 
 - Decision: Keep `!chat new` read-only and add explicit `!chat new --write [title]`. Before creating the thread, refresh the selected workspace and require effective `permissions.create_read_write_runs`. Persist the chosen tool access mode with the thread and use it for every session message.

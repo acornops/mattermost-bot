@@ -5,6 +5,7 @@ import { loadLocalEnv } from "./env.js";
 import { createMattermostBotRunner } from "./runner.js";
 import { createBotHttpServer } from "./server.js";
 import { createCommandContextStore } from "./state/postgres-store.js";
+import { createRunFollowerRegistry } from "./chat/follower.js";
 
 loadLocalEnv();
 
@@ -25,12 +26,21 @@ const acornOpsClient = new AcornOpsClient({
 const commandContextStore = await createCommandContextStore({
   databaseUrl: config.botDatabaseUrl
 });
+const runFollowerRegistry = createRunFollowerRegistry({
+  acornOpsClient,
+  commandContextStore,
+  postFollowUp: async ({ channelId, message, rootId = "" }) => {
+    await client.createPost({ channelId, message, rootId });
+  },
+  acornOpsConsoleUrl: config.acornOpsConsoleUrl
+});
 const runner = createMattermostBotRunner({
   client,
   acornOpsClient,
   websocketFactory: (url) => new WebSocket(url),
   botUsername: config.mattermostBotUsername,
   commandContextStore,
+  runFollowerRegistry,
   acornOpsConsoleUrl: config.acornOpsConsoleUrl,
   botPublicBaseUrl: config.botPublicBaseUrl,
   mattermostActionSecret: config.mattermostActionSecret
@@ -40,8 +50,12 @@ const httpServer = createBotHttpServer({
   port: config.botHttpPort,
   mattermostActionSecret: config.mattermostActionSecret,
   alertTimeZone: config.alertTimeZone,
+  botPublicBaseUrl: config.botPublicBaseUrl,
+  acornOpsConsoleUrl: config.acornOpsConsoleUrl,
   commandContextStore,
-  mattermostClient: client
+  mattermostClient: client,
+  acornOpsClient,
+  runFollowerRegistry
 });
 
 await runner.start();

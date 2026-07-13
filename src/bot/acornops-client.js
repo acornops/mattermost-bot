@@ -134,6 +134,22 @@ export class AcornOpsClient {
     );
   }
 
+  async listTargetIssues(identity, workspaceId, targetId, { limit = 50 } = {}) {
+    return this.getExternalPage(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/targets/${encodeURIComponent(targetId)}/issues`,
+      { limit }
+    );
+  }
+
+  async getTargetChatActivity(identity, workspaceId, targetId, { windowSeconds } = {}) {
+    return this.getExternalPage(
+      identity,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/targets/${encodeURIComponent(targetId)}/chat-activity`,
+      { windowSeconds }
+    );
+  }
+
   async listKubernetesClusters(
     identity,
     workspaceId,

@@ -290,6 +290,28 @@ test("allowed external bot read endpoints use service auth and external user hea
   }
 });
 
+test("issue triage discovery uses target issues and chat activity endpoints", async () => {
+  const requests = [];
+  const client = new AcornOpsClient({
+    baseUrl: "http://acornops",
+    externalIntegrationToken: "chat-token",
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  });
+
+  await client.listTargetIssues(externalIdentity(), "workspace-1", "target-1");
+  await client.getTargetChatActivity(externalIdentity(), "workspace-1", "target-1");
+
+  assert.equal(requests[0].url, "http://acornops/api/v1/workspaces/workspace-1/targets/target-1/issues?limit=50");
+  assert.equal(requests[1].url, "http://acornops/api/v1/workspaces/workspace-1/targets/target-1/chat-activity");
+  assert.equal(requests[0].init.headers["x-acornops-external-user-id"], "mattermost-user-1");
+});
+
 test("assistant session endpoints post the requested run access mode", async () => {
   const requests = [];
   const client = new AcornOpsClient({
