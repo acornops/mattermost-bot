@@ -55,13 +55,13 @@
 
 ## Known Issues
 
-- `login` direct messages first call AcornOps `POST /api/v1/auth/external-integrations/resolve`. Already-linked users are told they are linked and `!login reset` is the explicit context reset path. Unlinked or expired users receive a fresh AcornOps account-link URL from `POST /api/v1/auth/external-integrations/link`; bot context is preserved while login completion is pending.
+- `!login` direct messages first call AcornOps `POST /api/v1/auth/external-integrations/resolve`. Already-linked users are told they are linked and `!login reset` is the explicit context reset path. Unlinked or expired users receive a fresh AcornOps account-link URL from `POST /api/v1/auth/external-integrations/link`; bot context is preserved while login completion is pending.
 - `!login reset` clears the Mattermost user's workspace, target, session, remembered-list, run, and chat/workflow thread context before returning a fresh account-link URL. Webhook routes are intentionally left untouched.
 - After `!login` returns a link URL, the next authenticated command resolves the AcornOps link once. If the linked AcornOps account fingerprint matches the stored hash, context is preserved; if it differs, the bot resets context before running the command and asks the user to choose workspace/target again.
-- `status` now calls AcornOps `POST /api/v1/auth/external-integrations/resolve` and reports concise linked/unlinked account state plus current workspace/target names. It intentionally omits the Mattermost user id, backend AcornOps user id, and old chat/session selection line.
+- `!status` now calls AcornOps `POST /api/v1/auth/external-integrations/resolve` and reports concise linked/unlinked account state plus current workspace/target names. It intentionally omits the Mattermost user id, backend AcornOps user id, and old chat/session selection line.
 - Context-bearing command replies now start with `Current: Workspace: <name>    |    Target: <name>` followed by a divider before the command-specific response body.
 - The bot accepts commands with a `!` prefix on the command word only, such as `!login`, `!workspaces`, and `!chat new`. Slash-prefixed commands return guidance to use `!`; unprefixed main-conversation messages nudge users toward `!help`.
-- Only `login` is direct-message-only. Authenticated read and read-only assistant commands can run in direct messages or channel mentions.
+- Only `!login` is direct-message-only. Authenticated read and assistant commands can run in direct messages or channel mentions, subject to AcornOps authorization and the explicit read-write chat gate.
 - `!workspaces` calls AcornOps `GET /api/v1/workspaces?limit=50` with `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id.
 - `!workspaces` returns numbered workspace rows and, when `BOT_PUBLIC_BASE_URL` is configured, Mattermost workspace selection buttons. Button callbacks verify the action secret and acting Mattermost user before updating the user's current workspace and posting one visible bot result message in the main conversation. Expected action-level failures return Mattermost-compatible HTTP 200 responses to avoid generic integration errors.
 - `!workspaces 1` calls `GET /api/v1/workspaces/{workspaceId}` and shows detail without changing the current workspace.
@@ -90,6 +90,7 @@
 - The inbound HTTP listener is configured with `BOT_HTTP_HOST`, `BOT_HTTP_PORT`, `BOT_PUBLIC_BASE_URL`, and `MATTERMOST_ACTION_SECRET`. It serves `GET /healthz`, `POST /mattermost/actions`, and `POST /acornops/webhooks/routes/:routeToken`. Mattermost Docker deployments that call `host.docker.internal` for local button callbacks must allow that hostname through Mattermost `AllowedUntrustedInternalConnections`.
 - `!webhook create`, `!webhook connect`, `!webhook status`, `!webhook recreate`, and `!webhook disconnect` manage one user-level AcornOps alert route to a Mattermost destination. `create` returns the route-token delivery URL to paste into AcornOps console. `connect` claims AcornOps console-created subscription metadata and one-time rotated signing secrets over authenticated external integration APIs. `status` refreshes live AcornOps subscription state, shows AcornOps `unconfigured`/`configured`/`connected` status, guides users to run `!webhook connect` when subscriptions exist without claimed secrets, and falls back to cached state only with a stale warning. Route webhook intake verifies timestamp/signature against claimed subscription secrets, requires and deduplicates event ids, resolves the route token, and posts concise alerts.
 - AcornOps webhook posts now render `issue.created.v1`, `issue.reopened.v1`, and `issue.resolved.v1` as rich Mattermost issue alerts with title, bold severity, status, summary, scope/object/reason when present, and relevant issue timestamps. Created and reopened alerts emphasize `lastSeenAt`; resolved alerts emphasize `resolvedAt` and include `lastSeenAt` as supporting context. Alert notices omit ID-only workspace, target, issue, and subject lines. Timestamps render in `BOT_ALERT_TIME_ZONE`, which defaults to `Asia/Singapore`/SGT. Other webhook events still post as generic AcornOps info alerts using `occurredAt`, `createdAt`, `timestamp`, then webhook receive time. The bot defensively collapses repeated adjacent summary sentences before posting.
+- Created and reopened issue alerts include a recipient-gated `Run Triage` action when Mattermost callbacks are configured. It reloads the issue, links to recent AcornOps target chat activity when present, or creates a read-only Kubernetes cluster session and streams it into a dedicated Mattermost thread. Resolved alerts do not include the action.
 - `docs/acornops-mattermost-webhook-contract.md` is the AcornOps-facing contract for console setup, connect/status APIs, secret handling, TLS requirements, and signed delivery headers. It now records the AcornOps endpoint contract for exact delivery URL matching, `permissions.manage_webhooks` filtering, connect-time secret rotation, and status values.
 - Chat timing environment variables are `CHAT_RUN_POLL_ATTEMPTS`, `CHAT_RUN_POLL_INTERVAL_MS`, `RUN_STREAM_RECONNECT_ATTEMPTS`, `RUN_STREAM_RECONNECT_DELAY_MS`, `RUN_STREAM_FALLBACK_POLL_INTERVAL_MS`, and `RUN_STREAM_FALLBACK_POLL_MAX_MS`.
 - Docker image build lives in `Dockerfile`. The image installs dependencies inside Docker from `package*.json`, does not copy host `node_modules`, runs as the non-root `node` user, and exposes the optional bot HTTP port.
@@ -103,7 +104,7 @@
 
 ## Next Steps
 
-1. Run live Mattermost/AcornOps smoke for `!login`, `!status`, `!workspaces`, workspace button selection, `!workspace 1`, `!targets`, target button selection, `!resources`, `!findings`, `!workflows`, `!workflow run 1`, streamed workflow output, a workflow-thread follow-up, thread-local `!chat end`, `!chat new`, a threaded question/reply, concurrent threads, `!webhook create`, AcornOps console setup, `!webhook connect`, `!webhook status`, signed webhook delivery, duplicate suppression, and bot restart persistence when the local stack is available.
+1. Run live Mattermost/AcornOps smoke for `!login`, `!status`, workspace/target selection buttons, read-only and permission-gated read-write chat threads, approval links, workflow launch/follow-up, thread-local `!chat end`, webhook setup/status, signed issue delivery, `Run Triage` callbacks (existing-session link and new streamed thread), duplicate suppression, and bot restart persistence when the local stack is available.
 2. Add repeatable live-smoke notes for `!` commands, workspace buttons, threaded chats, webhook routing, and signed webhook alert delivery if local service command output becomes available.
 3. Coordinate image publishing, environment templates, and orchestration manifests in `acornops-deployment`.
 4. Decide whether active run recovery workers are needed after restart now that active run records can be persisted in Postgres.
@@ -111,6 +112,15 @@
 ## Session Log
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
+
+### 2026-07-15 - Uncommitted-change, documentation, harness, and wiki review
+
+- Goal: Review all local changes, fix every identified issue, repeat review until clean, audit documentation/harness accuracy, and publish the current Mattermost command wiki.
+- Findings fixed: Ignored generated `tmp/` render artifacts; corrected runtime argument/login guidance to consistently show `!`-prefixed commands; updated account-link, API inventory, auth-state, project-direction, startup-readiness, runtime, README, progress, feature, and handoff documentation; removed the obsolete claim that the AcornOps webhook route contract was still missing; and expanded live-smoke guidance for read-write chats, approvals, workflows, signed issue alerts, and `Run Triage`.
+- Harness: Added `feature_list.json` JSON parsing and required the repository command-reference file and title marker.
+- Wiki: Published wiki commit `366f26a` so `Mattermost-Bot-Commands` documents the created/reopened issue `Run Triage` action; the wiki Git remote and repository source are aligned.
+- Verification: Baseline `./init.sh` passed with 148 tests. Focused harness plus command/server verification passed with 86 tests. Final `./init.sh` passed with harness verification, lint, build, and all 148 tests.
+- Remaining external verification: Current live Mattermost/AcornOps smoke still requires running services; active run followers are not automatically recovered after restart.
 
 ### 2026-07-13 - Command documentation and GitHub wiki audit
 

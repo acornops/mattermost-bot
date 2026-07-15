@@ -1,5 +1,6 @@
 # Session Handoff
 
+- On 2026-07-15, completed an iterative local-change/code/documentation/harness audit. Fixed `!` command guidance, current-state and live-smoke drift, added harness JSON/command-reference checks, ignored generated `tmp/` renders, and published wiki commit `366f26a` documenting webhook `Run Triage`. Baseline and final `./init.sh` passed with all 148 tests; focused command/server verification passed with 86 tests.
 - On 2026-07-13, added `Run Triage` to created/reopened issue webhook alerts. The action reloads the issue, checks recent AcornOps target chat activity, links to an existing console session when present, or creates a read-only cluster session and streams it in a registered Mattermost thread. Final `./init.sh` passed with 148 tests; live signed-webhook/action smoke remains outstanding.
 - On 2026-07-10, added permission-gated read-write chats through `!chat new --write [title]`, persisted per-thread tool access mode, browser-console approval links from `ACORNOPS_CONSOLE_BASE_URL`, approval resolution notices, and continued SSE following through the final result. Final `./init.sh` passed with 144 tests. Live approval smoke remains outstanding.
 
@@ -43,10 +44,10 @@
 - Bot implementation runtime is Node.js ECMAScript modules with built-in runtime APIs.
 - The bot responds to Mattermost direct messages and channel mentions through REST plus WebSocket events.
 - The bot accepts commands with `!` on the command word only, for example `!login`, `!workspaces`, and `!chat new`. Slash-prefixed commands return guidance to use `!`; unprefixed main-conversation messages nudge users toward `!help`.
-- `login` in direct messages calls AcornOps `POST /api/v1/auth/external-integrations/link` with `{ "externalUserId": "<post author user_id>", "externalDisplayName": "<sender name when available>" }`.
-- `status` calls AcornOps `POST /api/v1/auth/external-integrations/resolve` with the same external user id.
+- `!login` in direct messages calls AcornOps `POST /api/v1/auth/external-integrations/link` with `{ "externalUserId": "<post author user_id>", "externalDisplayName": "<sender name when available>" }`.
+- `!status` calls AcornOps `POST /api/v1/auth/external-integrations/resolve` with the same external user id.
 - Context-bearing bot replies now start with `Current: Workspace: <name>    |    Target: <name>` followed by a divider. `!status` intentionally omits Mattermost user ids, backend AcornOps user ids, and chat/session selection.
-- Only `login` is direct-message-only. Authenticated read and read-only assistant commands can run in direct messages or channel mentions.
+- Only `!login` is direct-message-only. Authenticated read and assistant commands can run in direct messages or channel mentions, with read-write chats still permission-gated.
 - `!workspaces` calls AcornOps `GET /api/v1/workspaces?limit=50` using `EXTERNAL_INTEGRATION_SERVICE_TOKEN` and `x-acornops-external-user-id` set to the observed Mattermost post author id. It returns numbered rows, remembers lightweight `{ id, name }` references per external user id, and attaches workspace selection buttons when `BOT_PUBLIC_BASE_URL` is configured.
 - `!workspaces 1` calls `GET /api/v1/workspaces/{workspaceId}` and shows detail without changing the current workspace.
 - `!workspace 1` calls `GET /api/v1/workspaces/{workspaceId}`, shows detail, makes that workspace current, and clears current target/session context.
@@ -60,7 +61,7 @@
 - V1 follows one active streamed run per chat thread. A second question in the same thread is rejected while one answer is active.
 - `!chat end` works inside a chat thread and closes only that chat. `!chat pause` and `!chat resume` are retired from the main UX. `!sessions`, `!session new`, `!session 1`, `!messages`, and `!ask <question>` remain compatibility commands outside the short help surface.
 - The current AcornOps link and resolve contract sends only `{ "externalUserId": "<post author user_id>" }`.
-- The user reported the updated live Mattermost `login` and `status` flow works after the user-id-only contract update.
+- The user reported the Mattermost `!login` and `!status` flow worked after the user-id-only contract update; the later external-integration endpoint move still needs current live smoke.
 - The bot automatically loads `.env` before reading runtime variables.
 - Runtime defaults live in `src/bot/config.js`; change the bot mention name with `MATTERMOST_BOT_USERNAME`.
 - Mattermost runtime env vars are `MATTERMOST_URL`, `MATTERMOST_BOT_TOKEN`, and `MATTERMOST_BOT_USERNAME`; the previous prefixed Mattermost names are no longer accepted.
@@ -133,7 +134,7 @@
 
 - Live smoke for target button clicks still needs to run after rebuilding/restarting the bot. The user confirmed workspace buttons work once Mattermost allows `host.docker.internal` through `AllowedUntrustedInternalConnections`.
 - Live smoke still needs to cover same-account relogin after external-link expiry and different-account relink to confirm context preservation/reset behavior against real AcornOps.
-- AcornOps-side webhook setup requires coordinated control-plane work to implement or map `docs/acornops-mattermost-webhook-contract.md`; live `!webhook connect` and live status refresh cannot succeed until that contract exists.
+- The bot implements the supplied AcornOps webhook route connect/status contract, but live `!webhook connect`, status refresh, signed delivery, and `Run Triage` still require running Mattermost and AcornOps services with matching console setup.
 - Active SSE network followers are still process-local while running; persisted active-run records do not yet have a restart recovery worker.
 - The exact Mattermost post ids and AcornOps response snippets from the passing live account-link smoke are not recorded in this repository.
 - Live Mattermost/AcornOps smoke for the June 23 external-integrations endpoint move and the June 26/29/30 context-plus-chat command surface still needs to rerun. For `chat new` followed by a quick question, expect a direct assistant answer when the run completes within the polling window. For a longer run, expect an acknowledgement followed by a later Mattermost post with the final assistant answer.
@@ -145,7 +146,7 @@
 
 ## Next Best Action
 
-Live-smoke `!login`, `!status`, workspace/target selection, `!resources`, `!findings`, `!workflows`, `!workflow run 1`, workflow SSE output and a same-session thread follow-up, `!chat new`, a threaded question/reply, concurrent chat/workflow threads, thread-local `!chat end`, webhook setup/delivery/deduplication, and bot restart persistence against Compose Postgres.
+Live-smoke `!login`, `!status`, workspace/target buttons, read-only and permission-gated read-write chats, approval links, workflows and same-session follow-ups, thread-local `!chat end`, webhook setup/status, signed issue delivery, both `Run Triage` paths, deduplication, and bot restart persistence against Compose Postgres.
 
 ## Commands
 

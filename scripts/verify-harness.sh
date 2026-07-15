@@ -30,7 +30,11 @@ require_file "docs/startup-readiness.md"
 require_file "docs/harness-notes.md"
 require_file "docs/project-direction.md"
 require_file "docs/local-environment.md"
+require_file "docs/wiki-mattermost-bot-commands.md"
 require_file "README.md"
+
+node -e 'JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"))' "${ROOT_DIR}/feature_list.json" \
+  || fail "feature_list.json is not valid JSON." "Fix its JSON syntax before continuing."
 
 [[ -x "${ROOT_DIR}/init.sh" ]] || fail "init.sh is not executable." "Run: chmod +x init.sh"
 [[ -x "${ROOT_DIR}/scripts/verify-harness.sh" ]] || fail "scripts/verify-harness.sh is not executable." "Run: chmod +x scripts/verify-harness.sh"
@@ -45,6 +49,7 @@ require_contains "feature_list.json" "\"features\"" "Add a features array to fea
 require_contains "feature_list.json" "\"features\"" "Keep feature_list.json as the source of truth for completed and upcoming work."
 require_contains "session-handoff.md" "Next Best Action" "Keep session-handoff.md ready for larger sessions or interrupted work."
 require_contains "README.md" "Mattermost ChatOps bot" "Document the selected product direction in README.md."
+require_contains "docs/wiki-mattermost-bot-commands.md" "Mattermost Bot Commands" "Keep the comprehensive public command reference in the repository."
 require_contains "docs/project-direction.md" "K3s" "Document the Kubernetes learning path."
 require_contains "docs/project-direction.md" "Mattermost" "Document the Mattermost learning path."
 

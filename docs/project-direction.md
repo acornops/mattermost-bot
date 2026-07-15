@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a Mattermost ChatOps bot that authenticates Mattermost users to AcornOps, a backend system for managing Kubernetes clusters.
+Build a Mattermost ChatOps bot that authenticates Mattermost users to AcornOps and supports governed operations across AcornOps-managed Kubernetes and VM targets.
 
 The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/control-plane`. The repository should keep the Mattermost bot-account prototype restartable while wiring backend-backed commands in small stages.
 
@@ -37,11 +37,11 @@ Historical learning stages already completed:
 
 - Use the selected Node.js runtime to run a Mattermost bot account that receives messages and responds.
 - The previous local AcornOps `dev-login` bridge was only a development step.
-- Use AcornOps `POST /api/v1/auth/external-integrations/link` for `login`.
-- Use AcornOps `POST /api/v1/auth/external-integrations/resolve` for `status`.
+- Use AcornOps `POST /api/v1/auth/external-integrations/link` for `!login`.
+- Use AcornOps `POST /api/v1/auth/external-integrations/resolve` for `!status`.
 - Keep Mattermost identity values sourced from events, not user-supplied chat text.
 - Accept `!`-prefixed bot commands rather than slash commands. Keep `!login` direct-message-only; allow authenticated read, workflow, assistant, and user webhook-routing commands from direct messages or channel mentions.
-- Use process-local command context for the current workspace, one selected target, active/paused chat mode, and active run follow-up state.
+- Persist lightweight command context, thread mappings, webhook routes, and active-run records in Postgres when `BOT_DATABASE_URL` is configured; keep the in-memory store only as a development/test fallback.
 
 ## Initial Stack
 
@@ -54,8 +54,8 @@ Historical learning stages already completed:
 
 ## Open Decisions
 
-- How much cluster-management behavior should be mocked before authenticated AcornOps cluster APIs are wired.
-- Whether process-local command context should move to shared TTL storage before any multi-replica bot deployment.
+- Whether active-run recovery workers are needed to resume SSE followers after a bot restart.
+- What deployment coordination is required for safe multi-replica processing of Mattermost events and run followers.
 
 ## Official References
 

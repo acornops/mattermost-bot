@@ -161,7 +161,7 @@ Internal execution endpoints exist under `/internal/v1` when internal transport 
 
 The older proposed Mattermost chat-login transaction flow has been superseded. The bot no longer creates AcornOps OIDC URLs, stores transaction-style pending login state, polls transaction ids, or receives AcornOps session tokens. The Mattermost bot may store a lightweight login-validation-pending flag and hashed AcornOps account fingerprint to protect command context across relogin.
 
-The CSIT bot exposes `login` in Mattermost. That command calls AcornOps to create a short-lived external integration browser link:
+The Mattermost bot exposes `!login` in Mattermost. That command calls AcornOps to create a short-lived external integration browser link:
 
 - `POST /api/v1/auth/external-integrations/link`
   - Auth: `Authorization: Bearer {EXTERNAL_INTEGRATION_SERVICE_TOKEN}`.
@@ -176,7 +176,7 @@ The browser opens the returned management-console URL:
   - Auth: browser session or OIDC flow as needed.
   - Behavior: the console preserves the token through sign-in, previews safe consent metadata with `POST /api/v1/auth/external-integrations/link/preview`, and completes linking only after the signed-in user approves through `POST /api/v1/auth/external-integrations/link/complete`.
 
-The CSIT bot exposes `status` in Mattermost. That command calls AcornOps to resolve the durable link:
+The Mattermost bot exposes `!status` in Mattermost. That command calls AcornOps to resolve the durable link:
 
 - `POST /api/v1/auth/external-integrations/resolve`
   - Auth: `Authorization: Bearer {EXTERNAL_INTEGRATION_SERVICE_TOKEN}`.
@@ -184,7 +184,7 @@ The CSIT bot exposes `status` in Mattermost. That command calls AcornOps to reso
   - Request: `{ "externalUserId": "external-user-id-from-event" }`.
   - Response: `{ "status": "linked", ... }` or `{ "status": "unlinked" }`.
   - Linked response includes AcornOps user metadata and link timestamps.
-  - Bot behavior: report linked AcornOps identity for `linked`; tell the user to run `login` in a direct message for `unlinked`.
+  - Bot behavior: report linked AcornOps identity for `linked`; tell the user to run `!login` in a direct message for `unlinked`.
 
 The resolve request body intentionally includes only `externalUserId`. Link creation may also include optional `externalDisplayName` for consent metadata. The Mattermost adapter must set external identity values from the Mattermost event or WebSocket post author, never from user-supplied chat text.
 

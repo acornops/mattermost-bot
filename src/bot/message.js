@@ -208,7 +208,7 @@ export async function handleBotMessageResult({
 
   if (action === "login") {
     if (channelType !== "D") {
-      return `For account login, send me a direct message with \`login\`.`;
+      return "For account login, send me a direct message with `!login`.";
     }
 
     return handleLogin({
@@ -1026,7 +1026,7 @@ async function handleTarget({
   commandContextStore,
 }) {
   if (commandArgs.length !== 1) {
-    return "`target` requires exactly one target number or id.";
+    return "`!target` requires exactly one target number or id.";
   }
 
   const auth = await requireExternalDataCommand({
@@ -1243,7 +1243,7 @@ async function handleWorkspace({
   commandContextStore,
 }) {
   if (commandArgs.length > 1) {
-    return "`workspace` accepts at most one workspace number or id.";
+    return "`!workspace` accepts at most one workspace number or id.";
   }
 
   const auth = await requireExternalDataCommand({
@@ -1332,7 +1332,7 @@ async function handleClusters({
   commandContextStore,
 }) {
   if (commandArgs.length > 1) {
-    return "`clusters` accepts at most one cluster number or id.";
+    return "`!clusters` accepts at most one cluster number or id.";
   }
 
   const auth = await requireExternalDataCommand({
@@ -1388,7 +1388,7 @@ async function handleCluster({
   commandContextStore,
 }) {
   if (commandArgs.length !== 1) {
-    return "`cluster` requires exactly one cluster number or id.";
+    return "`!cluster` requires exactly one cluster number or id.";
   }
 
   const auth = await requireExternalDataCommand({
@@ -1637,7 +1637,7 @@ async function handleVirtualMachines({
   commandContextStore,
 }) {
   if (commandArgs.length > 1) {
-    return "`vms` accepts at most one VM number or id.";
+    return "`!vms` accepts at most one VM number or id.";
   }
 
   const auth = await requireExternalDataCommand({
@@ -1691,7 +1691,7 @@ async function handleVirtualMachine({
   commandContextStore,
 }) {
   if (commandArgs.length !== 1) {
-    return "`vm` requires exactly one VM number or id.";
+    return "`!vm` requires exactly one VM number or id.";
   }
 
   const auth = await requireExternalDataCommand({
@@ -1763,7 +1763,7 @@ async function handleSessions({
   commandContextStore,
 }) {
   if (commandArgs.length > 0) {
-    return "`sessions` does not accept arguments yet.";
+    return "`!sessions` does not accept arguments yet.";
   }
 
   const auth = await requireExternalDataCommand({
@@ -1837,7 +1837,7 @@ async function handleSession({
   }
 
   if (commandArgs.length !== 1) {
-    return "`session` requires `new` or one session number or id.";
+    return "`!session` requires `new` or one session number or id.";
   }
 
   const context = commandContextStore.get(auth.identity.externalUserId);
@@ -1899,7 +1899,7 @@ async function handleMessages({
   commandContextStore,
 }) {
   if (commandArgs.length > 1) {
-    return "`messages` accepts at most one session number or id.";
+    return "`!messages` accepts at most one session number or id.";
   }
 
   const auth = await requireExternalDataCommand({

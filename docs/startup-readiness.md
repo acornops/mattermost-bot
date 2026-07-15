@@ -8,8 +8,8 @@
 - Local learning stack selected: yes
 - Application code present: yes
 - Application tests present: yes
-- Mattermost local readiness: verified on 2026-05-28 with `./scripts/verify-mattermost.sh`
-- AcornOps account-link smoke: user reported `login` and `status` working on 2026-06-10 after the user-id-only contract update; the 2026-06-18 externalUserId contract rename is covered by automated tests and still needs live smoke
+- Mattermost local setup: verified on 2026-05-28; the latest readiness probe on 2026-06-30 failed because `localhost:8065` was not listening
+- AcornOps account-link smoke: `!login` and `!status` worked on 2026-06-10 for the user-id-only contract; the later `externalUserId` rename and `/auth/external-integrations/` endpoint move are covered by automated tests but still need current live smoke
 - K3s local readiness: historical learning stage only; the active production bot harness no longer includes a K3s readiness script
 
 ## Start Commands
@@ -35,7 +35,7 @@
 - [x] Application lint/static check command is documented and verified through `./init.sh`.
 - [x] Application build/start command is documented and verified through `./init.sh`.
 - [x] Current AcornOps account-link contract is documented in `docs/acornops-chat-login-contract.md`.
-- [x] Current AcornOps Mattermost `login` and `status` flow has live-smoke evidence.
+- [ ] Current AcornOps Mattermost `!login` and `!status` flow has live-smoke evidence for the `/auth/external-integrations/` endpoints.
 
 ## Fresh Session Test
 

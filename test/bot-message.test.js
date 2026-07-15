@@ -321,6 +321,7 @@ test("handleBotMessage keeps login direct-message only", async () => {
   });
 
   assert.match(response, /direct message/);
+  assert.match(response, /`!login`/);
 });
 
 test("handleBotMessage status reports linked AcornOps identity", async () => {

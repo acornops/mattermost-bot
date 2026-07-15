@@ -209,6 +209,8 @@ After AcornOps webhook intake is configured for the bot, users can route user-le
 
 AcornOps must send webhook deliveries to the route URL with `AcornOps-Event-Id`, `AcornOps-Timestamp`, and `AcornOps-Signature: v1=<hmac>`, where the HMAC is SHA-256 over `timestamp + "." + rawBody` using a signing secret returned to the bot through AcornOps' authenticated connect API.
 
+Created and reopened issue alerts include a **Run Triage** button when interactive actions are configured. Only the Mattermost user who owns the alert route can use it. The bot reloads the issue before acting, links to recent AcornOps cluster chat activity when available, or creates a new read-only cluster session and streams the result into a dedicated Mattermost thread. Resolved issue alerts do not offer the action.
+
 ## Safety Notes
 
 - The bot never asks you to type your AcornOps password into Mattermost.

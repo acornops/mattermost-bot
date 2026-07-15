@@ -45,7 +45,7 @@ not call AcornOps.
 
 ## Login
 
-When the user sends `login` in a direct message, the bot calls:
+When the user sends `!login` in a direct message, the bot calls:
 
 ```http
 POST {ACORNOPS_API_BASE_URL}/api/v1/auth/external-integrations/link
@@ -82,7 +82,7 @@ Bot behavior:
 
 ## Status
 
-When the user sends `status`, the bot calls:
+When the user sends `!status`, the bot calls:
 
 ```http
 POST {ACORNOPS_API_BASE_URL}/api/v1/auth/external-integrations/resolve
@@ -131,7 +131,7 @@ Unlinked response:
 Bot behavior:
 
 - For `linked`, report that the external chat user is linked to AcornOps.
-- For `unlinked`, tell the user to run `login` in a direct message.
+- For `unlinked`, tell the user to run `!login` in a direct message.
 
 ## Removed Placeholder Flow
 
