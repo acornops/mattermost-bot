@@ -638,7 +638,7 @@
       "id": "B22",
       "priority": 30,
       "area": "bot",
-      "title": "Launch issue triage from webhook alerts",
+      "title": "Launch issue triage from Mattermost issue alerts",
       "user_visible_behavior": "Created and reopened issue alerts offer a Run Triage button that links to recent AcornOps cluster chat activity or starts a new read-only triage run in a Mattermost thread.",
       "status": "passing",
       "verification": {

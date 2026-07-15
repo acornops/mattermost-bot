@@ -134,7 +134,7 @@ Commands are plain Mattermost messages, not slash commands. Command words requir
 
 After `!chat new`, reply in the generated Mattermost thread to send read-only assistant questions for that specific AcornOps session. Thread replies do not need `!`; assistant replies and long-running SSE follow-ups stay in that thread. The main bot direct message or channel mention remains available for normal `!` commands and additional `!chat new` threads. Advanced filters, shortcuts such as `!clusters` and `!vms`, and compatibility session commands are documented in [`docs/wiki-mattermost-bot-commands.md`](docs/wiki-mattermost-bot-commands.md).
 
-Created and reopened issue webhook alerts can include a **Run Triage** action. It is restricted to the Mattermost user who owns the alert route and either links to recent AcornOps cluster chat activity or starts a new read-only triage session in a dedicated Mattermost thread.
+Created and reopened issue alerts delivered to Mattermost can include a **Run Triage** action. It is restricted to the Mattermost user who owns the alert route and either links to recent AcornOps cluster chat activity or starts a new read-only triage session in a dedicated Mattermost thread.
 
 Only `!login` is direct-message-only. Authenticated read, threaded assistant, and user webhook routing commands can run in direct messages or channel mentions.
 
