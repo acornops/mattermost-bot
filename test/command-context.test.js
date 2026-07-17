@@ -238,6 +238,22 @@ test("command context stores workflow thread launch context", () => {
   assert.equal(thread.kind, "workflow");
   assert.equal(thread.workflowId, "cluster-triage");
   assert.deepEqual(thread.workflowInputs, { clusterId: "cluster-1" });
+  store.rememberActiveRunForChat("channel-1", "root-workflow-1", {
+    id: "run-2",
+    sessionId: "workflow-session-1",
+    status: "streaming",
+    kind: "workflow",
+    executionId: "execution-1",
+    lastEventId: "42"
+  });
+  assert.deepEqual(store.getChatThread("channel-1", "root-workflow-1").activeRun, {
+    id: "run-2",
+    status: "streaming",
+    sessionId: "workflow-session-1",
+    kind: "workflow",
+    executionId: "execution-1",
+    lastEventId: "42"
+  });
 });
 
 test("command context resets account-scoped selections and thread mappings", () => {

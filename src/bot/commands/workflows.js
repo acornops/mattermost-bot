@@ -98,24 +98,34 @@ export function prepareWorkflowLaunch({ workflow, providedInputs, currentTarget 
       .filter(Boolean)
   )];
   const name = workflow.name ?? workflow.id ?? "workflow";
+  const starterContent = String(workflow.starterPrompt ?? "").trim()
+    || `Run the ${name} workflow.`;
 
   return {
     inputs,
     approvedContextGrants,
-    content: String(workflow.starterPrompt ?? "").trim() || `Run the ${name} workflow.`
+    content: bindings.length > 0
+      ? bindWorkflowTargetReference(starterContent, currentTarget)
+      : starterContent
   };
+}
+
+export function bindWorkflowTargetReference(content, target) {
+  if (!target?.name) {
+    return content;
+  }
+
+  const reference = `@cluster[${escapePromptReferenceLabel(target.name)}]`;
+  const existingReference = /@cluster\[(?:\\.|[^\]])*\]/i;
+  if (existingReference.test(content)) {
+    return content.replace(existingReference, reference);
+  }
+  return `${content.trim()} ${reference}`.trim();
 }
 
 function workflowSafetyError(workflow) {
   if (workflow.status && workflow.status !== "active") {
     return "Only active workflows can be launched from Mattermost.";
-  }
-  if (workflow.policy?.mode !== "read_only") {
-    return "Only read-only workflows can be launched from Mattermost.";
-  }
-  if ((workflow.policy?.approvalRequirements ?? []).length > 0
-    || (workflow.steps ?? []).some((step) => step?.approvalRequired)) {
-    return "Approval-gated workflows cannot be launched from Mattermost.";
   }
   return "";
 }
@@ -144,4 +154,8 @@ function normalizeTargetType(value) {
     return "kubernetes";
   }
   return value ?? "";
+}
+
+function escapePromptReferenceLabel(value) {
+  return String(value).replaceAll("\\", "\\\\").replaceAll("]", "\\]");
 }

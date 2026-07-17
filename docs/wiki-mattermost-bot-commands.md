@@ -1,6 +1,6 @@
 # Mattermost Bot Commands
 
-`@acorn-ops-bot` lets you inspect AcornOps workspaces and targets, launch read-only workflows, receive AcornOps alerts, and open troubleshooting chats from Mattermost. Chats are read-only by default; authorized users can explicitly request a permission-gated read-write chat.
+`@acorn-ops-bot` lets you inspect AcornOps workspaces, targets, and issues; launch eligible workflows; receive alerts; and open troubleshooting chats from Mattermost. Chats are read-only by default; authorized users can explicitly request a permission-gated read-write chat.
 
 Use plain messages with `!` before the command word. Do not use slash commands. Arguments stay unprefixed, such as `!chat new Investigate Pods`.
 
@@ -19,7 +19,7 @@ Send these messages to the bot:
 
 After `!chat new`, the bot posts a dedicated read-only Mattermost thread. Authorized users can instead use `!chat new --write [title]`; the bot checks the effective AcornOps workspace permission before creating a clearly labelled read-write thread. Thread replies do not need `!`.
 
-If a write tool needs approval, the bot posts a link to that run and approval in the AcornOps console. Approve or reject there while signed in to AcornOps. The bot cannot make the decision; it continues watching the run and reports the approval status and final result in the same Mattermost thread.
+If a write tool needs approval, the bot shows **Approve** and **Reject** to the Mattermost user who originated the run. Both choices open a confirmation dialog before the bot sends the decision to AcornOps. The bot continues watching and reports the decision and final result in the same thread. If interactive callbacks are not configured, it shows an AcornOps-console link instead.
 
 Example:
 
@@ -42,9 +42,8 @@ why is the development cluster unhealthy?
 | `!targets` | Lists Kubernetes and VM targets in the current workspace and may include selection buttons. |
 | `!target 1` | Selects a target from the latest `!targets` result. |
 | `!resources` | Lists resources for the selected target. |
-| `!findings` | Lists findings for the selected target. |
-| `!investigations` | Lists investigations in the current workspace. |
-| `!workflows` | Lists active read-only workflows available in the current workspace. |
+| `!issues [filters]` | Lists issues across the current workspace. |
+| `!workflows` | Lists eligible active workflows with read-only/read-write and approval labels. |
 | `!workflow run <number\|id> [key=value...]` | Launches a workflow and creates a dedicated result thread. Quote values containing spaces. |
 | `!chat new [title]` | Starts a new read-only troubleshooting chat and posts a Mattermost thread for it. |
 | `!chat new --write [title]` | Starts a read-write chat only when the linked user, workspace grant, and integration configuration permit it. |
@@ -72,7 +71,11 @@ Declared workflow inputs use `key=value`. Quote values containing spaces:
 
 The bot supplies target bindings from the currently selected target; typed input cannot override them. After AcornOps accepts the launch, the bot posts `**Workflow launched: <name>**` as a new Mattermost root post. Streamed results and plain-text follow-ups stay in that thread and use the same workflow session.
 
-Each workflow thread allows one active run at a time. Use `!chat end` in the thread to close it. Only active, read-only, non-approval-gated workflows returned by AcornOps are available; the bot cannot mutate, schedule, approve, cancel, or launch read-write workflows.
+Each workflow thread allows one active execution at a time. Read-only, read-write, and approval-gated workflows returned by AcornOps use the same launch syntax; AcornOps remains authoritative for eligibility. A follow-up starts a fresh execution in the same workflow session.
+
+Every workflow launch or follow-up includes a hidden `clientRequestId` derived from the originating Mattermost post id. Retrying that exact post reuses the id so AcornOps can return the same accepted request instead of creating a duplicate execution. A new Mattermost reply gets a new id and execution.
+
+Approval buttons are bound to the exact Mattermost user, bot action secret, run, approval, workspace, and thread. The confirmation dialog carries signed immutable state, and AcornOps accepts decisions only from the same external integration link and client that created the execution. The bot never decides from an SSE event or webhook, never displays raw tool arguments, and may still offer rejection when write permission has been revoked and AcornOps permits it.
 
 ## Chat Threads
 
@@ -135,33 +138,21 @@ Example:
 !resources kind=Pod namespace=development health=attention
 ```
 
-### Findings
+### Issues
 
 | Filter | Values | Example |
 | --- | --- | --- |
-| `q` | any search text | `!findings q=probe` |
-| `severity` | `critical`, `warning`, `info` | `!findings severity=critical` |
-| `namespace` | Kubernetes namespace | `!findings namespace=payments` |
+| `q` | any search text | `!issues q=probe` |
+| `status` | `active`, `recovering`, `resolved`, `all` | `!issues status=active` |
+| `severity` | `critical`, `warning`, `info` | `!issues severity=critical` |
+| `targetId` | AcornOps target id | `!issues targetId=target-id` |
+| `targetType` | `kubernetes`, `virtual_machine` | `!issues targetType=kubernetes` |
+| `namespace` | Kubernetes namespace | `!issues namespace=payments` |
 
 Example:
 
 ```text
-!findings severity=critical namespace=payments
-```
-
-### Investigations
-
-| Filter | Values | Example |
-| --- | --- | --- |
-| `q` | any search text | `!investigations q=pod` |
-| `severity` | `critical`, `warning`, `info` | `!investigations severity=warning` |
-| `clusterId` | AcornOps cluster id | `!investigations clusterId=cluster-id` |
-| `namespace` | Kubernetes namespace | `!investigations namespace=default` |
-
-Example:
-
-```text
-!investigations severity=warning clusterId=cluster-id namespace=default
+!issues status=active severity=critical targetType=kubernetes namespace=payments
 ```
 
 ## Shortcuts
@@ -219,8 +210,8 @@ Created and reopened Mattermost issue alerts include a **Run Triage** button whe
 - `!login` should be used in a direct message with the bot.
 - Normal `!login` preserves bot context for same-account relogin. If the completed login uses a different AcornOps account, the bot resets context on the next authenticated command.
 - Assistant chats are read-only by default. `!chat new --write` is available only when AcornOps grants the linked user effective read-write-run permission for the selected workspace.
-- Read-write tools may require approval in AcornOps. The bot can link to an approval request and report its result, but cannot approve or reject it.
-- The bot cannot approve changes, cancel runs, rotate agent keys, manage targets, read logs, or call AcornOps admin/internal APIs.
+- Read-write tools may require approval. The exact Mattermost user who started the run must confirm **Approve** or **Reject** before the bot sends that decision; AcornOps still enforces exact-origin authorization.
+- The bot cannot decide automatically, cancel runs, rotate agent keys, manage targets, read logs, or call AcornOps admin/internal APIs.
 - Channel responses are visible to the channel. Use a direct message for quieter troubleshooting.
 
 ## Troubleshooting

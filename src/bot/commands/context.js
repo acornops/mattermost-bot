@@ -686,11 +686,18 @@ function sessionReference(session) {
 }
 
 function runReference(run) {
-  return {
+  const reference = {
     id: run.id ?? run.runId ?? run.run_id ?? "",
     status: run.status ?? "",
     sessionId: run.sessionId ?? run.session_id ?? ""
   };
+  const executionId = run.executionId ?? run.execution_id ?? "";
+  if (run.kind === "workflow" || executionId) {
+    reference.kind = "workflow";
+    reference.executionId = executionId;
+    reference.lastEventId = run.lastEventId ?? run.last_event_id ?? "";
+  }
+  return reference;
 }
 
 function chatThreadReference(thread) {

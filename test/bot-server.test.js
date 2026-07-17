@@ -4,6 +4,8 @@ import test from "node:test";
 import { createInMemoryCommandContextStore } from "../src/bot/commands/context.js";
 import {
   createBotHttpServer,
+  handleApprovalDecisionRequest,
+  handleApprovalDecisionSubmission,
   handleAcornOpsRouteWebhook,
   handleIssueTriageAction,
   handleMattermostAction,
@@ -223,6 +225,157 @@ test("Mattermost action rejects stale buttons after context reset", () => {
   assert.deepEqual(result.body, {});
   assert.match(result.message, /context changed/);
   assert.equal(commandContextStore.get("user-1").currentWorkspace, null);
+});
+
+test("approval buttons open user-bound confirmation dialogs for approve and reject", async () => {
+  const dialogs = [];
+  for (const decision of ["approved", "rejected"]) {
+    const result = await handleApprovalDecisionRequest({
+      payload: approvalActionPayload(decision),
+      mattermostActionSecret: "action-secret",
+      botPublicBaseUrl: "https://bot.example.com/",
+      mattermostClient: {
+        async openDialog(dialog) {
+          dialogs.push(dialog);
+        }
+      }
+    });
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.body, {});
+    assert.equal(result.suppressPost, true);
+  }
+
+  assert.equal(dialogs[0].url, "https://bot.example.com/mattermost/actions");
+  assert.equal(dialogs[0].dialog.submit_label, "Approve");
+  assert.equal(dialogs[1].dialog.submit_label, "Reject");
+  assert.deepEqual(dialogs[0].dialog.elements, []);
+  assert.notEqual(dialogs[0].dialog.state, dialogs[1].dialog.state);
+});
+
+test("approval button rejects wrong secrets and cross-user clicks", async () => {
+  const wrongSecret = await handleApprovalDecisionRequest({
+    payload: approvalActionPayload("approved", { secret: "wrong" }),
+    mattermostActionSecret: "action-secret",
+    botPublicBaseUrl: "https://bot.example.com",
+    mattermostClient: { async openDialog() {} }
+  });
+  const wrongUserPayload = approvalActionPayload("approved");
+  wrongUserPayload.user_id = "user-2";
+  const wrongUser = await handleApprovalDecisionRequest({
+    payload: wrongUserPayload,
+    mattermostActionSecret: "action-secret",
+    botPublicBaseUrl: "https://bot.example.com",
+    mattermostClient: { async openDialog() {} }
+  });
+  const wrongChannelPayload = approvalActionPayload("approved");
+  wrongChannelPayload.channel_id = "channel-2";
+  const wrongChannel = await handleApprovalDecisionRequest({
+    payload: wrongChannelPayload,
+    mattermostActionSecret: "action-secret",
+    botPublicBaseUrl: "https://bot.example.com",
+    mattermostClient: { async openDialog() {} }
+  });
+
+  assert.match(wrongSecret.body.error.message, /not authorized/);
+  assert.match(wrongUser.body.error.message, /started this run/);
+  assert.match(wrongChannel.body.error.message, /does not belong/);
+});
+
+test("signed approval submission records the decision and removes buttons", async () => {
+  const dialogs = [];
+  const updates = [];
+  const decisions = [];
+  await handleApprovalDecisionRequest({
+    payload: approvalActionPayload("approved"),
+    mattermostActionSecret: "action-secret",
+    botPublicBaseUrl: "https://bot.example.com",
+    mattermostClient: {
+      async openDialog(dialog) {
+        dialogs.push(dialog);
+      }
+    }
+  });
+  const result = await handleApprovalDecisionSubmission({
+    payload: {
+      callback_id: "acornops_approval_decision",
+      user_id: "user-1",
+      channel_id: "channel-1",
+      state: dialogs[0].dialog.state
+    },
+    mattermostActionSecret: "action-secret",
+    mattermostClient: {
+      async updatePost(post) {
+        updates.push(post);
+      }
+    },
+    acornOpsClient: {
+      async decideRunApproval(identity, runId, approvalId, decision) {
+        decisions.push({ identity, runId, approvalId, decision });
+        return { status: "approved" };
+      }
+    }
+  });
+
+  assert.deepEqual(decisions, [{
+    identity: { externalUserId: "user-1" },
+    runId: "run-1",
+    approvalId: "approval-1",
+    decision: "approved"
+  }]);
+  assert.equal(result.suppressPost, true);
+  assert.deepEqual(updates[0].props, {});
+  assert.match(updates[0].message, /Approval approved/);
+});
+
+test("approval submission rejects tampering and handles settled or revoked decisions", async () => {
+  const dialogs = [];
+  await handleApprovalDecisionRequest({
+    payload: approvalActionPayload("rejected"),
+    mattermostActionSecret: "action-secret",
+    botPublicBaseUrl: "https://bot.example.com",
+    mattermostClient: {
+      async openDialog(dialog) {
+        dialogs.push(dialog);
+      }
+    }
+  });
+  const state = dialogs[0].dialog.state;
+  const invalid = await handleApprovalDecisionSubmission({
+    payload: { user_id: "user-2", channel_id: "channel-1", state },
+    mattermostActionSecret: "action-secret",
+    mattermostClient: {},
+    acornOpsClient: {}
+  });
+  const updates = [];
+  const expired = await handleApprovalDecisionSubmission({
+    payload: { user_id: "user-1", channel_id: "channel-1", state },
+    mattermostActionSecret: "action-secret",
+    mattermostClient: {
+      async updatePost(post) {
+        updates.push(post);
+      }
+    },
+    acornOpsClient: {
+      async decideRunApproval() {
+        throw new Error('AcornOps API POST failed with 409: {"error":{"code":"APPROVAL_EXPIRED"}}');
+      }
+    }
+  });
+  const revoked = await handleApprovalDecisionSubmission({
+    payload: { user_id: "user-1", channel_id: "channel-1", state },
+    mattermostActionSecret: "action-secret",
+    mattermostClient: { async updatePost() {} },
+    acornOpsClient: {
+      async decideRunApproval() {
+        throw new Error('AcornOps API POST failed with 403: {"error":{"code":"FORBIDDEN"}}');
+      }
+    }
+  });
+
+  assert.match(invalid.body.error, /another user/);
+  assert.equal(expired.suppressPost, true);
+  assert.match(updates[0].message, /Approval expired/);
+  assert.match(revoked.body.error, /did not permit this rejection/);
 });
 
 test("AcornOps route webhook verifies signature, deduplicates, and posts to route destination", async () => {
@@ -602,6 +755,29 @@ function triageActionPayload() {
       targetId: "cluster-1",
       issueId: "issue-1",
       eventId: "event-1"
+    }
+  };
+}
+
+function approvalActionPayload(decision, contextOverrides = {}) {
+  return {
+    user_id: "user-1",
+    channel_id: "channel-1",
+    trigger_id: "trigger-1",
+    post_id: "approval-post-1",
+    context: {
+      action: "request_approval_decision",
+      secret: "action-secret",
+      externalUserId: "user-1",
+      runId: "run-1",
+      approvalId: "approval-1",
+      workspaceId: "workspace-1",
+      channelId: "channel-1",
+      rootId: "root-1",
+      decision,
+      toolName: "restart_workload",
+      summary: "Restart payments-api",
+      ...contextOverrides
     }
   };
 }

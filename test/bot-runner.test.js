@@ -87,7 +87,7 @@ test("handlePostedEvent responds to direct message posts in the main timeline", 
   assert.equal(posts[0].channelId, "channel-1");
   assert.equal(posts[0].rootId, "");
   assert.match(posts[0].message, /not linked/);
-  assert.match(posts[0].message, /Run `!login`/);
+  assert.match(posts[0].message, /Send `!login`/);
   assert.doesNotMatch(posts[0].message, /user-1/);
 });
 
@@ -167,7 +167,7 @@ test("handlePostedEvent creates AcornOps account link for direct message login p
   });
 
   assert.equal(result.id, "reply-1");
-  assert.match(posts[0].message, /AcornOps account link:/);
+  assert.match(posts[0].message, /Connect your Mattermost account to AcornOps:/);
   assert.match(posts[0].message, /intlink_123/);
 });
 
@@ -504,6 +504,7 @@ test("handlePostedEvent creates and follows a workflow thread with the exact roo
         return {
           message_id: "workflow-message-1",
           run_id: "run-1",
+          executionId: "execution-1",
           status: "queued"
         };
       }
@@ -538,7 +539,9 @@ test("handlePostedEvent creates and follows a workflow thread with the exact roo
     identity: { externalUserId: "user-1" },
     sessionId: "workflow-session-1",
     runId: "run-1",
+    executionId: "execution-1",
     messageId: "workflow-message-1",
+    workspaceId: "workspace-1",
     channelId: "channel-1",
     rootId: "reply-2"
   }]);

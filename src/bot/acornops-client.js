@@ -103,15 +103,24 @@ export class AcornOpsClient {
     );
   }
 
-  async listWorkspaceInvestigations(
+  async listWorkspaceIssues(
     identity,
     workspaceId,
-    { limit = 50, cursor = "", q = "", severity = "", clusterId = "", namespace = "" } = {}
+    {
+      limit = 50,
+      cursor = "",
+      q = "",
+      status = "",
+      severity = "",
+      targetId = "",
+      targetType = "",
+      namespace = ""
+    } = {}
   ) {
     return this.getExternalPage(
       identity,
-      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/investigations`,
-      { limit, cursor, q, severity, clusterId, namespace }
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/issues`,
+      { limit, cursor, q, status, severity, targetId, targetType, namespace }
     );
   }
 
@@ -203,19 +212,6 @@ export class AcornOpsClient {
     );
   }
 
-  async listKubernetesClusterFindings(
-    identity,
-    workspaceId,
-    clusterId,
-    { limit = 50, cursor = "", q = "", severity = "", namespace = "" } = {}
-  ) {
-    return this.getExternalPage(
-      identity,
-      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/kubernetes-clusters/${encodeURIComponent(clusterId)}/findings`,
-      { limit, cursor, q, severity, namespace }
-    );
-  }
-
   async listVirtualMachines(
     identity,
     workspaceId,
@@ -239,13 +235,6 @@ export class AcornOpsClient {
     return this.getExternalResource(
       identity,
       `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/virtual-machines/${encodeURIComponent(vmId)}/resources`
-    );
-  }
-
-  async listVirtualMachineFindings(identity, workspaceId, vmId) {
-    return this.getExternalResource(
-      identity,
-      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/virtual-machines/${encodeURIComponent(vmId)}/findings`
     );
   }
 
@@ -330,11 +319,61 @@ export class AcornOpsClient {
     );
   }
 
-  async postWorkflowSessionMessage(identity, sessionId, { workspaceId, content, inputs = {} }) {
+  async postWorkflowSessionMessage(
+    identity,
+    sessionId,
+    { content, inputs = {}, clientRequestId, targetId, targetType }
+  ) {
+    if (!String(clientRequestId ?? "").trim()) {
+      throw new Error("clientRequestId is required for external workflow messages.");
+    }
     return this.postExternalResource(
       identity,
       `/api/v1/workflow-sessions/${encodeURIComponent(sessionId)}/messages`,
-      { workspaceId, content, inputs }
+      { content, inputs, clientRequestId, targetId, targetType }
+    );
+  }
+
+  async getWorkflowExecution(identity, executionId) {
+    return this.getExternalResource(
+      identity,
+      `/api/v1/workflow-executions/${encodeURIComponent(executionId)}`
+    );
+  }
+
+  async streamWorkflowExecution(identity, executionId, { signal, after = "" } = {}) {
+    this.requireExternalIntegrationAuth();
+
+    const params = new URLSearchParams();
+    if (after !== "" && after !== undefined && after !== null) {
+      params.set("after", String(after));
+    }
+    const query = params.toString();
+    const response = await this.request(
+      "GET",
+      `/api/v1/workflow-executions/${encodeURIComponent(executionId)}/stream${query ? `?${query}` : ""}`,
+      undefined,
+      {
+        serviceAuth: true,
+        signal,
+        headers: {
+          ...this.externalUserHeaders(identity),
+          accept: "text/event-stream",
+          ...(after !== "" && after !== undefined && after !== null
+            ? { "last-event-id": String(after) }
+            : {})
+        }
+      }
+    );
+
+    return parseServerSentEvents(response.body);
+  }
+
+  async decideRunApproval(identity, runId, approvalId, decision) {
+    return this.postExternalResource(
+      identity,
+      `/api/v1/runs/${encodeURIComponent(runId)}/approvals/${encodeURIComponent(approvalId)}/decision`,
+      { decision }
     );
   }
 
@@ -502,6 +541,7 @@ function eventBoundary(value) {
 
 function parseSseFrame(frame) {
   let event = "message";
+  let id = "";
   const dataLines = [];
   let hasField = false;
 
@@ -519,6 +559,8 @@ function parseSseFrame(frame) {
 
     if (field === "event") {
       event = value || "message";
+    } else if (field === "id") {
+      id = value;
     } else if (field === "data") {
       dataLines.push(value);
     }
@@ -529,10 +571,14 @@ function parseSseFrame(frame) {
   }
 
   const dataText = dataLines.join("\n");
-  return {
+  const parsed = {
     event,
     data: parseSseData(dataText)
   };
+  if (id) {
+    parsed.id = id;
+  }
+  return parsed;
 }
 
 function parseSseData(dataText) {

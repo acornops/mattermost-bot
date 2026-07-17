@@ -96,6 +96,63 @@ test("createPost can include props and attachments", async () => {
   });
 });
 
+test("updatePost removes interactive props from a bot-owned approval post", async () => {
+  const calls = [];
+  const client = new MattermostClient({
+    baseUrl: "http://mattermost",
+    token: "bot-token",
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return okResponse({ id: "post-1" });
+    }
+  });
+
+  await client.updatePost({
+    postId: "post-1",
+    message: "Approval approved.",
+    props: {}
+  });
+
+  assert.equal(calls[0].url, "http://mattermost/api/v4/posts/post-1");
+  assert.equal(calls[0].options.method, "PUT");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    id: "post-1",
+    message: "Approval approved.",
+    props: {}
+  });
+});
+
+test("openDialog sends a confirmation-only Mattermost dialog", async () => {
+  const calls = [];
+  const client = new MattermostClient({
+    baseUrl: "http://mattermost",
+    token: "bot-token",
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return okResponse({});
+    }
+  });
+  const dialog = {
+    callback_id: "acornops_approval_decision",
+    title: "Approve AcornOps action",
+    elements: [],
+    state: "signed-state"
+  };
+
+  await client.openDialog({
+    triggerId: "trigger-1",
+    url: "https://bot.example.com/mattermost/actions",
+    dialog
+  });
+
+  assert.equal(calls[0].url, "http://mattermost/api/v4/actions/dialogs/open");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    trigger_id: "trigger-1",
+    url: "https://bot.example.com/mattermost/actions",
+    dialog
+  });
+});
+
 test("request returns the raw response for non-JSON handling", async () => {
   const response = rawResponse({ status: 202, text: "accepted" });
   const client = new MattermostClient({

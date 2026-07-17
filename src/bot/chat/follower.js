@@ -8,6 +8,8 @@ export function createRunFollowerRegistry({
   commandContextStore,
   postFollowUp,
   acornOpsConsoleUrl = "",
+  botPublicBaseUrl = "",
+  mattermostActionSecret = "",
   logger = console,
   reconnectAttempts = numberFromEnv("RUN_STREAM_RECONNECT_ATTEMPTS", DEFAULT_RECONNECT_ATTEMPTS),
   reconnectDelayMs = numberFromEnv("RUN_STREAM_RECONNECT_DELAY_MS", DEFAULT_RECONNECT_DELAY_MS, { allowZero: true }),
@@ -17,7 +19,18 @@ export function createRunFollowerRegistry({
   const active = new Map();
 
   return {
-    start({ identity, sessionId, runId, messageId = "", workspaceId = "", channelId, rootId = "", kind = "chat" }) {
+    start({
+      identity,
+      sessionId,
+      runId,
+      executionId = "",
+      messageId = "",
+      workspaceId = "",
+      channelId,
+      rootId = "",
+      kind = "chat",
+      lastEventId = ""
+    }) {
       if (!identity?.externalUserId || !runId || !sessionId || !channelId) {
         return false;
       }
@@ -32,6 +45,8 @@ export function createRunFollowerRegistry({
         identity,
         sessionId,
         runId,
+        executionId,
+        lastEventId,
         messageId,
         workspaceId,
         channelId,
@@ -47,7 +62,10 @@ export function createRunFollowerRegistry({
       const activeRun = {
         id: runId,
         sessionId,
-        status: "streaming"
+        status: "streaming",
+        kind,
+        executionId,
+        lastEventId
       };
       if (rootId) {
         commandContextStore.rememberActiveRunForChat?.(channelId, rootId, activeRun);
@@ -61,6 +79,8 @@ export function createRunFollowerRegistry({
         commandContextStore,
         postFollowUp,
         acornOpsConsoleUrl,
+        botPublicBaseUrl,
+        mattermostActionSecret,
         logger,
         reconnectAttempts,
         reconnectDelayMs,
@@ -116,6 +136,8 @@ async function followRun({
   commandContextStore,
   postFollowUp,
   acornOpsConsoleUrl,
+  botPublicBaseUrl,
+  mattermostActionSecret,
   logger,
   reconnectAttempts,
   reconnectDelayMs,
@@ -123,6 +145,26 @@ async function followRun({
   fallbackPollMaxMs,
   active
 }) {
+  if (entry.kind === "workflow" && entry.executionId
+    && typeof acornOpsClient.streamWorkflowExecution === "function") {
+    await followWorkflowExecution({
+      entry,
+      acornOpsClient,
+      commandContextStore,
+      postFollowUp,
+      acornOpsConsoleUrl,
+      botPublicBaseUrl,
+      mattermostActionSecret,
+      logger,
+      reconnectAttempts,
+      reconnectDelayMs,
+      fallbackPollIntervalMs,
+      fallbackPollMaxMs,
+      active
+    });
+    return;
+  }
+
   let status = "";
 
   for (let attempt = 0; attempt <= reconnectAttempts; attempt += 1) {
@@ -135,7 +177,9 @@ async function followRun({
         acornOpsClient,
         entry,
         postFollowUp,
-        acornOpsConsoleUrl
+        acornOpsConsoleUrl,
+        botPublicBaseUrl,
+        mattermostActionSecret
       });
       if (streamStatus) {
         status = streamStatus;
@@ -202,7 +246,14 @@ async function followRun({
   }
 }
 
-async function streamUntilTerminal({ acornOpsClient, entry, postFollowUp, acornOpsConsoleUrl }) {
+async function streamUntilTerminal({
+  acornOpsClient,
+  entry,
+  postFollowUp,
+  acornOpsConsoleUrl,
+  botPublicBaseUrl,
+  mattermostActionSecret
+}) {
   if (typeof acornOpsClient.streamRun !== "function") {
     return "";
   }
@@ -212,7 +263,21 @@ async function streamUntilTerminal({ acornOpsClient, entry, postFollowUp, acornO
   });
   for await (const event of events) {
     if (event.event === "tool_approval_requested") {
-      await postApprovalRequest({ event, entry, postFollowUp, acornOpsConsoleUrl });
+      const payload = event.data?.payload ?? event.data ?? {};
+      await postApprovalRequest({
+        approval: {
+          approvalId: payload.approval_id ?? payload.approvalId ?? "",
+          runId: entry.runId,
+          toolName: payload.tool ?? "write operation",
+          summary: payload.summary ?? "",
+          expiresAt: payload.expires_at ?? payload.expiresAt ?? ""
+        },
+        entry,
+        postFollowUp,
+        acornOpsConsoleUrl,
+        botPublicBaseUrl,
+        mattermostActionSecret
+      });
     } else if (["tool_approval_approved", "tool_approval_rejected", "tool_approval_expired"].includes(event.event)) {
       await postApprovalStatus({ event, entry, postFollowUp });
     }
@@ -223,6 +288,268 @@ async function streamUntilTerminal({ acornOpsClient, entry, postFollowUp, acornO
   }
 
   return "";
+}
+
+async function followWorkflowExecution({
+  entry,
+  acornOpsClient,
+  commandContextStore,
+  postFollowUp,
+  acornOpsConsoleUrl,
+  botPublicBaseUrl,
+  mattermostActionSecret,
+  logger,
+  reconnectAttempts,
+  reconnectDelayMs,
+  fallbackPollIntervalMs,
+  fallbackPollMaxMs,
+  active
+}) {
+  let status = "";
+
+  for (let attempt = 0; attempt <= reconnectAttempts; attempt += 1) {
+    if (entry.controller.signal.aborted) {
+      return;
+    }
+
+    try {
+      const events = await acornOpsClient.streamWorkflowExecution(
+        entry.identity,
+        entry.executionId,
+        {
+          signal: entry.controller.signal,
+          after: entry.lastEventId
+        }
+      );
+      for await (const event of events) {
+        status = await handleWorkflowExecutionEvent({
+          event,
+          entry,
+          commandContextStore,
+          postFollowUp,
+          acornOpsConsoleUrl,
+          botPublicBaseUrl,
+          mattermostActionSecret
+        }) || status;
+        if (isTerminalRunStatus(status)) {
+          await refreshWorkflowEntry(acornOpsClient, entry);
+          await postTerminalResult({
+            status,
+            entry,
+            acornOpsClient,
+            commandContextStore,
+            postFollowUp,
+            active
+          });
+          return;
+        }
+      }
+    } catch (error) {
+      if (isAbortError(error) || entry.controller.signal.aborted) {
+        return;
+      }
+      logger.error(error instanceof Error ? error.message : error);
+    }
+
+    status = await refreshWorkflowEntry(acornOpsClient, entry) || status;
+    if (isTerminalRunStatus(status)) {
+      await postTerminalResult({
+        status,
+        entry,
+        acornOpsClient,
+        commandContextStore,
+        postFollowUp,
+        active
+      });
+      return;
+    }
+    if (attempt < reconnectAttempts && reconnectDelayMs > 0) {
+      await sleep(reconnectDelayMs, entry.controller.signal);
+    }
+  }
+
+  const deadline = Date.now() + fallbackPollMaxMs;
+  while (!entry.controller.signal.aborted && Date.now() <= deadline) {
+    status = await refreshWorkflowEntry(acornOpsClient, entry) || status;
+    if (isTerminalRunStatus(status)) {
+      await postTerminalResult({
+        status,
+        entry,
+        acornOpsClient,
+        commandContextStore,
+        postFollowUp,
+        active
+      });
+      return;
+    }
+    if (fallbackPollIntervalMs <= 0) {
+      break;
+    }
+    await sleep(fallbackPollIntervalMs, entry.controller.signal);
+  }
+
+  clearFollowerEntry({ entry, commandContextStore, active });
+}
+
+async function handleWorkflowExecutionEvent({
+  event,
+  entry,
+  commandContextStore,
+  postFollowUp,
+  acornOpsConsoleUrl,
+  botPublicBaseUrl,
+  mattermostActionSecret
+}) {
+  if (event.event !== "workflow_execution" || !event.data || typeof event.data !== "object") {
+    return "";
+  }
+  const data = event.data;
+  const eventId = String(data.id ?? event.id ?? "");
+  if (eventId && !isWorkflowEventAfter(eventId, entry.lastEventId)) {
+    return "";
+  }
+  entry.lastEventId = eventId || entry.lastEventId;
+  if (data.runId) {
+    entry.runId = data.runId;
+  }
+  rememberFollowerEntry(entry, commandContextStore);
+
+  if (data.type === "approval_requested") {
+    const payload = data.payload ?? {};
+    await postApprovalRequest({
+      approval: {
+        approvalId: data.approvalId ?? "",
+        runId: data.runId ?? entry.runId,
+        toolName: payload.toolName ?? "write operation",
+        summary: payload.summary ?? "",
+        expiresAt: payload.expiresAt ?? ""
+      },
+      entry,
+      postFollowUp,
+      acornOpsConsoleUrl,
+      botPublicBaseUrl,
+      mattermostActionSecret
+    });
+  } else if (data.type === "approval_decided") {
+    const payload = data.payload ?? {};
+    await postWorkflowApprovalStatus({
+      approvalId: data.approvalId ?? "",
+      status: payload.status ?? payload.decision ?? "decided",
+      entry,
+      postFollowUp
+    });
+  } else if (data.type === "run_event") {
+    const runEvent = data.payload?.runEvent ?? data.payload?.run_event ?? {};
+    const runPayload = runEvent.payload ?? {};
+    if (runEvent.type === "tool_approval_requested") {
+      await postApprovalRequest({
+        approval: {
+          approvalId: runPayload.approval_id ?? runPayload.approvalId ?? "",
+          runId: data.runId ?? entry.runId,
+          toolName: runPayload.tool ?? runPayload.toolName ?? "write operation",
+          summary: runPayload.summary ?? "",
+          expiresAt: runPayload.expires_at ?? runPayload.expiresAt ?? ""
+        },
+        entry,
+        postFollowUp,
+        acornOpsConsoleUrl,
+        botPublicBaseUrl,
+        mattermostActionSecret
+      });
+    } else if (["tool_approval_approved", "tool_approval_rejected", "tool_approval_expired"].includes(runEvent.type)) {
+      await postWorkflowApprovalStatus({
+        approvalId: runPayload.approval_id ?? runPayload.approvalId ?? "",
+        status: runEvent.type.replace("tool_approval_", ""),
+        entry,
+        postFollowUp
+      });
+    }
+  }
+
+  if (data.type === "execution_status_changed") {
+    const status = data.payload?.status ?? "";
+    return isTerminalRunStatus(status) ? status : "";
+  }
+  return "";
+}
+
+function isWorkflowEventAfter(candidate, cursor) {
+  if (!cursor) {
+    return true;
+  }
+  const candidateNumber = Number(candidate);
+  const cursorNumber = Number(cursor);
+  if (Number.isSafeInteger(candidateNumber) && Number.isSafeInteger(cursorNumber)) {
+    return candidateNumber > cursorNumber;
+  }
+  return candidate !== cursor;
+}
+
+async function postWorkflowApprovalStatus({
+  approvalId,
+  status,
+  entry,
+  postFollowUp
+}) {
+  const key = `${approvalId}:${status}`;
+  if (entry.notifiedApprovalStatuses.has(key)) {
+    return;
+  }
+  entry.notifiedApprovalStatuses.add(key);
+  await postFollowUp({
+    channelId: entry.channelId,
+    rootId: entry.rootId,
+    message: `Approval ${status}. ${status === "approved"
+      ? "AcornOps is continuing the workflow."
+      : "I’ll keep watching for the workflow’s final status."}`
+  });
+}
+
+function rememberFollowerEntry(entry, commandContextStore) {
+  if (!entry.rootId) {
+    return;
+  }
+  commandContextStore.rememberActiveRunForChat?.(
+    entry.channelId,
+    entry.rootId,
+    {
+      id: entry.runId,
+      sessionId: entry.sessionId,
+      status: "streaming",
+      kind: entry.kind,
+      executionId: entry.executionId,
+      lastEventId: entry.lastEventId
+    }
+  );
+}
+
+async function refreshWorkflowEntry(acornOpsClient, entry) {
+  if (typeof acornOpsClient.getWorkflowExecution !== "function") {
+    return "";
+  }
+  try {
+    const response = await acornOpsClient.getWorkflowExecution(
+      entry.identity,
+      entry.executionId
+    );
+    const attempts = Array.isArray(response?.attempts) ? response.attempts : [];
+    const latest = attempts.at(-1);
+    if (latest?.id) {
+      entry.runId = latest.id;
+    }
+    return response?.execution?.status ?? response?.status ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function clearFollowerEntry({ entry, commandContextStore, active }) {
+  active.delete(entry.key);
+  if (entry.rootId) {
+    commandContextStore.clearActiveRunForChat?.(entry.channelId, entry.rootId);
+  } else {
+    commandContextStore.clearActiveRun?.(entry.identity.externalUserId);
+  }
 }
 
 async function postApprovalStatus({ event, entry, postFollowUp }) {
@@ -237,31 +564,114 @@ async function postApprovalStatus({ event, entry, postFollowUp }) {
   await postFollowUp({
     channelId: entry.channelId,
     rootId: entry.rootId,
-    message: `AcornOps write request ${label}. ${label === "approved" ? "The bot is continuing to watch this run." : "The bot will keep watching for the run's final status."}`
+    message: `Approval ${label}. ${label === "approved" ? "AcornOps is continuing the run." : "I’ll keep watching for the run’s final status."}`
   });
 }
 
-async function postApprovalRequest({ event, entry, postFollowUp, acornOpsConsoleUrl }) {
-  const payload = event.data?.payload ?? event.data ?? {};
-  const approvalId = payload.approval_id ?? payload.approvalId ?? "";
+async function postApprovalRequest({
+  approval,
+  entry,
+  postFollowUp,
+  acornOpsConsoleUrl,
+  botPublicBaseUrl,
+  mattermostActionSecret
+}) {
+  const approvalId = approval.approvalId;
   if (!approvalId || entry.notifiedApprovalIds.has(approvalId)) {
     return;
   }
   entry.notifiedApprovalIds.add(approvalId);
 
-  const tool = String(payload.tool ?? "write operation").trim();
-  const summary = String(payload.summary ?? "").trim();
+  const tool = String(approval.toolName ?? "write operation").trim();
+  const summary = String(approval.summary ?? "").trim();
   const lines = [
-    `AcornOps is waiting for manual approval to run **${tool}**${summary ? `: ${summary}` : "."}`
+    `Approval required for **${tool}**${summary ? `: ${summary}` : "."}`
   ];
-  const approvalUrl = buildApprovalUrl(acornOpsConsoleUrl, entry.workspaceId, entry.runId, approvalId);
-  if (approvalUrl) {
-    lines.push(`[Review this request in AcornOps](${approvalUrl}). The bot will keep watching and continue when the approval status changes.`);
-  } else {
-    lines.push("Open the AcornOps approval inbox to review it. The bot will keep watching and continue when the approval status changes.");
+  if (approval.expiresAt) {
+    lines.push(`Expires: ${approval.expiresAt}`);
   }
-  lines.push("This bot cannot approve or reject write requests.");
-  await postFollowUp({ channelId: entry.channelId, rootId: entry.rootId, message: lines.join("\n") });
+  const attachments = approvalDecisionAttachments({
+    approval: {
+      ...approval,
+      toolName: tool,
+      summary
+    },
+    entry,
+    botPublicBaseUrl,
+    mattermostActionSecret
+  });
+  if (attachments.length > 0) {
+    lines.push("Choose a decision below. AcornOps will continue after the decision is recorded.");
+  } else {
+    const approvalUrl = buildApprovalUrl(
+      acornOpsConsoleUrl,
+      entry.workspaceId,
+      approval.runId || entry.runId,
+      approvalId
+    );
+    lines.push(approvalUrl
+      ? `[Review this request in AcornOps](${approvalUrl}).`
+      : "Open the AcornOps approval inbox to review this request.");
+  }
+  await postFollowUp({
+    channelId: entry.channelId,
+    rootId: entry.rootId,
+    message: lines.join("\n"),
+    attachments
+  });
+}
+
+function approvalDecisionAttachments({
+  approval,
+  entry,
+  botPublicBaseUrl,
+  mattermostActionSecret
+}) {
+  const actionUrl = botPublicBaseUrl
+    ? `${botPublicBaseUrl.replace(/\/+$/, "")}/mattermost/actions`
+    : "";
+  if (!actionUrl || !mattermostActionSecret) {
+    return [];
+  }
+
+  const common = {
+    action: "request_approval_decision",
+    secret: mattermostActionSecret,
+    externalUserId: entry.identity.externalUserId,
+    runId: approval.runId || entry.runId,
+    approvalId: approval.approvalId,
+    workspaceId: entry.workspaceId,
+    channelId: entry.channelId,
+    rootId: entry.rootId,
+    toolName: approval.toolName,
+    summary: approval.summary,
+    expiresAt: approval.expiresAt ?? ""
+  };
+  return [{
+    text: "Confirm in Mattermost before the decision is sent to AcornOps.",
+    actions: [
+      {
+        id: "approvalApprove",
+        name: "Approve",
+        type: "button",
+        style: "primary",
+        integration: {
+          url: actionUrl,
+          context: { ...common, decision: "approved" }
+        }
+      },
+      {
+        id: "approvalReject",
+        name: "Reject",
+        type: "button",
+        style: "danger",
+        integration: {
+          url: actionUrl,
+          context: { ...common, decision: "rejected" }
+        }
+      }
+    ]
+  }];
 }
 
 function buildApprovalUrl(baseUrl, workspaceId, runId, approvalId) {

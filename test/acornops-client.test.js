@@ -254,11 +254,13 @@ test("allowed external bot read endpoints use service auth and external user hea
   await client.listKubernetesClusterResources(externalIdentity(), "workspace-1", "cluster-1", {
     namespace: "default"
   });
-  await client.listKubernetesClusterFindings(externalIdentity(), "workspace-1", "cluster-1", {
-    severity: "warning"
-  });
-  await client.listWorkspaceInvestigations(externalIdentity(), "workspace-1", {
-    clusterId: "cluster-1"
+  await client.listWorkspaceIssues(externalIdentity(), "workspace-1", {
+    q: "payments",
+    status: "active",
+    severity: "warning",
+    targetId: "cluster-1",
+    targetType: "kubernetes",
+    namespace: "default"
   });
   await client.listTargets(externalIdentity(), "workspace-1", {
     q: "prod",
@@ -270,19 +272,16 @@ test("allowed external bot read endpoints use service auth and external user hea
   });
   await client.getVirtualMachine(externalIdentity(), "workspace-1", "vm-1");
   await client.listVirtualMachineResources(externalIdentity(), "workspace-1", "vm-1");
-  await client.listVirtualMachineFindings(externalIdentity(), "workspace-1", "vm-1");
 
   assert.deepEqual(requests.map((request) => request.url), [
     "http://acornops/api/v1/workspaces/workspace-1/kubernetes-clusters/cluster-1",
     "http://acornops/api/v1/workspaces/workspace-1/kubernetes-clusters/cluster-1/resources?limit=100&namespace=default",
-    "http://acornops/api/v1/workspaces/workspace-1/kubernetes-clusters/cluster-1/findings?limit=50&severity=warning",
-    "http://acornops/api/v1/workspaces/workspace-1/investigations?limit=50&clusterId=cluster-1",
+    "http://acornops/api/v1/workspaces/workspace-1/issues?limit=50&q=payments&status=active&severity=warning&targetId=cluster-1&targetType=kubernetes&namespace=default",
     "http://acornops/api/v1/workspaces/workspace-1/targets?limit=50&q=prod&targetType=kubernetes",
     "http://acornops/api/v1/workspaces/workspace-1/targets/target-1",
     "http://acornops/api/v1/workspaces/workspace-1/virtual-machines?limit=50&status=online",
     "http://acornops/api/v1/workspaces/workspace-1/virtual-machines/vm-1",
-    "http://acornops/api/v1/workspaces/workspace-1/virtual-machines/vm-1/resources",
-    "http://acornops/api/v1/workspaces/workspace-1/virtual-machines/vm-1/findings"
+    "http://acornops/api/v1/workspaces/workspace-1/virtual-machines/vm-1/resources"
   ]);
   for (const request of requests) {
     assert.equal(request.init.headers.authorization, "Bearer chat-token");
@@ -391,9 +390,11 @@ test("workflow endpoints list, create sessions, and launch messages with externa
     approvedContextGrants: ["workspace_metadata", "target_inventory"]
   });
   await client.postWorkflowSessionMessage(externalIdentity(), "workflow-session-1", {
-    workspaceId: "workspace-1",
-    content: "Triage the cluster.",
-    inputs: { clusterId: "cluster-1" }
+    content: "Triage @cluster[Development Cluster].",
+    inputs: { clusterId: "cluster-1" },
+    clientRequestId: "mm-post-1",
+    targetId: "cluster-1",
+    targetType: "kubernetes"
   });
 
   assert.deepEqual(requests.map((request) => request.url), [
@@ -406,14 +407,33 @@ test("workflow endpoints list, create sessions, and launch messages with externa
     approvedContextGrants: ["workspace_metadata", "target_inventory"]
   });
   assert.deepEqual(JSON.parse(requests[2].init.body), {
-    workspaceId: "workspace-1",
-    content: "Triage the cluster.",
-    inputs: { clusterId: "cluster-1" }
+    content: "Triage @cluster[Development Cluster].",
+    inputs: { clusterId: "cluster-1" },
+    clientRequestId: "mm-post-1",
+    targetId: "cluster-1",
+    targetType: "kubernetes"
   });
   for (const request of requests) {
     assert.equal(request.init.headers.authorization, "Bearer chat-token");
     assert.equal(request.init.headers["x-acornops-external-user-id"], "mattermost-user-1");
   }
+});
+
+test("workflow messages require an idempotency key", async () => {
+  const client = new AcornOpsClient({
+    baseUrl: "http://acornops",
+    serviceToken: "service-token",
+    fetchImpl: async () => {
+      throw new Error("fetch should not be called");
+    }
+  });
+
+  await assert.rejects(
+    client.postWorkflowSessionMessage(externalIdentity(), "workflow-session-1", {
+      content: "Triage the cluster."
+    }),
+    /clientRequestId is required/
+  );
 });
 
 test("parseServerSentEvents parses event/data pairs and heartbeat comments", async () => {
@@ -504,6 +524,85 @@ test("streamRun uses SSE endpoint and headers", async () => {
       }
     }
   ]);
+});
+
+test("workflow execution observation replays from an SSE event id", async () => {
+  const requests = [];
+  const client = new AcornOpsClient({
+    baseUrl: "http://acornops/",
+    externalIntegrationToken: "chat-token",
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      if (url.endsWith("/stream?after=41")) {
+        return new Response(
+          "event: workflow_execution\nid: 42\ndata: {\"id\":\"42\",\"type\":\"execution_status_changed\",\"payload\":{\"status\":\"completed\"}}\n\n",
+          { status: 200, headers: { "content-type": "text/event-stream" } }
+        );
+      }
+      return new Response(JSON.stringify({
+        execution: { id: "execution-1", status: "running" },
+        attempts: []
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  });
+
+  await client.getWorkflowExecution(externalIdentity(), "execution-1");
+  const events = [];
+  for await (const event of await client.streamWorkflowExecution(
+    externalIdentity(),
+    "execution-1",
+    { after: "41" }
+  )) {
+    events.push(event);
+  }
+
+  assert.equal(requests[0].url, "http://acornops/api/v1/workflow-executions/execution-1");
+  assert.equal(
+    requests[1].url,
+    "http://acornops/api/v1/workflow-executions/execution-1/stream?after=41"
+  );
+  assert.equal(requests[1].init.headers["last-event-id"], "41");
+  assert.deepEqual(events, [{
+    event: "workflow_execution",
+    id: "42",
+    data: {
+      id: "42",
+      type: "execution_status_changed",
+      payload: { status: "completed" }
+    }
+  }]);
+});
+
+test("approval decisions use the run-scoped external integration endpoint", async () => {
+  const requests = [];
+  const client = new AcornOpsClient({
+    baseUrl: "http://acornops/",
+    externalIntegrationToken: "chat-token",
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({ status: "approved" }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  });
+
+  await client.decideRunApproval(
+    externalIdentity(),
+    "run-1",
+    "approval-1",
+    "approved"
+  );
+
+  assert.equal(
+    requests[0].url,
+    "http://acornops/api/v1/runs/run-1/approvals/approval-1/decision"
+  );
+  assert.deepEqual(JSON.parse(requests[0].init.body), { decision: "approved" });
+  assert.equal(requests[0].init.headers["x-acornops-external-user-id"], "mattermost-user-1");
 });
 
 test("external integration auth requires the service token", async () => {

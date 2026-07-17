@@ -1,12 +1,20 @@
 import { randomUUID } from "node:crypto";
 
 export function chatClientMessageId({ sourceMessageId }) {
+  return externalRequestId({ sourceMessageId, localPrefix: "mm-local" });
+}
+
+export function workflowClientRequestId({ sourceMessageId }) {
+  return externalRequestId({ sourceMessageId, localPrefix: "mm-workflow-local" });
+}
+
+function externalRequestId({ sourceMessageId, localPrefix }) {
   const postPart = safeClientMessageIdPart(sourceMessageId);
   if (postPart) {
     return `mm-post-${postPart}`;
   }
 
-  return `mm-local-${localMessageIdPart()}`;
+  return `${localPrefix}-${localMessageIdPart()}`;
 }
 
 function localMessageIdPart() {

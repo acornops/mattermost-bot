@@ -72,7 +72,7 @@ export function formatWorkflowPage({ page, context, userId, userName }) {
   ];
 
   if (items.length === 0) {
-    lines.push("- No active read-only workflows are available in this workspace.");
+    lines.push("- No workflows are available for this account in the current workspace.");
     return lines.join("\n");
   }
 
@@ -80,7 +80,11 @@ export function formatWorkflowPage({ page, context, userId, userName }) {
     const name = workflow.name ?? workflow.id ?? "Unnamed workflow";
     const id = workflow.id && workflow.id !== name ? ` (${workflow.id})` : "";
     const description = singleLine(workflow.description ?? "");
-    lines.push(`${index + 1}. ${name}${id}${description ? ` - ${description}` : ""}`);
+    const mode = workflow.policy?.mode === "read_write" ? "read-write" : "read-only";
+    const approvalRequired = (workflow.policy?.approvalRequirements ?? []).length > 0
+      || (workflow.steps ?? []).some((step) => step?.approvalRequired);
+    const access = approvalRequired ? `${mode}, approval may be required` : mode;
+    lines.push(`${index + 1}. ${name}${id} — ${access}${description ? ` — ${description}` : ""}`);
   }
   lines.push("Run one with `!workflow run 1` and add declared inputs as `key=value`.");
   return lines.join("\n");
@@ -191,7 +195,7 @@ export function formatClusterDetail({ cluster, context, fallbackWorkspace, userI
   }
 
   if (selectCurrent) {
-    lines.push("Current target updated. Use `!chat new`, `!resources`, or `!findings`.");
+    lines.push("Current target updated. Use `!chat new`, `!resources`, or `!issues`.");
   } else {
     lines.push("Use `!target 1` or `!cluster 1` to make this the current target.");
   }
@@ -264,7 +268,7 @@ export function formatVirtualMachineDetail({ vm, context, fallbackWorkspace, use
   }
 
   if (selectCurrent) {
-    lines.push("Current target updated. Use `!chat new`, `!resources`, or `!findings`.");
+    lines.push("Current target updated. Use `!chat new`, `!resources`, or `!issues`.");
   } else {
     lines.push("Use `!target 1` or `!vm 1` to make this the current target.");
   }
@@ -295,20 +299,20 @@ export function formatResourcePage({ title, page, context, userId, userName }) {
   return lines.join("\n");
 }
 
-export function formatFindingPage({ title, page, context, userId, userName }) {
+export function formatIssuePage({ page, context, userId, userName }) {
   const items = Array.isArray(page?.items) ? page.items : [];
   const lines = [
     ...formatContextLines(context, { userId, userName }),
-    title
+    "Workspace issues:"
   ];
 
   if (items.length === 0) {
-    lines.push("- No findings are available.");
+    lines.push("- No issues match these filters.");
     return lines.join("\n");
   }
 
-  for (const [index, finding] of items.entries()) {
-    lines.push(`${index + 1}. ${formatFindingSummary(finding)}`);
+  for (const [index, issue] of items.entries()) {
+    lines.push(`${index + 1}. ${formatIssueSummary(issue)}`);
   }
 
   if (page.nextCursor) {
@@ -418,20 +422,21 @@ function formatResourceSummary(resource) {
   return details.length > 0 ? `${name} - ${details.join(", ")}` : name;
 }
 
-function formatFindingSummary(finding) {
-  const title = finding.title ?? finding.findingId ?? finding.id ?? "Finding";
+function formatIssueSummary(issue) {
+  const title = issue.title ?? issue.id ?? "Issue";
   const target = [
-    finding.clusterName,
-    finding.namespace,
-    finding.resourceKind ?? finding.objectKind,
-    finding.resourceName ?? finding.objectName
+    issue.targetName,
+    issue.namespace,
+    issue.resourceKind ?? issue.objectKind,
+    issue.resourceName ?? issue.objectName
   ].filter(Boolean).join("/");
   const details = [
-    formatField("severity", finding.severity),
+    formatField("severity", issue.severity),
+    formatField("status", issue.status),
     target
   ].filter(Boolean);
-
-  return details.length > 0 ? `${title} - ${details.join(", ")}` : title;
+  const summary = singleLine(issue.summary ?? "");
+  return `${title}${details.length > 0 ? ` — ${details.join(", ")}` : ""}${summary ? ` — ${summary}` : ""}`;
 }
 
 function formatSessionSummary(session) {
@@ -509,7 +514,7 @@ export function formatTargetDetail({ target, context, fallbackWorkspace, userId,
   }
 
   if (selectCurrent) {
-    lines.push("Current target updated. Use `!chat new`, `!resources`, or `!findings`.");
+    lines.push("Current target updated. Use `!chat new`, `!resources`, or `!issues`.");
   } else {
     lines.push("Use `!target 1` to make this the current target.");
   }

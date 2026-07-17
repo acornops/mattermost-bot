@@ -28,8 +28,9 @@ The Mattermost bot gives Mattermost users a chat entry point into AcornOps:
 2. `!login` resolves the current AcornOps external integration link and creates an account-link request only when relogin is needed.
 3. `!status` resolves the linked AcornOps identity for the observed Mattermost user.
 4. Read commands call AcornOps control-plane APIs with service authentication and `x-acornops-external-user-id`.
-5. `!chat new` creates a dedicated Mattermost thread for each read-only AcornOps assistant session.
-6. `!workflows` lists available read-only workflows, and `!workflow run 1` launches one in its own threaded session.
+5. `!chat new` creates a dedicated Mattermost thread for each AcornOps assistant session.
+6. `!workflows` lists every eligible workflow mode, and `!workflow run 1` launches one in its own threaded session.
+7. Approval-gated runs can be approved or rejected by their originating Mattermost user through confirmation dialogs.
 
 The bot never asks users for AcornOps passwords in Mattermost and does not store AcornOps browser sessions, cookies, OIDC tokens, refresh tokens, or raw link tokens.
 
@@ -40,7 +41,7 @@ This repository owns:
 - Mattermost WebSocket event handling and REST replies
 - `!`-prefixed bot command parsing for `@acorn-ops-bot`
 - external integration link and resolve calls to AcornOps
-- read-only workspace, target, resource, finding, investigation, and threaded assistant command surfaces
+- workspace, target, resource, workspace-wide issue, workflow, and threaded assistant command surfaces
 - persistent command context for numbered workspaces, targets, sessions, chat-thread mappings, active streamed assistant runs, login-triggered account validation, and user-level webhook routes
 - optional inbound HTTP callbacks for Mattermost interactive actions and AcornOps alert webhooks
 - repo-local lint, build, and test verification
@@ -63,6 +64,8 @@ The bot depends on the AcornOps control-plane external integration contract:
 - `POST /api/v1/auth/external-integrations/resolve`
 - authenticated read APIs under `/api/v1/workspaces`, `/api/v1/sessions`, and `/api/v1/runs`
 - `GET /api/v1/runs/{runId}/stream` for long-running assistant follow-up delivery
+- `GET /api/v1/workflow-executions/{executionId}/stream` for replayable multi-step workflow following
+- `POST /api/v1/runs/{runId}/approvals/{approvalId}/decision` for confirmed, origin-bound decisions
 
 The bot authenticates to AcornOps with `EXTERNAL_INTEGRATION_SERVICE_TOKEN`. The external user id is always derived from the observed Mattermost post author id; it is never accepted from user-typed chat text.
 
@@ -83,13 +86,13 @@ Environment variables:
 | `MATTERMOST_BOT_TOKEN` | Mattermost bot access token. | Required |
 | `MATTERMOST_BOT_USERNAME` | Bot username used for mention detection. | `acorn-ops-bot` |
 | `ACORNOPS_API_BASE_URL` | AcornOps control-plane base URL. | `http://localhost:8081` |
-| `ACORNOPS_CONSOLE_BASE_URL` | Browser console base URL used for manual write-approval links. | Empty |
+| `ACORNOPS_CONSOLE_BASE_URL` | Browser console base URL used as the approval fallback when interactive callbacks are unavailable. | Empty |
 | `EXTERNAL_INTEGRATION_SERVICE_TOKEN` | AcornOps service token for this installed external integration. | Required for AcornOps-backed commands |
 | `BOT_DATABASE_URL` | Optional Postgres URL for persistent bot command context, chat threads, active runs, webhook routes, and inbound idempotency. Compose supplies a bundled Postgres URL; empty uses in-memory state for local tests. | Empty |
 | `BOT_HTTP_HOST` | Host for the optional inbound bot HTTP listener. | `0.0.0.0` |
 | `BOT_HTTP_PORT` | Port for the inbound bot HTTP listener. `0` disables listening. | `0` |
-| `BOT_PUBLIC_BASE_URL` | Public base URL used in Mattermost interactive action callbacks and AcornOps webhook delivery URLs. Required for workspace buttons and `!webhook create`. | Empty |
-| `MATTERMOST_ACTION_SECRET` | Shared secret embedded in Mattermost action contexts. | Empty |
+| `BOT_PUBLIC_BASE_URL` | Public base URL used in Mattermost interactive action callbacks and AcornOps webhook delivery URLs. Required for selection/approval buttons and `!webhook create`. | Empty |
+| `MATTERMOST_ACTION_SECRET` | Shared secret embedded in user-bound Mattermost action contexts. Required with `BOT_PUBLIC_BASE_URL` for approval buttons. | Empty |
 | `BOT_ALERT_TIME_ZONE` | IANA timezone used when rendering AcornOps webhook alert timestamps. | `Asia/Singapore` |
 | `CHAT_RUN_POLL_ATTEMPTS` | Immediate chat run polling attempts before SSE follow-up. | `15` |
 | `CHAT_RUN_POLL_INTERVAL_MS` | Immediate chat run polling interval in milliseconds. | `1000` |
@@ -104,7 +107,7 @@ Local `.env` files are loaded without overriding existing process environment va
 
 Commands are plain Mattermost messages, not slash commands. Command words require `!`; arguments do not. Slash-prefixed input returns guidance to use `!`.
 
-`!chat new` creates a read-only thread. `!chat new --write [title]` refreshes the selected workspace and starts a read-write thread only when AcornOps returns `permissions.create_read_write_runs: true` for the linked user and integration. Write tools still pause for manual approval; the bot links to the AcornOps approval page and continues following the run, but never approves or rejects requests itself.
+`!chat new` creates a read-only thread. `!chat new --write [title]` refreshes the selected workspace and starts a read-write thread only when AcornOps returns `permissions.create_read_write_runs: true` for the linked user and integration. When a write pauses, the originating user can approve or reject through a confirmation dialog in Mattermost. If callback configuration is absent, the bot links to the AcornOps approval page instead.
 
 - `!help`: show the short common workflow
 - `!help filters`: show supported filters and finite values
@@ -119,12 +122,11 @@ Commands are plain Mattermost messages, not slash commands. Command words requir
 - `!targets`: list Kubernetes and VM targets in the current workspace, with selection buttons when callback config is present
 - `!target 1`: select a target
 - `!resources`: list resources for the selected target
-- `!findings`: list findings for the selected target
-- `!investigations`: list workspace investigations
+- `!issues [filters]`: list issues across the current workspace
 - `!chat new [title]`: create a read-only troubleshooting chat for the selected target and post a dedicated Mattermost root thread
 - `!chat new --write [title]`: create a permission-gated read-write chat for the selected target
-- `!workflows`: list active read-only workflows in the current workspace
-- `!workflow run <number|id> [key=value...]`: launch a workflow and post its streamed result in a dedicated Mattermost thread
+- `!workflows`: list all eligible active workflows in the current workspace, with mode and approval labels
+- `!workflow run <number|id> [key=value...]`: launch any listed workflow and post every step’s result in a dedicated Mattermost thread
 - `!chat end`: inside a chat thread, close only that chat and stop following its active answer
 - `!webhook create`: create or show the current user's AcornOps webhook delivery URL for the current Mattermost destination
 - `!webhook connect`: claim AcornOps console-created subscription metadata and signing secrets for that delivery URL
@@ -133,6 +135,8 @@ Commands are plain Mattermost messages, not slash commands. Command words requir
 - `!webhook disconnect`: remove the current user's webhook route
 
 After `!chat new`, reply in the generated Mattermost thread to send read-only assistant questions for that specific AcornOps session. Thread replies do not need `!`; assistant replies and long-running SSE follow-ups stay in that thread. The main bot direct message or channel mention remains available for normal `!` commands and additional `!chat new` threads. Advanced filters, shortcuts such as `!clusters` and `!vms`, and compatibility session commands are documented in [`docs/wiki-mattermost-bot-commands.md`](docs/wiki-mattermost-bot-commands.md).
+
+Every workflow launch or follow-up sends a required `clientRequestId` derived from its originating Mattermost post id. It is reused only if that exact post is retried, is never shown to users, and prevents a transport retry from creating a duplicate execution.
 
 Created and reopened issue alerts delivered to Mattermost can include a **Run Triage** action. It is restricted to the Mattermost user who owns the alert route and either links to recent AcornOps cluster chat activity or starts a new read-only triage session in a dedicated Mattermost thread.
 

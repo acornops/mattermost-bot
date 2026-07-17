@@ -654,6 +654,28 @@
       },
       "evidence": "Implemented on 2026-07-13. Created/reopened issue alerts now include an acting-user-bound Run Triage action. The callback reloads the issue through GET /api/v1/workspaces/{workspaceId}/targets/{targetId}/issues, loads cluster metadata, and checks GET /api/v1/workspaces/{workspaceId}/targets/{targetId}/chat-activity. Recent activity returns an AcornOps deep link; otherwise the bot creates a cluster session, posts the exact console triage prompt with read_only access, registers a Mattermost thread, and starts the shared SSE follower. Focused AcornOps client/server tests passed with 31 tests. Final ./init.sh passed with harness verification, lint, build, and 148 tests. On 2026-07-15, an iterative review updated the repository command reference and published GitHub wiki commit 366f26a with the Run Triage behavior; focused command/server verification passed with 86 tests and final ./init.sh passed with all 148 tests.",
       "notes": "Duplicate avoidance follows AcornOps' recent target chat activity window, not issue-title matching. Production requires BOT_PUBLIC_BASE_URL, MATTERMOST_ACTION_SECRET, and ACORNOPS_CONSOLE_BASE_URL. Live signed webhook/button rendering, both triage action paths, and end-to-end assistant streaming still need smoke testing."
+    },
+    {
+      "id": "B23",
+      "priority": 31,
+      "area": "bot",
+      "title": "Align workflows, approvals, issues, and response UX with the external integration contract",
+      "user_visible_behavior": "Users can list workspace issues, launch every eligible AcornOps workflow, follow multi-step executions, and confirm bot-originated approval decisions directly in Mattermost with clearer command responses.",
+      "status": "passing",
+      "verification": {
+        "command": "./init.sh plus live issue, multi-step workflow, and approval-action smoke when services are available",
+        "steps": [
+          "Replace findings and investigations with one workspace-wide !issues command and current issue filters.",
+          "Send stable clientRequestId values for workflow launches and follow-ups.",
+          "Follow aggregate replayable workflow execution streams through every step.",
+          "Render user-bound Approve and Reject actions and require a confirmed Mattermost dialog before submitting a decision.",
+          "Refine login, status, command, workflow, approval, and error copy.",
+          "Update command and runtime documentation.",
+          "Add automated tests and run ./init.sh."
+        ]
+      },
+      "evidence": "Implemented and verified on 2026-07-18. Added workspace-wide !issues with exact contract filters and generic unknown responses for removed !findings/!investigations. Eligible workflow modes now use stable Mattermost-post-derived clientRequestId values, consume executionId, and follow replayable aggregate streams through multiple attempts with cursor persistence and deduplication. Troubleshooting and workflow approval requests now offer user-bound Approve/Reject confirmation dialogs, signed immutable state, run-scoped decisions, settled-state handling, and button removal, with console fallback when callbacks are unavailable. The earlier target-reference fix renders the selected target mention and sends targetId/targetType; its corrected live request returned HTTP 202. Focused client/command/runner/follower/context/action tests passed with 148 tests. Full npm test passed with 160 tests; lint and build passed; final ./init.sh passed with harness verification and all 160 tests. Mattermost and AcornOps were not listening on localhost:8065/8081, so the full live smoke matrix remains outstanding.",
+      "notes": "Generated workflow report delivery and automatic active-follower recovery after a bot restart remain separate follow-up work. Live Mattermost/AcornOps approval, multi-step workflow, and issue smoke is still required when services are available."
     }
   ]
 }

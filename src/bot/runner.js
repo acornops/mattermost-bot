@@ -18,10 +18,12 @@ export function createMattermostBotRunner({
   const followers = runFollowerRegistry ?? createRunFollowerRegistry({
     acornOpsClient,
     commandContextStore,
-    postFollowUp: async ({ channelId, message, rootId = "" }) => {
-      await client.createPost({ channelId, message, rootId });
+    postFollowUp: async ({ channelId, message, rootId = "", attachments = undefined }) => {
+      return await client.createPost({ channelId, message, rootId, attachments });
     },
     acornOpsConsoleUrl,
+    botPublicBaseUrl,
+    mattermostActionSecret,
     logger
   });
 
@@ -215,7 +217,9 @@ export async function handlePostedEvent({
         identity: effect.identity,
         sessionId: effect.session?.id ?? effect.session?.sessionId ?? "",
         runId: effect.runId,
+        executionId: effect.executionId,
         messageId: effect.messageId,
+        workspaceId: effect.workspaceId,
         channelId: post.channel_id,
         rootId: threadRoot.id
       });

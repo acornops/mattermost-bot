@@ -2,7 +2,7 @@
 
 Initially checked on 2026-06-04 against `/Users/ryangoh/Desktop/Development/acornops/control-plane`.
 
-This inventory is a maintained reference for CSIT bot work. The account-link section was updated on 2026-06-23 from the current AcornOps external integration contract.
+This inventory is a maintained reference for CSIT bot work. The bot-accessible endpoints and account-link behavior were updated on 2026-07-18 from the current AcornOps external integration contract.
 
 Do not implement bot behavior from the superseded proposal that used chat-login transactions or bot-side AcornOps session state. The current bot contract is recorded in `docs/acornops-chat-login-contract.md`.
 
@@ -118,6 +118,20 @@ Troubleshooting sessions and runs:
 - `GET /api/v1/runs/{runId}/stream`
 - `GET /api/v1/runs/{runId}/events`
 
+External-integration issues, workflows, and approvals used by the bot:
+
+- `GET /api/v1/workspaces/{workspaceId}/issues`
+- `GET /api/v1/workspaces/{workspaceId}/workflows`
+- `POST /api/v1/workflows/{workflowId}/sessions`
+- `POST /api/v1/workflow-sessions/{sessionId}/messages`
+- `GET /api/v1/workflow-executions/{executionId}`
+- `GET /api/v1/workflow-executions/{executionId}/stream`
+- `POST /api/v1/runs/{runId}/approvals/{approvalId}/decision`
+
+Every external workflow message requires a `clientRequestId`. The Mattermost bot derives it from the source post id and reuses it only when retrying that exact post. The launch returns an `executionId`; the bot follows the replayable aggregate execution stream with `Last-Event-ID` so it can discover every step attempt and approval instead of assuming the first `run_id` is the whole workflow.
+
+Approval decisions require explicit linked-user confirmation. Mattermost actions are user-bound and signed, while AcornOps separately restricts decisions to the exact integration link and client that originated the run. The exact origin may reject after write permission is removed when AcornOps still permits it; no event or webhook is treated as approval.
+
 Health and local docs:
 
 - `GET /health`
@@ -168,7 +182,7 @@ The Mattermost bot exposes `!login` in Mattermost. That command calls AcornOps t
   - Content type: `application/json`.
   - Request: `{ "externalUserId": "external-user-id-from-event", "externalDisplayName": "optional-display-name" }`.
   - Response: `{ "linkUrl": "...", "expiresAt": "..." }`.
-  - Bot behavior: return `linkUrl` exactly as AcornOps sends it, tell the user it expires in 10 minutes, and do not log the raw link or token.
+  - Bot behavior: return `linkUrl` exactly as AcornOps sends it, display the returned `expiresAt`, explain that the link connects Mattermost to AcornOps, and do not log the raw link or token.
 
 The browser opens the returned management-console URL:
 

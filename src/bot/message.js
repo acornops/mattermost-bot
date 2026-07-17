@@ -21,7 +21,7 @@ import {
   formatClusterDetail,
   formatClusterPage,
   formatContextLines,
-  formatFindingPage,
+  formatIssuePage,
   formatMessagePage,
   formatReferenceName,
   formatResourcePage,
@@ -53,9 +53,11 @@ import {
   activeRunResponseText,
   chatClientMessageId,
   followRunForAnswer,
-  formatChatPendingResponse
+  formatChatPendingResponse,
+  workflowClientRequestId
 } from "./chat/runs.js";
 import {
+  bindWorkflowTargetReference,
   parseWorkflowRunArguments,
   prepareWorkflowLaunch
 } from "./commands/workflows.js";
@@ -71,8 +73,8 @@ const helpText = [
   "- `!status` shows account and current context.",
   "- `!workspaces` lists workspaces; `!workspace 1` selects one.",
   "- `!targets` lists Kubernetes and VM targets; `!target 1` selects one.",
-  "- `!resources`, `!findings`, and `!investigations` inspect the selected context.",
-  "- `!workflows` lists read-only workflows; `!workflow run 1` launches one.",
+  "- `!resources` inspects the selected target; `!issues` lists workspace issues.",
+  "- `!workflows` lists available workflows; `!workflow run 1` launches one.",
   "- `!chat new` starts a read-only chat; `!chat new --write` requests a write-capable chat when permitted.",
   "- `!chat end` closes the current chat thread when sent inside that thread.",
   "- `!help filters` shows common filters.",
@@ -85,15 +87,13 @@ const filterHelpText = [
   "- `!workspaces q=platform`",
   "- `!targets q=prod targetType=kubernetes`",
   "- `!resources kind=Pod namespace=payments health=attention`",
-  "- `!findings severity=critical namespace=payments`",
-  "- `!investigations severity=warning clusterId=cluster-id namespace=default`",
+  "- `!issues status=active severity=critical namespace=payments`",
   "",
   "Supported filters:",
   "- `workspaces`: `q`",
   "- `targets`: `q`, `targetType=kubernetes|virtual_machine`",
   "- `resources`: `q`, `kind`, `family=workloads|network|storage|cluster`, `namespace`, `health=healthy|attention`",
-  "- `findings`: `q`, `severity=critical|warning|info`, `namespace`",
-  "- `investigations`: `q`, `severity=critical|warning|info`, `clusterId`, `namespace`",
+  "- `issues`: `q`, `status=active|recovering|resolved|all`, `severity=critical|warning|info`, `targetId`, `targetType=kubernetes|virtual_machine`, `namespace`",
   "",
   `Full reference: ${commandReferenceUrl}`
 ].join("\n");
@@ -160,6 +160,7 @@ export async function handleBotMessageResult({
         channelType,
         acornOpsClient,
         commandContextStore,
+        sourceMessageId,
         threadChat
       });
     }
@@ -260,7 +261,8 @@ export async function handleBotMessageResult({
       userName,
       channelType,
       acornOpsClient,
-      commandContextStore
+      commandContextStore,
+      sourceMessageId
     });
   }
 
@@ -271,7 +273,8 @@ export async function handleBotMessageResult({
       userName,
       channelType,
       acornOpsClient,
-      commandContextStore
+      commandContextStore,
+      sourceMessageId
     });
   }
 
@@ -332,19 +335,8 @@ export async function handleBotMessageResult({
     });
   }
 
-  if (action === "findings") {
-    return handleFindings({
-      commandArgs,
-      userId,
-      userName,
-      channelType,
-      acornOpsClient,
-      commandContextStore,
-    });
-  }
-
-  if (action === "investigations") {
-    return handleInvestigations({
+  if (action === "issues") {
+    return handleIssues({
       commandArgs,
       userId,
       userName,
@@ -518,6 +510,7 @@ async function handleWorkflowThreadMessage({
   channelType,
   acornOpsClient,
   commandContextStore,
+  sourceMessageId,
   threadChat
 }) {
   if (threadChat.externalUserId !== userId) {
@@ -573,19 +566,33 @@ async function handleWorkflowThreadMessage({
   }
 
   try {
+    const context = commandContextStore.get(auth.identity.externalUserId);
+    const selectedTarget = workflowInputContainsTarget(
+      currentThread.workflowInputs,
+      context.currentTarget
+    )
+      ? context.currentTarget
+      : null;
     const result = await acornOpsClient.postWorkflowSessionMessage(
       auth.identity,
       currentThread.sessionId,
       {
-        workspaceId: currentThread.workspaceId,
-        content: normalizedText,
-        inputs: currentThread.workflowInputs
+        content: selectedTarget
+          ? bindWorkflowTargetReference(normalizedText, selectedTarget)
+          : normalizedText,
+        inputs: currentThread.workflowInputs,
+        clientRequestId: workflowClientRequestId({ sourceMessageId }),
+        targetId: selectedTarget?.id,
+        targetType: selectedTarget
+          ? normalizeTargetType(selectedTarget.type)
+          : undefined
       }
     );
     const runId = result.run_id ?? result.runId ?? "";
+    const executionId = result.executionId ?? result.execution_id ?? result.workflow_run_id ?? "";
     const messageId = result.message_id ?? result.messageId ?? "";
-    if (!runId) {
-      return "AcornOps accepted the workflow follow-up, but did not return a run to follow.";
+    if (!runId || !executionId) {
+      return "AcornOps accepted the workflow follow-up but did not return an execution to follow.";
     }
     commandContextStore.rememberLatestRun(auth.identity.externalUserId, {
       id: runId,
@@ -598,7 +605,10 @@ async function handleWorkflowThreadMessage({
       {
         id: runId,
         sessionId: currentThread.sessionId,
-        status: "streaming"
+        status: "streaming",
+        kind: "workflow",
+        executionId,
+        lastEventId: ""
       }
     );
     return {
@@ -609,7 +619,9 @@ async function handleWorkflowThreadMessage({
         identity: auth.identity,
         sessionId: currentThread.sessionId,
         runId,
+        executionId,
         messageId,
+        workspaceId: currentThread.workspaceId,
         channelId: currentThread.channelId,
         rootId: currentThread.rootId
       }]
@@ -672,9 +684,9 @@ async function handleLogin({ commandArgs, userId, userName, acornOpsClient, comm
     const user = result.user ?? {};
     const linkedUser = [user.displayName, user.email].filter(Boolean).join(" / ");
     return [
-      "Your Mattermost account is already linked to AcornOps.",
-      linkedUser ? `Linked account: ${linkedUser}` : "",
-      "Use `!login reset` only when you want to clear bot context before linking again."
+      `Connected to AcornOps${linkedUser ? ` as ${linkedUser}` : ""}.`,
+      "Continue with `!workspaces` or any other command.",
+      "To connect a different account, use `!login reset`."
     ].filter(Boolean).join("\n");
   }
 
@@ -693,8 +705,8 @@ async function handleLogin({ commandArgs, userId, userName, acornOpsClient, comm
     userId,
     userName,
     prefixLines: [
-      "Complete this AcornOps login, then retry your bot command.",
-      "Existing bot context is preserved unless the completed login uses a different AcornOps account."
+      "Open the link below to connect your account.",
+      "Your current bot context stays in place unless you connect a different AcornOps account."
     ]
   });
 }
@@ -716,11 +728,12 @@ function formatLoginLinkResponse({ link, userId, userName, prefixLines = [] }) {
     lines.push("");
   }
   lines.push(
-    "AcornOps account link:",
+    "Connect your Mattermost account to AcornOps:",
     link.linkUrl,
     "",
     `Mattermost user: ${identityLabel({ userId, userName })}`,
-    "This link expires in 10 minutes.",
+    link.expiresAt ? `Link expires: ${link.expiresAt}` : "This link expires soon.",
+    "After connecting, return here and continue with `!workspaces` or any other command.",
     "No AcornOps password should be typed into Mattermost."
   );
   return lines.join("\n");
@@ -745,7 +758,7 @@ async function handleStatus({ userId, userName, acornOpsClient, commandContextSt
       return {
         message: [
           "AcornOps bot status:",
-          "- Acornops: linked to a different AcornOps account.",
+          "- AcornOps: linked to a different account.",
           "- Context: reset. Send `!workspaces` to choose context for this account."
         ].join("\n"),
         effects: [{
@@ -761,7 +774,7 @@ async function handleStatus({ userId, userName, acornOpsClient, commandContextSt
     const current = `Workspace: ${formatReferenceName(context.currentWorkspace)}    |    Target: ${formatReferenceName(selectedContextTarget(context))}`;
     return [
       "AcornOps bot status:",
-      `- Acornops: linked to AcornOps${linkedUser ? ` as ${linkedUser}` : ""}`,
+      `- AcornOps: linked${linkedUser ? ` as ${linkedUser}` : ""}`,
       `- Context: ${current}`
     ].join("\n");
   }
@@ -769,13 +782,13 @@ async function handleStatus({ userId, userName, acornOpsClient, commandContextSt
   if (result.status === "unlinked") {
     return [
       "AcornOps bot status:",
-      `- Acornops: not linked. Run \`!login\` in a direct message to connect AcornOps.`
+      `- AcornOps: not linked. Send \`!login\` in a direct message to connect your account.`
     ].join("\n");
   }
 
   return [
     "AcornOps bot status:",
-    `- Acornops: unknown AcornOps status ${JSON.stringify(result.status)}`
+    `- AcornOps: unknown link status ${JSON.stringify(result.status)}`
   ].join("\n");
 }
 
@@ -1141,7 +1154,8 @@ async function handleWorkflow({
   userName,
   channelType,
   acornOpsClient,
-  commandContextStore
+  commandContextStore,
+  sourceMessageId
 }) {
   const parsed = parseWorkflowRunArguments(normalizedText);
   if (parsed.error) {
@@ -1199,14 +1213,17 @@ async function handleWorkflow({
       auth.identity,
       session.id,
       {
-        workspaceId: context.currentWorkspace.id,
         content: launch.content,
-        inputs: launch.inputs
+        inputs: launch.inputs,
+        clientRequestId: workflowClientRequestId({ sourceMessageId }),
+        targetId: context.currentTarget?.id,
+        targetType: normalizeTargetType(context.currentTarget?.type)
       }
     );
     const runId = result.run_id ?? result.runId ?? "";
-    if (!runId) {
-      return "AcornOps created the workflow session, but did not return a run to follow.";
+    const executionId = result.executionId ?? result.execution_id ?? result.workflow_run_id ?? "";
+    if (!runId || !executionId) {
+      return "AcornOps created the workflow session but did not return an execution to follow.";
     }
     const workflowName = workflow.name ?? workflow.id;
     commandContextStore.rememberLatestRun(auth.identity.externalUserId, {
@@ -1226,12 +1243,20 @@ async function handleWorkflow({
         workflowInputs: launch.inputs,
         session,
         runId,
+        executionId,
         messageId: result.message_id ?? result.messageId ?? ""
       }]
     };
   } catch (error) {
     return workflowMessageErrorText(error);
   }
+}
+
+function workflowInputContainsTarget(inputs, target) {
+  return Boolean(
+    target?.id
+    && Object.values(inputs ?? {}).some((value) => value === target.id)
+  );
 }
 
 async function handleWorkspace({
@@ -1515,7 +1540,7 @@ async function handleResources({
   }
 }
 
-async function handleFindings({
+async function handleIssues({
   commandArgs,
   userId,
   userName,
@@ -1523,7 +1548,11 @@ async function handleFindings({
   acornOpsClient,
   commandContextStore,
 }) {
-  const parsedArgs = parseTargetFilterArgs(commandArgs, ["q", "severity", "namespace"]);
+  const parsedArgs = parseListArgs(
+    commandArgs,
+    ["q", "status", "severity", "targetId", "targetType", "namespace"],
+    { allowReference: false }
+  );
   if (parsedArgs.error) {
     return parsedArgs.error;
   }
@@ -1533,73 +1562,7 @@ async function handleFindings({
     acornOpsClient,
     commandContextStore,
     userId,
-    commandLabel: "findings"
-  });
-  if (auth.response) {
-    return auth.response;
-  }
-
-  const context = commandContextStore.get(auth.identity.externalUserId);
-  const target = selectedTarget(context, parsedArgs.hint);
-  if (target.response) {
-    return target.response;
-  }
-
-  try {
-    if (target.type === "cluster") {
-      const page = await acornOpsClient.listKubernetesClusterFindings(
-        auth.identity,
-        context.currentWorkspace.id,
-        target.reference.id,
-        parsedArgs.filters
-      );
-      return formatFindingPage({
-        title: "AcornOps findings:",
-        page,
-        context,
-        userId,
-        userName
-      });
-    }
-
-    const findings = await acornOpsClient.listVirtualMachineFindings(
-      auth.identity,
-      context.currentWorkspace.id,
-      target.reference.id
-    );
-    return formatFindingPage({
-      title: "AcornOps findings:",
-      page: normalizeListResponse(findings),
-      context,
-      userId,
-      userName
-    });
-  } catch (error) {
-    return dataErrorText(error, "findings");
-  }
-}
-
-async function handleInvestigations({
-  commandArgs,
-  userId,
-  userName,
-  channelType,
-  acornOpsClient,
-  commandContextStore,
-}) {
-  const parsedArgs = parseListArgs(commandArgs, ["q", "severity", "clusterId", "namespace"], {
-    allowReference: false
-  });
-  if (parsedArgs.error) {
-    return parsedArgs.error;
-  }
-
-  const auth = await requireExternalDataCommand({
-    channelType,
-    acornOpsClient,
-    commandContextStore,
-    userId,
-    commandLabel: "investigations"
+    commandLabel: "issues"
   });
   if (auth.response) {
     return auth.response;
@@ -1611,20 +1574,19 @@ async function handleInvestigations({
   }
 
   try {
-    const page = await acornOpsClient.listWorkspaceInvestigations(
+    const page = await acornOpsClient.listWorkspaceIssues(
       auth.identity,
       context.currentWorkspace.id,
       parsedArgs.filters
     );
-    return formatFindingPage({
-      title: "AcornOps investigations:",
+    return formatIssuePage({
       page,
       context,
       userId,
       userName
     });
   } catch (error) {
-    return dataErrorText(error, "investigations");
+    return dataErrorText(error, "issues");
   }
 }
 

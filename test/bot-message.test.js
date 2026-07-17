@@ -97,9 +97,10 @@ test("handleBotMessage creates an AcornOps account link for direct login", async
     }
   });
 
-  assert.match(response, /AcornOps account link:/);
+  assert.match(response, /Connect your Mattermost account to AcornOps:/);
   assert.match(response, /https:\/\/console\.acornops\.dev\/integrations\/external\/link\?token=intlink_123/);
-  assert.match(response, /This link expires in 10 minutes\./);
+  assert.match(response, /Link expires: 2026-06-09T00:10:00\.000Z/);
+  assert.match(response, /continue with `!workspaces` or any other command/);
   assert.match(response, /No AcornOps password should be typed into Mattermost\./);
   assert.equal(commandContextStore.get("mattermost-user-1").loginValidationPending, true);
   assert.equal(commandContextStore.get("mattermost-user-1").currentWorkspace.id, "workspace-1");
@@ -125,7 +126,8 @@ test("handleBotMessage login stores linked account fingerprint without resetting
   });
   const context = commandContextStore.get("mattermost-user-1");
 
-  assert.match(response, /already linked/);
+  assert.match(response, /Connected to AcornOps/);
+  assert.match(response, /Continue with `!workspaces`/);
   assert.equal(context.currentWorkspace.id, "workspace-1");
   assert.equal(context.currentTarget.id, "cluster-1");
   assert.match(context.accountFingerprint, /^[a-f0-9]{64}$/);
@@ -348,7 +350,7 @@ test("handleBotMessage status reports linked AcornOps identity", async () => {
     }
   });
 
-  assert.match(response, /Acornops: linked to AcornOps as Alice \/ alice@example\.com/);
+  assert.match(response, /AcornOps: linked as Alice \/ alice@example\.com/);
   assert.match(response, /Context: Workspace: none {4}\| {4}Target: none/);
   assert.doesNotMatch(response, /acorn-user-1/);
   assert.doesNotMatch(response, /Mattermost user/);
@@ -368,8 +370,8 @@ test("handleBotMessage status tells unlinked users to run login", async () => {
     }
   });
 
-  assert.match(response, /Acornops: not linked/);
-  assert.match(response, /Run `!login`/);
+  assert.match(response, /AcornOps: not linked/);
+  assert.match(response, /Send `!login`/);
   assert.doesNotMatch(response, /mattermost-user-1/);
 });
 
@@ -786,8 +788,8 @@ test("handleBotMessage tells unlinked users to login before workspaces", async (
     }
   });
 
-  assert.match(response, /not linked or the bot credentials are invalid/);
-  assert.match(response, /Run `!login`/);
+  assert.match(response, /couldn’t access AcornOps workspaces/);
+  assert.match(response, /send `!login` in a direct message/);
 });
 
 test("handleBotMessage reports backend workspace errors without leaking response body", async () => {
@@ -802,7 +804,7 @@ test("handleBotMessage reports backend workspace errors without leaking response
     }
   });
 
-  assert.match(response, /HTTP 500/);
+  assert.match(response, /temporarily unavailable/);
   assert.doesNotMatch(response, /database detail/);
 });
 
@@ -1245,57 +1247,45 @@ test("handleBotMessage lists resources for the selected cluster", async () => {
   assert.match(response, /payments-api - Pod, namespace: payments, status: Running/);
 });
 
-test("handleBotMessage lists findings for the selected VM", async () => {
-  const commandContextStore = selectedVmContext();
-  const response = await handleBotMessage({
-    text: "!findings",
-    userId: "mattermost-user-1",
-    channelType: "D",
-    commandContextStore,
-    acornOpsClient: {
-      async listVirtualMachineFindings(input, workspaceId, vmId) {
-        assert.equal(workspaceId, "workspace-1");
-        assert.equal(vmId, "vm-1");
-        return [
-          {
-            findingId: "finding-1",
-            severity: "warning",
-            title: "Service attention needed",
-            objectKind: "systemd_service",
-            objectName: "sshd"
-          }
-        ];
-      }
-    }
-  });
-
-  assert.match(response, /Current: Workspace: Platform {4}\| {4}Target: App VM/);
-  assert.match(response, /AcornOps findings:/);
-  assert.match(response, /Service attention needed - severity: warning/);
+test("handleBotMessage treats removed finding commands as unknown", async () => {
+  for (const command of ["!findings", "!investigations"]) {
+    const response = await handleBotMessage({ text: command });
+    assert.match(response, new RegExp(`Unknown AcornOps bot command: ${command.slice(1)}`));
+    assert.match(response, /AcornOps commands:/);
+  }
 });
 
-test("handleBotMessage lists workspace investigations", async () => {
+test("handleBotMessage lists filtered workspace issues", async () => {
   const commandContextStore = createInMemoryCommandContextStore();
   commandContextStore.selectWorkspace("mattermost-user-1", {
     id: "workspace-1",
     name: "Platform"
   });
   const response = await handleBotMessage({
-    text: "!investigations",
+    text: "!issues status=active severity=critical targetType=kubernetes namespace=payments",
     userId: "mattermost-user-1",
     channelType: "D",
     commandContextStore,
     acornOpsClient: {
-      async listWorkspaceInvestigations(input, workspaceId) {
+      async listWorkspaceIssues(input, workspaceId, filters) {
         assert.equal(workspaceId, "workspace-1");
+        assert.deepEqual(filters, {
+          status: "active",
+          severity: "critical",
+          targetType: "kubernetes",
+          namespace: "payments"
+        });
         return {
           items: [
             {
-              id: "finding-1",
+              id: "issue-1",
               severity: "critical",
+              status: "active",
               title: "Pod unhealthy",
-              clusterName: "Prod",
-              namespace: "payments"
+              namespace: "payments",
+              objectKind: "Pod",
+              objectName: "payments-api",
+              summary: "Readiness checks are failing."
             }
           ]
         };
@@ -1303,8 +1293,9 @@ test("handleBotMessage lists workspace investigations", async () => {
     }
   });
 
-  assert.match(response, /AcornOps investigations:/);
-  assert.match(response, /Pod unhealthy - severity: critical, Prod\/payments/);
+  assert.match(response, /Workspace issues:/);
+  assert.match(response, /Pod unhealthy — severity: critical, status: active, payments\/Pod\/payments-api/);
+  assert.match(response, /Readiness checks are failing/);
 });
 
 test("handleBotMessage lists VMs and selects one", async () => {
@@ -2151,7 +2142,12 @@ test("handleBotMessage lists workflows for the current workspace", async () => {
           items: [{
             id: "cluster-triage",
             name: "Cluster triage",
-            description: "Inspect the selected cluster."
+            description: "Inspect the selected cluster.",
+            policy: {
+              mode: "read_write",
+              approvalRequirements: ["before_execution"]
+            },
+            steps: []
           }]
         };
       }
@@ -2160,6 +2156,7 @@ test("handleBotMessage lists workflows for the current workspace", async () => {
 
   assert.match(response, /Available AcornOps workflows:/);
   assert.match(response, /1\. Cluster triage \(cluster-triage\)/);
+  assert.match(response, /read-write, approval may be required/);
   assert.deepEqual(commandContextStore.get("mattermost-user-1").workflows, [{
     id: "cluster-triage",
     name: "Cluster triage"
@@ -2173,6 +2170,7 @@ test("handleBotMessage launches a workflow with grants, quoted inputs, and selec
     userId: "mattermost-user-1",
     userName: "alice",
     channelType: "D",
+    sourceMessageId: "mattermost-post-1",
     commandContextStore,
     acornOpsClient: workflowClient()
   });
@@ -2196,6 +2194,7 @@ test("handleBotMessage launches a workflow with grants, quoted inputs, and selec
       id: "workflow-session-1"
     },
     runId: "run-1",
+    executionId: "execution-1",
     messageId: "workflow-message-1"
   }]);
 });
@@ -2219,6 +2218,7 @@ test("handleBotMessage reports AcornOps workflow 400 reasons", async () => {
     text: '!workflow run 1 reason="check production pods"',
     userId: "mattermost-user-1",
     channelType: "D",
+    sourceMessageId: "mattermost-post-2",
     commandContextStore,
     acornOpsClient: client
   });
@@ -2226,6 +2226,35 @@ test("handleBotMessage reports AcornOps workflow 400 reasons", async () => {
   assert.equal(
     response,
     "AcornOps could not start the workflow run (AI_PROVIDER_CREDENTIAL_MISSING: Configure an AI provider API key in AI Settings before starting a workflow run.)."
+  );
+});
+
+test("handleBotMessage reports AcornOps workflow 409 reasons", async () => {
+  const commandContextStore = selectedClusterContext();
+  const client = workflowClient();
+  client.postWorkflowSessionMessage = async () => {
+    throw new Error([
+      "AcornOps API POST /api/v1/workflow-sessions/workflow-session-1/messages failed with 409:",
+      JSON.stringify({
+        error: {
+          code: "WORKFLOW_TARGET_MENTION_MISMATCH",
+          message: "The control message must include @cluster[Prod] so the selected cluster is explicit."
+        }
+      })
+    ].join(" "));
+  };
+
+  const response = await handleBotMessage({
+    text: '!workflow run 1 reason="check production pods"',
+    userId: "mattermost-user-1",
+    channelType: "D",
+    commandContextStore,
+    acornOpsClient: client
+  });
+
+  assert.equal(
+    response,
+    "AcornOps could not start the workflow run (WORKFLOW_TARGET_MENTION_MISMATCH: The control message must include @cluster[Prod] so the selected cluster is explicit.)."
   );
 });
 
@@ -2246,20 +2275,22 @@ test("handleBotMessage routes workflow thread replies to the same session", asyn
     text: "focus on failed pods",
     userId: "mattermost-user-1",
     channelType: "D",
+    sourceMessageId: "mattermost-post-2",
     commandContextStore,
     threadChat: thread,
     acornOpsClient: {
       async postWorkflowSessionMessage(identity, sessionId, body) {
         assert.deepEqual(identity, externalIdentity());
         assert.equal(sessionId, "workflow-session-1");
-        assert.deepEqual(body, {
-          workspaceId: "workspace-1",
-          content: "focus on failed pods",
-          inputs: { clusterId: "cluster-1" }
-        });
+        assert.equal(body.content, "focus on failed pods @cluster[Prod]");
+        assert.deepEqual(body.inputs, { clusterId: "cluster-1" });
+        assert.equal(body.clientRequestId, "mm-post-mattermost-post-2");
+        assert.equal(body.targetId, "cluster-1");
+        assert.equal(body.targetType, "kubernetes");
         return {
           message_id: "workflow-message-2",
           run_id: "run-2",
+          executionId: "execution-2",
           status: "queued"
         };
       }
@@ -2269,6 +2300,7 @@ test("handleBotMessage routes workflow thread replies to the same session", asyn
   assert.match(result.message, /Workflow follow-up sent/);
   assert.equal(result.effects[0].kind, "workflow");
   assert.equal(result.effects[0].runId, "run-2");
+  assert.equal(result.effects[0].executionId, "execution-2");
   assert.equal(
     commandContextStore.getChatThread("channel-1", "root-1").activeRun.id,
     "run-2"
@@ -2332,7 +2364,7 @@ function workflowClient() {
           id: "cluster-triage",
           name: "Cluster triage",
           status: "active",
-          starterPrompt: "Triage the selected cluster.",
+          starterPrompt: "Triage @cluster[Cluster name] using live evidence.",
           inputs: [{
             name: "reason",
             type: "text",
@@ -2371,17 +2403,32 @@ function workflowClient() {
     async postWorkflowSessionMessage(identity, sessionId, body) {
       assert.deepEqual(identity, externalIdentity());
       assert.equal(sessionId, "workflow-session-1");
-      assert.deepEqual(body, {
-        workspaceId: "workspace-1",
-        content: "Triage the selected cluster.",
+      assert.equal(body.content, "Triage @cluster[Prod] using live evidence.");
+      assert.deepEqual(body.inputs, {
+        reason: "check production pods",
+        clusterId: "cluster-1"
+      });
+      assert.equal(body.clientRequestId, "mm-post-mattermost-post-1");
+      assert.equal(body.targetId, "cluster-1");
+      assert.equal(body.targetType, "kubernetes");
+      assert.deepEqual({
+        content: body.content,
+        inputs: body.inputs,
+        targetId: body.targetId,
+        targetType: body.targetType
+      }, {
+        content: "Triage @cluster[Prod] using live evidence.",
         inputs: {
           reason: "check production pods",
           clusterId: "cluster-1"
-        }
+        },
+        targetId: "cluster-1",
+        targetType: "kubernetes"
       });
       return {
         message_id: "workflow-message-1",
         run_id: "run-1",
+        executionId: "execution-1",
         status: "queued"
       };
     }

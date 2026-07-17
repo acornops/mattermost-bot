@@ -29,10 +29,12 @@ const commandContextStore = await createCommandContextStore({
 const runFollowerRegistry = createRunFollowerRegistry({
   acornOpsClient,
   commandContextStore,
-  postFollowUp: async ({ channelId, message, rootId = "" }) => {
-    await client.createPost({ channelId, message, rootId });
+  postFollowUp: async ({ channelId, message, rootId = "", attachments = undefined }) => {
+    return await client.createPost({ channelId, message, rootId, attachments });
   },
-  acornOpsConsoleUrl: config.acornOpsConsoleUrl
+  acornOpsConsoleUrl: config.acornOpsConsoleUrl,
+  botPublicBaseUrl: config.botPublicBaseUrl,
+  mattermostActionSecret: config.mattermostActionSecret
 });
 const runner = createMattermostBotRunner({
   client,

@@ -167,10 +167,132 @@ test("run follower links approval requests and keeps streaming after approval", 
   registry.start({ ...followOptions(), workspaceId: "workspace-1", rootId: "root-1" });
   await waitFor(() => posts.length === 3);
 
-  assert.match(posts[0].message, /waiting for manual approval/);
+  assert.match(posts[0].message, /Approval required/);
   assert.match(posts[0].message, /https:\/\/console\.acornops\.dev\/workspaces\/workspace-1\/approvals\?runId=run-1&approvalId=approval-1/);
-  assert.match(posts[1].message, /write request approved/);
+  assert.match(posts[1].message, /Approval approved/);
   assert.equal(posts[2].message, "Restart completed.");
+});
+
+test("workflow follower replays every step, deduplicates approvals, and uses the final attempt", async () => {
+  const posts = [];
+  const streamCursors = [];
+  let streamCalls = 0;
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.registerChatThread("mattermost-user-1", {
+    channelId: "channel-1",
+    rootId: "root-1",
+    sessionId: "session-1",
+    kind: "workflow"
+  });
+  const registry = createRunFollowerRegistry({
+    acornOpsClient: {
+      async streamWorkflowExecution(identity, executionId, options) {
+        assert.deepEqual(identity, { externalUserId: "mattermost-user-1" });
+        assert.equal(executionId, "execution-1");
+        streamCursors.push(options.after);
+        streamCalls += 1;
+        if (streamCalls === 1) {
+          return asyncEvents([
+            workflowEvent(1, "run_created", { runId: "run-1" }),
+            workflowEvent(2, "approval_requested", {
+              runId: "run-1",
+              approvalId: "approval-1",
+              payload: {
+                toolName: "restart_workload",
+                summary: "Restart payments-api",
+                expiresAt: "2026-07-18T10:00:00.000Z"
+              }
+            })
+          ]);
+        }
+        return asyncEvents([
+          workflowEvent(2, "approval_requested", {
+            runId: "run-1",
+            approvalId: "approval-1",
+            payload: { toolName: "restart_workload" }
+          }),
+          workflowEvent(3, "run_created", { runId: "run-2" }),
+          workflowEvent(4, "run_event", {
+            runId: "run-2",
+            payload: {
+              runEvent: {
+                type: "tool_approval_requested",
+                payload: {
+                  approval_id: "approval-2",
+                  tool: "cordon_node",
+                  summary: "Cordon node-2"
+                }
+              }
+            }
+          }),
+          workflowEvent(5, "approval_decided", {
+            runId: "run-1",
+            approvalId: "approval-1",
+            payload: { status: "approved" }
+          }),
+          workflowEvent(6, "execution_status_changed", {
+            runId: "run-2",
+            payload: { status: "completed" }
+          })
+        ]);
+      },
+      async getWorkflowExecution() {
+        return {
+          execution: {
+            id: "execution-1",
+            status: streamCalls < 2 ? "running" : "completed"
+          },
+          attempts: [
+            { id: "run-1", stepIndex: 0, attemptNumber: 1 },
+            { id: "run-2", stepIndex: 1, attemptNumber: 1 }
+          ]
+        };
+      },
+      async getRun(identity, runId) {
+        assert.equal(runId, "run-2");
+        return {
+          id: "run-2",
+          status: "completed",
+          assistantMessage: { content: "All workflow steps completed." }
+        };
+      }
+    },
+    commandContextStore,
+    botPublicBaseUrl: "https://bot.example.com/",
+    mattermostActionSecret: "action-secret",
+    postFollowUp: async (post) => posts.push(post),
+    logger: quietLogger(),
+    reconnectAttempts: 2,
+    reconnectDelayMs: 0,
+    fallbackPollIntervalMs: 0,
+    fallbackPollMaxMs: 0
+  });
+
+  assert.equal(registry.start({
+    ...followOptions({ kind: "workflow" }),
+    executionId: "execution-1",
+    workspaceId: "workspace-1",
+    rootId: "root-1"
+  }), true);
+  assert.equal(registry.start({
+    ...followOptions({ kind: "workflow" }),
+    executionId: "execution-2",
+    rootId: "root-1"
+  }), false);
+  await waitFor(() => posts.length === 4);
+
+  assert.deepEqual(streamCursors, ["", "2"]);
+  assert.match(posts[0].message, /restart_workload/);
+  assert.equal(posts[0].attachments[0].actions[0].name, "Approve");
+  assert.equal(posts[0].attachments[0].actions[1].name, "Reject");
+  assert.equal(
+    posts[0].attachments[0].actions[0].integration.context.externalUserId,
+    "mattermost-user-1"
+  );
+  assert.match(posts[1].message, /cordon_node/);
+  assert.match(posts[2].message, /Approval approved/);
+  assert.equal(posts[3].message, "All workflow steps completed.");
+  assert.equal(commandContextStore.getChatThread("channel-1", "root-1").activeRun, null);
 });
 
 test("run follower abort prevents stale final posts", async () => {
@@ -293,6 +415,18 @@ function terminalStreamClient(event) {
       return asyncEvents([
         { event, data: {} }
       ]);
+    }
+  };
+}
+
+function workflowEvent(id, type, fields = {}) {
+  return {
+    event: "workflow_execution",
+    id: String(id),
+    data: {
+      id,
+      type,
+      ...fields
     }
   };
 }

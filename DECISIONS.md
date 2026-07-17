@@ -1,5 +1,14 @@
 # Decision Log
 
+## 2026-07-18: Follow eligible workflow executions and confirm exact-origin approvals in Mattermost
+
+- Decision: Replace target findings and workspace investigations commands with workspace-wide `!issues`; trust AcornOps’ permission-filtered workflow list for active read-only, read-write, and approval-gated workflows; and follow each workflow message through its aggregate `executionId`. Every workflow message carries a hidden `clientRequestId` derived from the originating Mattermost post id and reused only for a retry of that same post.
+- Reason: The updated external-integration contract makes workflow executions multi-step and replayable, so the first `run_id` is not the lifecycle boundary. Post-derived idempotency prevents transport retries from duplicating executions while allowing each new thread reply to create a fresh execution in the same session.
+- Consequence: Active workflow state persists execution kind, `executionId`, current `runId`, and replay cursor in the existing thread record. The follower reconnects with `Last-Event-ID`, deduplicates replay, handles aggregate and nested run approval events, and resolves final output from the latest attempt. Generated report delivery and automatic follower recovery after process restart remain deferred.
+- Decision: For bot-originated troubleshooting and workflow approvals, show **Approve** and **Reject** only when the public callback URL and action secret are configured. Either choice verifies the exact acting user, opens a confirmation-only dialog, verifies signed immutable state on submission, and then calls the run-scoped AcornOps decision endpoint. Otherwise show the AcornOps-console fallback.
+- Reason: A write decision must be explicit and attributable without exposing raw tool arguments or allowing a replayed event, webhook, different Mattermost user, link, or integration client to decide.
+- Consequence: Successful and settled decisions replace the bot-owned approval post and remove its buttons. AcornOps remains authoritative for exact-origin ownership, expiry, conflicts, current write permission, and the limited ability to reject after write permission is removed. This supersedes the 2026-07-10 decision that approvals remain browser-owned and the 2026-07-09 restriction to read-only workflows.
+
 ## 2026-07-13: Reuse AcornOps target chat activity before webhook triage
 
 - Decision: Created and reopened issue alerts expose `Run Triage`. On click, the bot reloads the issue and checks AcornOps' recent target chat activity. If activity identifies a session, the bot links to the AcornOps cluster chat instead of creating another run. Otherwise it creates a read-only cluster session, sends the same prompt as the console, and streams it in a registered Mattermost thread.
@@ -8,6 +17,7 @@
 
 ## 2026-07-10: Opt in to read-write chats per thread and keep approvals browser-owned
 
+- Status: approval handling superseded on 2026-07-18; explicit per-thread read-write chat opt-in remains current.
 - Decision: Keep `!chat new` read-only and add explicit `!chat new --write [title]`. Before creating the thread, refresh the selected workspace and require effective `permissions.create_read_write_runs`. Persist the chosen tool access mode with the thread and use it for every session message.
 - Reason: AcornOps computes this permission from the linked user's workspace role, the registered integration client ceiling, and the user-approved workspace grant. An explicit per-thread choice prevents ordinary troubleshooting conversations from unexpectedly gaining write capability.
 - Consequence: Read-write tool calls may pause for browser approval. Mattermost posts an AcornOps console link from `ACORNOPS_CONSOLE_BASE_URL`, reports approval resolution events, and keeps following the same SSE stream to completion. The bot never makes approval decisions, and AcornOps' message-time `403` remains authoritative if permission changes after preflight.
@@ -26,6 +36,7 @@
 
 ## 2026-07-09: Run external workflows in dedicated Mattermost threads
 
+- Status: workflow thread/session model remains current; read-only-only eligibility, per-run following, and missing idempotency were superseded on 2026-07-18.
 - Decision: Expose active read-only workflows through `!workflows` and `!workflow run <number|id> [key=value...]`. Each accepted launch creates a root post named `**Workflow launched: <name>**`; streamed output and plain-text follow-ups use the same persisted AcornOps workflow session. `!chat end` closes either conversation kind.
 - Reason: Workflow runs can outlive a command response and need the same visible, concurrent conversation boundary already proven by assistant chat threads. The supplied AcornOps contract also requires exact context grants and returns final workflow output on the generic run resource.
 - Consequence: Thread records now carry a `chat` or `workflow` kind plus workflow id, workspace id, and launch inputs. Target bindings always come from the current bot selection, only one run is followed per thread, and the bot continues to deny mutation, scheduling, approval, cancellation, read-write, paused/draft, and approval-gated workflow operations. Workflow message idempotency and restart-time follower recovery remain backend/future-work limitations.

@@ -4,8 +4,8 @@ export function workspaceErrorText(error) {
   const status = httpStatusFromError(error);
   if (status === 401) {
     return [
-      "AcornOps workspaces could not be loaded because this external chat account is not linked or the bot credentials are invalid.",
-      "Run `!login` in a direct message, then try `!workspaces` again."
+      "I couldn’t access AcornOps workspaces for this account.",
+      "Send `!status` to check the connection. If it is not linked, send `!login` in a direct message."
     ].join("\n");
   }
 
@@ -14,18 +14,18 @@ export function workspaceErrorText(error) {
   }
 
   if (status) {
-    return `AcornOps workspaces could not be loaded (HTTP ${status}). Try again later or check the bot logs.`;
+    return "AcornOps workspaces are temporarily unavailable. Try again later.";
   }
 
-  return "AcornOps workspaces could not be loaded. Try again later or check the bot logs.";
+  return "AcornOps workspaces are temporarily unavailable. Try again later.";
 }
 
 export function dataErrorText(error, label) {
   const status = httpStatusFromError(error);
   if (status === 401) {
     return [
-      `AcornOps ${label} could not be loaded because this external chat account is not linked or the bot credentials are invalid.`,
-      "Run `!login` in a direct message, then try again."
+      `I couldn’t access AcornOps ${label} for this account.`,
+      "Send `!status` to check the connection. If it is not linked, send `!login` in a direct message."
     ].join("\n");
   }
 
@@ -38,10 +38,10 @@ export function dataErrorText(error, label) {
   }
 
   if (status) {
-    return `AcornOps ${label} could not be loaded (HTTP ${status}). Try again later or check the bot logs.`;
+    return `AcornOps ${label} are temporarily unavailable. Try again later.`;
   }
 
-  return `AcornOps ${label} could not be loaded. Try again later or check the bot logs.`;
+  return `AcornOps ${label} are temporarily unavailable. Try again later.`;
 }
 
 export function chatMessageErrorText(error, toolAccessMode = "read_only") {
@@ -54,11 +54,11 @@ export function chatMessageErrorText(error, toolAccessMode = "read_only") {
       return `AcornOps could not start the ${modeLabel} chat run (${reason}). Reply in this thread to try again, or use \`!chat end\` to close it.`;
     }
 
-    return `AcornOps could not start the ${modeLabel} chat run (HTTP 400). Reply in this thread to try again, or use \`!chat end\` to close it; check the AcornOps logs for the rejected request reason.`;
+    return `AcornOps could not start the ${modeLabel} chat run. Reply in this thread to try again, or use \`!chat end\` to close it.`;
   }
 
   if (status === 403 && toolAccessMode === "read_write") {
-    return "AcornOps did not allow a read-write run for your linked account in this workspace. The integration configuration, workspace grant, or workspace role may no longer permit it. Start a read-only chat with `!chat new` if needed.";
+    return "Read-write access is no longer available for this account in the current workspace. You can start a read-only chat with `!chat new`.";
   }
 
   return dataErrorText(error, "chat message");
@@ -66,13 +66,13 @@ export function chatMessageErrorText(error, toolAccessMode = "read_only") {
 
 export function workflowMessageErrorText(error) {
   const status = httpStatusFromError(error);
-  if (status === 400) {
+  if (status === 400 || status === 409) {
     const details = acornOpsErrorDetails(error);
     const reason = [details.code, details.message].filter(Boolean).join(": ");
     if (reason) {
       return `AcornOps could not start the workflow run (${reason}).`;
     }
-    return "AcornOps could not start the workflow run (HTTP 400). Check the AcornOps logs for the rejected request reason.";
+    return "AcornOps could not start the workflow. Review its inputs or try again later.";
   }
 
   return dataErrorText(error, "workflow");

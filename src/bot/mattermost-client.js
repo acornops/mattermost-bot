@@ -45,6 +45,30 @@ export class MattermostClient {
     return await this.requestJson("POST", "/api/v4/posts", body);
   }
 
+  async updatePost({ postId, message, props = {} }) {
+    return await this.requestJson(
+      "PUT",
+      `/api/v4/posts/${encodeURIComponent(postId)}`,
+      {
+        id: postId,
+        message,
+        props
+      }
+    );
+  }
+
+  async openDialog({ triggerId, url, dialog }) {
+    return await this.requestJson(
+      "POST",
+      "/api/v4/actions/dialogs/open",
+      {
+        trigger_id: triggerId,
+        url,
+        dialog
+      }
+    );
+  }
+
   async requestJson(method, path, body, options = {}) {
     return await this.http.requestJson(method, path, body, {
       ...options,
