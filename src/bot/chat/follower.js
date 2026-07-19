@@ -1,3 +1,5 @@
+import { signMattermostActionContext } from "../mattermost-actions.js";
+
 const DEFAULT_RECONNECT_ATTEMPTS = 3;
 const DEFAULT_RECONNECT_DELAY_MS = 1000;
 const DEFAULT_FALLBACK_POLL_INTERVAL_MS = 3000;
@@ -14,7 +16,8 @@ export function createRunFollowerRegistry({
   reconnectAttempts = numberFromEnv("RUN_STREAM_RECONNECT_ATTEMPTS", DEFAULT_RECONNECT_ATTEMPTS),
   reconnectDelayMs = numberFromEnv("RUN_STREAM_RECONNECT_DELAY_MS", DEFAULT_RECONNECT_DELAY_MS, { allowZero: true }),
   fallbackPollIntervalMs = numberFromEnv("RUN_STREAM_FALLBACK_POLL_INTERVAL_MS", DEFAULT_FALLBACK_POLL_INTERVAL_MS, { allowZero: true }),
-  fallbackPollMaxMs = numberFromEnv("RUN_STREAM_FALLBACK_POLL_MAX_MS", DEFAULT_FALLBACK_POLL_MAX_MS, { allowZero: true })
+  fallbackPollMaxMs = numberFromEnv("RUN_STREAM_FALLBACK_POLL_MAX_MS", DEFAULT_FALLBACK_POLL_MAX_MS, { allowZero: true }),
+  workflowRetryDelayMs = numberFromEnv("WORKFLOW_FOLLOW_RETRY_DELAY_MS", DEFAULT_FALLBACK_POLL_INTERVAL_MS)
 }) {
   const active = new Map();
 
@@ -86,6 +89,7 @@ export function createRunFollowerRegistry({
         reconnectDelayMs,
         fallbackPollIntervalMs,
         fallbackPollMaxMs,
+        workflowRetryDelayMs,
         active
       }).catch((error) => {
         if (!isAbortError(error)) {
@@ -143,6 +147,7 @@ async function followRun({
   reconnectDelayMs,
   fallbackPollIntervalMs,
   fallbackPollMaxMs,
+  workflowRetryDelayMs,
   active
 }) {
   if (entry.kind === "workflow" && entry.executionId
@@ -160,6 +165,7 @@ async function followRun({
       reconnectDelayMs,
       fallbackPollIntervalMs,
       fallbackPollMaxMs,
+      workflowRetryDelayMs,
       active
     });
     return;
@@ -303,92 +309,98 @@ async function followWorkflowExecution({
   reconnectDelayMs,
   fallbackPollIntervalMs,
   fallbackPollMaxMs,
+  workflowRetryDelayMs,
   active
 }) {
   let status = "";
 
-  for (let attempt = 0; attempt <= reconnectAttempts; attempt += 1) {
-    if (entry.controller.signal.aborted) {
-      return;
-    }
-
-    try {
-      const events = await acornOpsClient.streamWorkflowExecution(
-        entry.identity,
-        entry.executionId,
-        {
-          signal: entry.controller.signal,
-          after: entry.lastEventId
-        }
-      );
-      for await (const event of events) {
-        status = await handleWorkflowExecutionEvent({
-          event,
-          entry,
-          commandContextStore,
-          postFollowUp,
-          acornOpsConsoleUrl,
-          botPublicBaseUrl,
-          mattermostActionSecret
-        }) || status;
-        if (isTerminalRunStatus(status)) {
-          await refreshWorkflowEntry(acornOpsClient, entry);
-          await postTerminalResult({
-            status,
-            entry,
-            acornOpsClient,
-            commandContextStore,
-            postFollowUp,
-            active
-          });
-          return;
-        }
-      }
-    } catch (error) {
-      if (isAbortError(error) || entry.controller.signal.aborted) {
+  while (!entry.controller.signal.aborted) {
+    for (let attempt = 0; attempt <= reconnectAttempts; attempt += 1) {
+      if (entry.controller.signal.aborted) {
         return;
       }
-      logger.error(error instanceof Error ? error.message : error);
+
+      try {
+        const events = await acornOpsClient.streamWorkflowExecution(
+          entry.identity,
+          entry.executionId,
+          {
+            signal: entry.controller.signal,
+            after: entry.lastEventId
+          }
+        );
+        for await (const event of events) {
+          status = await handleWorkflowExecutionEvent({
+            event,
+            entry,
+            commandContextStore,
+            postFollowUp,
+            acornOpsConsoleUrl,
+            botPublicBaseUrl,
+            mattermostActionSecret
+          }) || status;
+          if (isTerminalRunStatus(status)) {
+            await refreshWorkflowEntry(acornOpsClient, entry);
+            await postTerminalResult({
+              status,
+              entry,
+              acornOpsClient,
+              commandContextStore,
+              postFollowUp,
+              active
+            });
+            return;
+          }
+        }
+      } catch (error) {
+        if (isAbortError(error) || entry.controller.signal.aborted) {
+          return;
+        }
+        logger.error(error instanceof Error ? error.message : error);
+      }
+
+      status = await refreshWorkflowEntry(acornOpsClient, entry) || status;
+      if (isTerminalRunStatus(status)) {
+        await postTerminalResult({
+          status,
+          entry,
+          acornOpsClient,
+          commandContextStore,
+          postFollowUp,
+          active
+        });
+        return;
+      }
+      if (attempt < reconnectAttempts && reconnectDelayMs > 0) {
+        await sleep(reconnectDelayMs, entry.controller.signal);
+      }
     }
 
-    status = await refreshWorkflowEntry(acornOpsClient, entry) || status;
-    if (isTerminalRunStatus(status)) {
-      await postTerminalResult({
-        status,
-        entry,
-        acornOpsClient,
-        commandContextStore,
-        postFollowUp,
-        active
-      });
-      return;
+    const deadline = Date.now() + fallbackPollMaxMs;
+    while (!entry.controller.signal.aborted && Date.now() <= deadline) {
+      status = await refreshWorkflowEntry(acornOpsClient, entry) || status;
+      if (isTerminalRunStatus(status)) {
+        await postTerminalResult({
+          status,
+          entry,
+          acornOpsClient,
+          commandContextStore,
+          postFollowUp,
+          active
+        });
+        return;
+      }
+      if (fallbackPollIntervalMs <= 0) {
+        break;
+      }
+      await sleep(fallbackPollIntervalMs, entry.controller.signal);
     }
-    if (attempt < reconnectAttempts && reconnectDelayMs > 0) {
-      await sleep(reconnectDelayMs, entry.controller.signal);
+
+    if (!entry.controller.signal.aborted) {
+      logger.error(`Workflow execution ${entry.executionId} is still active after fallback polling; retaining the follower and retrying.`);
+      await sleep(workflowRetryDelayMs, entry.controller.signal);
     }
   }
-
-  const deadline = Date.now() + fallbackPollMaxMs;
-  while (!entry.controller.signal.aborted && Date.now() <= deadline) {
-    status = await refreshWorkflowEntry(acornOpsClient, entry) || status;
-    if (isTerminalRunStatus(status)) {
-      await postTerminalResult({
-        status,
-        entry,
-        acornOpsClient,
-        commandContextStore,
-        postFollowUp,
-        active
-      });
-      return;
-    }
-    if (fallbackPollIntervalMs <= 0) {
-      break;
-    }
-    await sleep(fallbackPollIntervalMs, entry.controller.signal);
-  }
-
-  clearFollowerEntry({ entry, commandContextStore, active });
 }
 
 async function handleWorkflowExecutionEvent({
@@ -408,11 +420,9 @@ async function handleWorkflowExecutionEvent({
   if (eventId && !isWorkflowEventAfter(eventId, entry.lastEventId)) {
     return "";
   }
-  entry.lastEventId = eventId || entry.lastEventId;
   if (data.runId) {
     entry.runId = data.runId;
   }
-  rememberFollowerEntry(entry, commandContextStore);
 
   if (data.type === "approval_requested") {
     const payload = data.payload ?? {};
@@ -466,6 +476,9 @@ async function handleWorkflowExecutionEvent({
     }
   }
 
+  entry.lastEventId = eventId || entry.lastEventId;
+  rememberFollowerEntry(entry, commandContextStore);
+
   if (data.type === "execution_status_changed") {
     const status = data.payload?.status ?? "";
     return isTerminalRunStatus(status) ? status : "";
@@ -495,7 +508,6 @@ async function postWorkflowApprovalStatus({
   if (entry.notifiedApprovalStatuses.has(key)) {
     return;
   }
-  entry.notifiedApprovalStatuses.add(key);
   await postFollowUp({
     channelId: entry.channelId,
     rootId: entry.rootId,
@@ -503,6 +515,7 @@ async function postWorkflowApprovalStatus({
       ? "AcornOps is continuing the workflow."
       : "I’ll keep watching for the workflow’s final status."}`
   });
+  entry.notifiedApprovalStatuses.add(key);
 }
 
 function rememberFollowerEntry(entry, commandContextStore) {
@@ -543,15 +556,6 @@ async function refreshWorkflowEntry(acornOpsClient, entry) {
   }
 }
 
-function clearFollowerEntry({ entry, commandContextStore, active }) {
-  active.delete(entry.key);
-  if (entry.rootId) {
-    commandContextStore.clearActiveRunForChat?.(entry.channelId, entry.rootId);
-  } else {
-    commandContextStore.clearActiveRun?.(entry.identity.externalUserId);
-  }
-}
-
 async function postApprovalStatus({ event, entry, postFollowUp }) {
   const payload = event.data?.payload ?? event.data ?? {};
   const approvalId = payload.approval_id ?? payload.approvalId ?? "";
@@ -559,13 +563,13 @@ async function postApprovalStatus({ event, entry, postFollowUp }) {
   if (entry.notifiedApprovalStatuses.has(key)) {
     return;
   }
-  entry.notifiedApprovalStatuses.add(key);
   const label = event.event.replace("tool_approval_", "");
   await postFollowUp({
     channelId: entry.channelId,
     rootId: entry.rootId,
     message: `Approval ${label}. ${label === "approved" ? "AcornOps is continuing the run." : "I’ll keep watching for the run’s final status."}`
   });
+  entry.notifiedApprovalStatuses.add(key);
 }
 
 async function postApprovalRequest({
@@ -580,7 +584,6 @@ async function postApprovalRequest({
   if (!approvalId || entry.notifiedApprovalIds.has(approvalId)) {
     return;
   }
-  entry.notifiedApprovalIds.add(approvalId);
 
   const tool = String(approval.toolName ?? "write operation").trim();
   const summary = String(approval.summary ?? "").trim();
@@ -619,6 +622,7 @@ async function postApprovalRequest({
     message: lines.join("\n"),
     attachments
   });
+  entry.notifiedApprovalIds.add(approvalId);
 }
 
 function approvalDecisionAttachments({
@@ -636,7 +640,6 @@ function approvalDecisionAttachments({
 
   const common = {
     action: "request_approval_decision",
-    secret: mattermostActionSecret,
     externalUserId: entry.identity.externalUserId,
     runId: approval.runId || entry.runId,
     approvalId: approval.approvalId,
@@ -647,6 +650,10 @@ function approvalDecisionAttachments({
     summary: approval.summary,
     expiresAt: approval.expiresAt ?? ""
   };
+  const approvalExpiry = Date.parse(approval.expiresAt ?? "");
+  const tokenOptions = Number.isFinite(approvalExpiry)
+    ? { expiresAt: Math.min(approvalExpiry, Date.now() + 24 * 60 * 60 * 1000) }
+    : {};
   return [{
     text: "Confirm in Mattermost before the decision is sent to AcornOps.",
     actions: [
@@ -657,7 +664,13 @@ function approvalDecisionAttachments({
         style: "primary",
         integration: {
           url: actionUrl,
-          context: { ...common, decision: "approved" }
+          context: {
+            token: signMattermostActionContext(
+              { ...common, decision: "approved" },
+              mattermostActionSecret,
+              tokenOptions
+            )
+          }
         }
       },
       {
@@ -667,7 +680,13 @@ function approvalDecisionAttachments({
         style: "danger",
         integration: {
           url: actionUrl,
-          context: { ...common, decision: "rejected" }
+          context: {
+            token: signMattermostActionContext(
+              { ...common, decision: "rejected" },
+              mattermostActionSecret,
+              tokenOptions
+            )
+          }
         }
       }
     ]
@@ -728,7 +747,6 @@ async function postTerminalResult({
     return;
   }
 
-  entry.finalPosted = true;
   commandContextStore.rememberLatestRun?.(entry.identity.externalUserId, {
     id: entry.runId,
     sessionId: entry.sessionId,
@@ -739,21 +757,19 @@ async function postTerminalResult({
     ? await completedRunMessage({ acornOpsClient, entry })
     : terminalRunMessage(status, entry.kind);
 
-  try {
-    if (!entry.controller.signal.aborted && message) {
-      await postFollowUp({
-        channelId: entry.channelId,
-        message,
-        rootId: entry.rootId
-      });
-    }
-  } finally {
-    active.delete(entry.key);
-    if (entry.rootId) {
-      commandContextStore.clearActiveRunForChat?.(entry.channelId, entry.rootId, entry.runId);
-    } else {
-      commandContextStore.clearActiveRun?.(entry.identity.externalUserId, entry.runId);
-    }
+  if (!entry.controller.signal.aborted && message) {
+    await postFollowUp({
+      channelId: entry.channelId,
+      message,
+      rootId: entry.rootId
+    });
+  }
+  entry.finalPosted = true;
+  active.delete(entry.key);
+  if (entry.rootId) {
+    commandContextStore.clearActiveRunForChat?.(entry.channelId, entry.rootId, entry.runId);
+  } else {
+    commandContextStore.clearActiveRun?.(entry.identity.externalUserId, entry.runId);
   }
 }
 

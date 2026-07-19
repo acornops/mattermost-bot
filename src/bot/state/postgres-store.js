@@ -165,6 +165,12 @@ function wrapPersistentStore({ memory, db, logger }) {
     return result;
   };
 
+  store.rememberWorkflowLaunch = async (externalUserId, launch) => {
+    const result = memory.rememberWorkflowLaunch(externalUserId, launch);
+    await persistContext(db, memory, externalUserId);
+    return result;
+  };
+
   store.registerChatThread = (externalUserId, thread) => {
     const result = memory.registerChatThread(externalUserId, thread);
     persistThread(db, result).catch(logPersistenceError(logger));

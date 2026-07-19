@@ -61,6 +61,7 @@ import {
   parseWorkflowRunArguments,
   prepareWorkflowLaunch
 } from "./commands/workflows.js";
+import { signMattermostActionContext } from "./mattermost-actions.js";
 
 const commandReferenceUrl = "https://github.com/acornops/mattermost-bot/wiki/Mattermost-Bot-Commands";
 
@@ -946,7 +947,7 @@ function workspaceSelectionAttachments({
   const actionUrl = botPublicBaseUrl
     ? `${botPublicBaseUrl.replace(/\/+$/, "")}/mattermost/actions`
     : "";
-  if (!actionUrl || items.length === 0) {
+  if (!actionUrl || !mattermostActionSecret || items.length === 0) {
     return [];
   }
 
@@ -963,14 +964,15 @@ function workspaceSelectionAttachments({
           integration: {
             url: actionUrl,
             context: {
-              action: "select_workspace",
-              secret: mattermostActionSecret,
-              externalUserId: identity.externalUserId,
-              contextGeneration: context?.contextGeneration ?? 0,
-              workspace: {
-                id,
-                name
-              }
+              token: signMattermostActionContext({
+                action: "select_workspace",
+                externalUserId: identity.externalUserId,
+                contextGeneration: context?.contextGeneration ?? 0,
+                workspace: {
+                  id,
+                  name
+                }
+              }, mattermostActionSecret)
             }
           }
         };
@@ -991,7 +993,7 @@ function targetSelectionAttachments({
   const actionUrl = botPublicBaseUrl
     ? `${botPublicBaseUrl.replace(/\/+$/, "")}/mattermost/actions`
     : "";
-  if (!actionUrl || items.length === 0) {
+  if (!actionUrl || !mattermostActionSecret || items.length === 0) {
     return [];
   }
 
@@ -1009,19 +1011,20 @@ function targetSelectionAttachments({
           integration: {
             url: actionUrl,
             context: {
-              action: "select_target",
-              secret: mattermostActionSecret,
-              externalUserId: identity.externalUserId,
-              contextGeneration: context?.contextGeneration ?? 0,
-              workspace: {
-                id: workspace?.id ?? "",
-                name: workspace?.name ?? ""
-              },
-              target: {
-                id,
-                name,
-                type
-              }
+              token: signMattermostActionContext({
+                action: "select_target",
+                externalUserId: identity.externalUserId,
+                contextGeneration: context?.contextGeneration ?? 0,
+                workspace: {
+                  id: workspace?.id ?? "",
+                  name: workspace?.name ?? ""
+                },
+                target: {
+                  id,
+                  name,
+                  type
+                }
+              }, mattermostActionSecret)
             }
           }
         };
@@ -1200,28 +1203,89 @@ async function handleWorkflow({
     if (launch.error) {
       return launch.error;
     }
-    const sessionResponse = await acornOpsClient.createWorkflowSession(
-      auth.identity,
-      workflow.id,
-      {
-        workspaceId: context.currentWorkspace.id,
-        approvedContextGrants: launch.approvedContextGrants
+    const clientRequestId = workflowClientRequestId({ sourceMessageId });
+    const runOnce = commandContextStore.runWorkflowLaunchOnce?.bind(commandContextStore)
+      ?? ((_externalUserId, _sourceMessageId, operation) => operation());
+    const launched = await runOnce(
+      auth.identity.externalUserId,
+      sourceMessageId,
+      async () => {
+        const reservedLaunch = sourceMessageId
+          ? commandContextStore.getWorkflowLaunch?.(
+            auth.identity.externalUserId,
+            sourceMessageId
+          )
+          : null;
+        if (reservedLaunch
+          && (reservedLaunch.workflowId !== workflow.id
+            || reservedLaunch.workspaceId !== context.currentWorkspace.id)) {
+          return {
+            error: "This Mattermost post is already associated with a different workflow launch."
+          };
+        }
+
+        let session;
+        if (reservedLaunch?.sessionId) {
+          session = { id: reservedLaunch.sessionId };
+        } else {
+          const sessionResponse = await acornOpsClient.createWorkflowSession(
+            auth.identity,
+            workflow.id,
+            {
+              workspaceId: context.currentWorkspace.id,
+              approvedContextGrants: launch.approvedContextGrants
+            }
+          );
+          session = sessionResponse.session ?? sessionResponse;
+          if (sourceMessageId) {
+            await commandContextStore.rememberWorkflowLaunch?.(
+              auth.identity.externalUserId,
+              {
+                sourceMessageId,
+                clientRequestId,
+                workspaceId: context.currentWorkspace.id,
+                workflowId: workflow.id,
+                sessionId: session.id
+              }
+            );
+          }
+        }
+        const result = await acornOpsClient.postWorkflowSessionMessage(
+          auth.identity,
+          session.id,
+          {
+            content: launch.content,
+            inputs: launch.inputs,
+            clientRequestId,
+            targetId: context.currentTarget?.id,
+            targetType: normalizeTargetType(context.currentTarget?.type)
+          }
+        );
+        const runId = result.run_id ?? result.runId ?? "";
+        const executionId = result.executionId ?? result.execution_id ?? result.workflow_run_id ?? "";
+        if (sourceMessageId && runId && executionId) {
+          await commandContextStore.rememberWorkflowLaunch?.(
+            auth.identity.externalUserId,
+            {
+              sourceMessageId,
+              clientRequestId,
+              workspaceId: context.currentWorkspace.id,
+              workflowId: workflow.id,
+              sessionId: session.id,
+              messageId: result.message_id ?? result.messageId ?? "",
+              runId,
+              executionId,
+              status: result.status ?? "accepted"
+            }
+          );
+        }
+        return { session, result, runId, executionId };
       }
     );
-    const session = sessionResponse.session ?? sessionResponse;
-    const result = await acornOpsClient.postWorkflowSessionMessage(
-      auth.identity,
-      session.id,
-      {
-        content: launch.content,
-        inputs: launch.inputs,
-        clientRequestId: workflowClientRequestId({ sourceMessageId }),
-        targetId: context.currentTarget?.id,
-        targetType: normalizeTargetType(context.currentTarget?.type)
-      }
-    );
-    const runId = result.run_id ?? result.runId ?? "";
-    const executionId = result.executionId ?? result.execution_id ?? result.workflow_run_id ?? "";
+    if (launched.error) {
+      return launched.error;
+    }
+    const { session, result, runId, executionId } = launched;
     if (!runId || !executionId) {
       return "AcornOps created the workflow session but did not return an execution to follow.";
     }

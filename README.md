@@ -92,7 +92,7 @@ Environment variables:
 | `BOT_HTTP_HOST` | Host for the optional inbound bot HTTP listener. | `0.0.0.0` |
 | `BOT_HTTP_PORT` | Port for the inbound bot HTTP listener. `0` disables listening. | `0` |
 | `BOT_PUBLIC_BASE_URL` | Public base URL used in Mattermost interactive action callbacks and AcornOps webhook delivery URLs. Required for selection/approval buttons and `!webhook create`. | Empty |
-| `MATTERMOST_ACTION_SECRET` | Shared secret embedded in user-bound Mattermost action contexts. Required with `BOT_PUBLIC_BASE_URL` for approval buttons. | Empty |
+| `MATTERMOST_ACTION_SECRET` | Server-side HMAC key for expiring Mattermost action and approval-dialog tokens. It is never included in a Mattermost post. Required with `BOT_PUBLIC_BASE_URL` for interactive buttons. | Empty |
 | `BOT_ALERT_TIME_ZONE` | IANA timezone used when rendering AcornOps webhook alert timestamps. | `Asia/Singapore` |
 | `CHAT_RUN_POLL_ATTEMPTS` | Immediate chat run polling attempts before SSE follow-up. | `15` |
 | `CHAT_RUN_POLL_INTERVAL_MS` | Immediate chat run polling interval in milliseconds. | `1000` |
@@ -100,6 +100,7 @@ Environment variables:
 | `RUN_STREAM_RECONNECT_DELAY_MS` | Delay between SSE reconnect attempts in milliseconds. | `1000` |
 | `RUN_STREAM_FALLBACK_POLL_INTERVAL_MS` | Fallback run polling interval in milliseconds. | `3000` |
 | `RUN_STREAM_FALLBACK_POLL_MAX_MS` | Maximum fallback run polling duration in milliseconds. | `180000` |
+| `WORKFLOW_FOLLOW_RETRY_DELAY_MS` | Delay before a still-active workflow starts another reconnect and polling cycle. | `3000` |
 
 Local `.env` files are loaded without overriding existing process environment values.
 
@@ -136,7 +137,7 @@ Commands are plain Mattermost messages, not slash commands. Command words requir
 
 After `!chat new`, reply in the generated Mattermost thread to send read-only assistant questions for that specific AcornOps session. Thread replies do not need `!`; assistant replies and long-running SSE follow-ups stay in that thread. The main bot direct message or channel mention remains available for normal `!` commands and additional `!chat new` threads. Advanced filters, shortcuts such as `!clusters` and `!vms`, and compatibility session commands are documented in [`docs/wiki-mattermost-bot-commands.md`](docs/wiki-mattermost-bot-commands.md).
 
-Every workflow launch or follow-up sends a required `clientRequestId` derived from its originating Mattermost post id. It is reused only if that exact post is retried, is never shown to users, and prevents a transport retry from creating a duplicate execution.
+Every workflow launch or follow-up sends a required `clientRequestId` derived from its originating Mattermost post id. Initial launches also persist and reuse the source-post-to-session reservation, including concurrent delivery in one bot process. The id is reused only if that exact post is retried, is never shown to users, and prevents a transport retry from creating a duplicate execution.
 
 Created and reopened issue alerts delivered to Mattermost can include a **Run Triage** action. It is restricted to the Mattermost user who owns the alert route and either links to recent AcornOps cluster chat activity or starts a new read-only triage session in a dedicated Mattermost thread.
 

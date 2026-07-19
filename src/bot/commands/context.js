@@ -19,6 +19,7 @@ export function createInMemoryCommandContextStore({ initialState = {} } = {}) {
     })
   );
   const inboundEvents = new Set(initialState.inboundEvents ?? []);
+  const workflowLaunchTasks = new Map();
 
   return {
     get(externalUserId) {
@@ -43,6 +44,44 @@ export function createInMemoryCommandContextStore({ initialState = {} } = {}) {
       };
       contexts.set(externalUserId, nextContext);
       return nextContext;
+    },
+
+    getWorkflowLaunch(externalUserId, sourceMessageId) {
+      if (!sourceMessageId) {
+        return null;
+      }
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      return (context.workflowLaunches ?? [])
+        .find((launch) => launch.sourceMessageId === sourceMessageId) ?? null;
+    },
+
+    rememberWorkflowLaunch(externalUserId, launch) {
+      const context = contexts.get(externalUserId) ?? emptyContext();
+      const record = workflowLaunchReference(launch);
+      const prior = (context.workflowLaunches ?? [])
+        .filter((item) => item.sourceMessageId !== record.sourceMessageId);
+      const nextContext = {
+        ...context,
+        workflowLaunches: [...prior, record].slice(-50)
+      };
+      contexts.set(externalUserId, nextContext);
+      return record;
+    },
+
+    runWorkflowLaunchOnce(externalUserId, sourceMessageId, operation) {
+      if (!sourceMessageId) {
+        return operation();
+      }
+      const key = `${externalUserId}:${sourceMessageId}`;
+      const existing = workflowLaunchTasks.get(key);
+      if (existing) {
+        return existing;
+      }
+      const task = Promise.resolve()
+        .then(operation)
+        .finally(() => workflowLaunchTasks.delete(key));
+      workflowLaunchTasks.set(key, task);
+      return task;
     },
 
     selectWorkspace(externalUserId, workspace) {
@@ -425,6 +464,15 @@ export function createNullCommandContextStore() {
         workflows: workflows.map(workflowReference)
       };
     },
+    getWorkflowLaunch() {
+      return null;
+    },
+    rememberWorkflowLaunch(_externalUserId, launch) {
+      return workflowLaunchReference(launch);
+    },
+    runWorkflowLaunchOnce(_externalUserId, _sourceMessageId, operation) {
+      return operation();
+    },
     selectWorkspace(_externalUserId, workspace) {
       return {
         ...emptyContext(),
@@ -622,6 +670,7 @@ function emptyContext() {
   return {
     workspaces: [],
     workflows: [],
+    workflowLaunches: [],
     currentWorkspace: null,
     clusters: [],
     currentCluster: null,
@@ -637,6 +686,20 @@ function emptyContext() {
     accountFingerprint: "",
     loginValidationPending: false,
     contextGeneration: 0
+  };
+}
+
+function workflowLaunchReference(launch) {
+  return {
+    sourceMessageId: launch.sourceMessageId ?? "",
+    clientRequestId: launch.clientRequestId ?? "",
+    workspaceId: launch.workspaceId ?? "",
+    workflowId: launch.workflowId ?? "",
+    sessionId: launch.sessionId ?? "",
+    messageId: launch.messageId ?? "",
+    runId: launch.runId ?? "",
+    executionId: launch.executionId ?? "",
+    status: launch.status ?? ""
   };
 }
 

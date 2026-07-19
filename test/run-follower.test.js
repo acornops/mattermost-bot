@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createInMemoryCommandContextStore } from "../src/bot/commands/context.js";
 import { createRunFollowerRegistry } from "../src/bot/chat/follower.js";
+import { verifyMattermostActionContext } from "../src/bot/mattermost-actions.js";
 
 test("run follower posts the assistant answer on SSE completion", async () => {
   const commandContextStore = createInMemoryCommandContextStore();
@@ -200,7 +201,7 @@ test("workflow follower replays every step, deduplicates approvals, and uses the
               payload: {
                 toolName: "restart_workload",
                 summary: "Restart payments-api",
-                expiresAt: "2026-07-18T10:00:00.000Z"
+                expiresAt: "2099-07-18T10:00:00.000Z"
               }
             })
           ]);
@@ -285,14 +286,211 @@ test("workflow follower replays every step, deduplicates approvals, and uses the
   assert.match(posts[0].message, /restart_workload/);
   assert.equal(posts[0].attachments[0].actions[0].name, "Approve");
   assert.equal(posts[0].attachments[0].actions[1].name, "Reject");
+  const approvalContext = posts[0].attachments[0].actions[0].integration.context;
+  assert.deepEqual(Object.keys(approvalContext), ["token"]);
   assert.equal(
-    posts[0].attachments[0].actions[0].integration.context.externalUserId,
+    verifyMattermostActionContext(approvalContext.token, "action-secret").externalUserId,
     "mattermost-user-1"
   );
   assert.match(posts[1].message, /cordon_node/);
   assert.match(posts[2].message, /Approval approved/);
   assert.equal(posts[3].message, "All workflow steps completed.");
   assert.equal(commandContextStore.getChatThread("channel-1", "root-1").activeRun, null);
+});
+
+test("workflow follower replays an approval when its Mattermost post fails", async () => {
+  const cursors = [];
+  const posts = [];
+  let streamCalls = 0;
+  let postCalls = 0;
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.registerChatThread("mattermost-user-1", {
+    channelId: "channel-1",
+    rootId: "root-1",
+    sessionId: "session-1",
+    kind: "workflow"
+  });
+  const registry = createRunFollowerRegistry({
+    acornOpsClient: {
+      async streamWorkflowExecution(_identity, _executionId, options) {
+        cursors.push(options.after);
+        streamCalls += 1;
+        if (streamCalls === 1) {
+          return asyncEvents([
+            workflowEvent(1, "approval_requested", {
+              runId: "run-1",
+              approvalId: "approval-1",
+              payload: { toolName: "restart_workload" }
+            })
+          ]);
+        }
+        return asyncEvents([
+          workflowEvent(1, "approval_requested", {
+            runId: "run-1",
+            approvalId: "approval-1",
+            payload: { toolName: "restart_workload" }
+          }),
+          workflowEvent(2, "execution_status_changed", {
+            runId: "run-1",
+            payload: { status: "completed" }
+          })
+        ]);
+      },
+      async getWorkflowExecution() {
+        return {
+          execution: { status: streamCalls > 1 ? "completed" : "running" },
+          attempts: [{ id: "run-1" }]
+        };
+      },
+      async getRun() {
+        return {
+          id: "run-1",
+          status: "completed",
+          assistantMessage: { content: "Workflow completed." }
+        };
+      }
+    },
+    commandContextStore,
+    postFollowUp: async (post) => {
+      postCalls += 1;
+      if (postCalls === 1) {
+        throw new Error("Mattermost unavailable");
+      }
+      posts.push(post);
+    },
+    logger: quietLogger(),
+    reconnectAttempts: 2,
+    reconnectDelayMs: 0,
+    fallbackPollIntervalMs: 0,
+    fallbackPollMaxMs: 0,
+    workflowRetryDelayMs: 1
+  });
+
+  registry.start({
+    ...followOptions({ kind: "workflow" }),
+    executionId: "execution-1",
+    rootId: "root-1"
+  });
+  await waitFor(() => posts.length === 2);
+
+  assert.deepEqual(cursors, ["", ""]);
+  assert.match(posts[0].message, /Approval required/);
+  assert.equal(posts[1].message, "Workflow completed.");
+});
+
+test("workflow follower retries terminal delivery before clearing active state", async () => {
+  const posts = [];
+  let postCalls = 0;
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.registerChatThread("mattermost-user-1", {
+    channelId: "channel-1",
+    rootId: "root-1",
+    sessionId: "session-1",
+    kind: "workflow"
+  });
+  const registry = createRunFollowerRegistry({
+    acornOpsClient: {
+      async streamWorkflowExecution() {
+        return asyncEvents([
+          workflowEvent(1, "execution_status_changed", {
+            runId: "run-1",
+            payload: { status: "completed" }
+          })
+        ]);
+      },
+      async getWorkflowExecution() {
+        return {
+          execution: { status: "completed" },
+          attempts: [{ id: "run-1" }]
+        };
+      },
+      async getRun() {
+        return {
+          id: "run-1",
+          status: "completed",
+          assistantMessage: { content: "Delivered after retry." }
+        };
+      }
+    },
+    commandContextStore,
+    postFollowUp: async (post) => {
+      postCalls += 1;
+      if (postCalls === 1) {
+        throw new Error("Mattermost unavailable");
+      }
+      posts.push(post);
+    },
+    logger: quietLogger(),
+    reconnectAttempts: 1,
+    reconnectDelayMs: 0,
+    fallbackPollIntervalMs: 0,
+    fallbackPollMaxMs: 0,
+    workflowRetryDelayMs: 1
+  });
+
+  registry.start({
+    ...followOptions({ kind: "workflow" }),
+    executionId: "execution-1",
+    rootId: "root-1"
+  });
+  await waitFor(() => posts.length === 1);
+
+  assert.equal(postCalls, 2);
+  assert.equal(posts[0].message, "Delivered after retry.");
+  assert.equal(commandContextStore.getChatThread("channel-1", "root-1").activeRun, null);
+});
+
+test("workflow follower retains active state after bounded fallback polling", async () => {
+  let streamCalls = 0;
+  const commandContextStore = createInMemoryCommandContextStore();
+  commandContextStore.registerChatThread("mattermost-user-1", {
+    channelId: "channel-1",
+    rootId: "root-1",
+    sessionId: "session-1",
+    kind: "workflow"
+  });
+  const registry = createRunFollowerRegistry({
+    acornOpsClient: {
+      async streamWorkflowExecution() {
+        streamCalls += 1;
+        return asyncEvents([]);
+      },
+      async getWorkflowExecution() {
+        return {
+          execution: { status: "running" },
+          attempts: [{ id: "run-1" }]
+        };
+      }
+    },
+    commandContextStore,
+    postFollowUp: async () => {},
+    logger: quietLogger(),
+    reconnectAttempts: 0,
+    reconnectDelayMs: 0,
+    fallbackPollIntervalMs: 0,
+    fallbackPollMaxMs: 0,
+    workflowRetryDelayMs: 1
+  });
+
+  registry.start({
+    ...followOptions({ kind: "workflow" }),
+    executionId: "execution-1",
+    rootId: "root-1"
+  });
+  await waitFor(() => streamCalls >= 2);
+
+  assert.equal(registry.has("mattermost-user-1", {
+    channelId: "channel-1",
+    rootId: "root-1"
+  }), true);
+  assert.equal(
+    commandContextStore.getChatThread("channel-1", "root-1").activeRun.executionId,
+    "execution-1"
+  );
+  registry.abort("mattermost-user-1", {
+    channelId: "channel-1",
+    rootId: "root-1"
+  });
 });
 
 test("run follower abort prevents stale final posts", async () => {

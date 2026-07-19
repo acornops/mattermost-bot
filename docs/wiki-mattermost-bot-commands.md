@@ -73,9 +73,9 @@ The bot supplies target bindings from the currently selected target; typed input
 
 Each workflow thread allows one active execution at a time. Read-only, read-write, and approval-gated workflows returned by AcornOps use the same launch syntax; AcornOps remains authoritative for eligibility. A follow-up starts a fresh execution in the same workflow session.
 
-Every workflow launch or follow-up includes a hidden `clientRequestId` derived from the originating Mattermost post id. Retrying that exact post reuses the id so AcornOps can return the same accepted request instead of creating a duplicate execution. A new Mattermost reply gets a new id and execution.
+Every workflow launch or follow-up includes a hidden `clientRequestId` derived from the originating Mattermost post id. The bot also persists the initial post-to-workflow-session reservation, so sequential or concurrent delivery of that exact post reuses both the session and request id and AcornOps can return the same accepted execution. A new Mattermost reply gets a new id and execution.
 
-Approval buttons are bound to the exact Mattermost user, bot action secret, run, approval, workspace, and thread. The confirmation dialog carries signed immutable state, and AcornOps accepts decisions only from the same external integration link and client that created the execution. The bot never decides from an SSE event or webhook, never displays raw tool arguments, and may still offer rejection when write permission has been revoked and AcornOps permits it.
+Approval buttons are bound to the exact Mattermost user, run, approval, workspace, and thread through an expiring signed token. The action secret remains server-side and is never included in the post. The confirmation dialog carries a separate short-lived signed immutable state token, and AcornOps accepts decisions only from the same external integration link and client that created the execution. The bot never decides from an SSE event or webhook, never displays raw tool arguments, and may still offer rejection when write permission has been revoked and AcornOps permits it.
 
 ## Chat Threads
 

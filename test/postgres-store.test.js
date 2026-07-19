@@ -118,6 +118,17 @@ test("Postgres command context store migrates, loads, and persists state", async
     ]
   });
   store.rememberAccountFingerprint("user-1", "fingerprint-1");
+  await store.rememberWorkflowLaunch("user-1", {
+    sourceMessageId: "post-1",
+    clientRequestId: "mm-post-post-1",
+    workspaceId: "workspace-2",
+    workflowId: "workflow-1",
+    sessionId: "workflow-session-1"
+  });
+  assert.equal(
+    store.getWorkflowLaunch("user-1", "post-1").sessionId,
+    "workflow-session-1"
+  );
   store.resetAccountContext("user-1");
   assert.equal(await store.rememberInboundEvent("event-2"), true);
 
@@ -127,6 +138,7 @@ test("Postgres command context store migrates, loads, and persists state", async
   assert.equal(queries.some((query) => query.sql.includes("ADD COLUMN IF NOT EXISTS route_token_hash")), true);
   assert.equal(queries.some((query) => query.sql.includes("ADD COLUMN IF NOT EXISTS thread_kind")), true);
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO bot_user_contexts")), true);
+  assert.equal(queries.some((query) => query.params[1]?.workflowLaunches?.[0]?.sessionId === "workflow-session-1"), true);
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO bot_webhook_routes")), true);
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO bot_inbound_events")), true);
   assert.equal(queries.some((query) => query.sql.includes("DELETE FROM bot_chat_threads WHERE external_user_id = $1")), true);

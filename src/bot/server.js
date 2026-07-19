@@ -1,6 +1,12 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import { DEFAULT_ALERT_TIME_ZONE } from "./config.js";
+import {
+  signApprovalDialogState,
+  signMattermostActionContext,
+  verifyApprovalDialogState,
+  verifyMattermostActionContext
+} from "./mattermost-actions.js";
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
@@ -34,34 +40,17 @@ export function createBotHttpServer({
       if (req.method === "POST" && pathname === "/mattermost/actions") {
         const rawBody = await readBody(req);
         const payload = parseJson(rawBody);
-        let result;
-        if (payload.callback_id === "acornops_approval_decision") {
-          result = await handleApprovalDecisionSubmission({
-            payload,
-            mattermostActionSecret,
-            mattermostClient,
-            acornOpsClient
-          });
-        } else if (payload.context?.action === "request_approval_decision") {
-          result = await handleApprovalDecisionRequest({
-            payload,
-            mattermostActionSecret,
-            botPublicBaseUrl,
-            mattermostClient
-          });
-        } else if (payload.context?.action === "run_issue_triage") {
-          result = await handleIssueTriageAction({
-            payload,
-            mattermostActionSecret,
-            commandContextStore,
-            mattermostClient,
-            acornOpsClient,
-            acornOpsConsoleUrl,
-            runFollowerRegistry
-          });
-        } else {
-          result = handleMattermostAction({ payload, mattermostActionSecret, commandContextStore });
-        }
+        const result = await handleMattermostActionPayload({
+          payload,
+          mattermostActionSecret,
+          botPublicBaseUrl,
+          commandContextStore,
+          mattermostClient,
+          acornOpsClient,
+          acornOpsConsoleUrl,
+          runFollowerRegistry,
+          logger
+        });
         if (!result.suppressPost) {
           await postMattermostActionResponse({
             payload,
@@ -136,13 +125,66 @@ export function createBotHttpServer({
   };
 }
 
+export async function handleMattermostActionPayload({
+  payload,
+  mattermostActionSecret,
+  botPublicBaseUrl = "",
+  commandContextStore,
+  mattermostClient,
+  acornOpsClient = null,
+  acornOpsConsoleUrl = "",
+  runFollowerRegistry = null,
+  logger = console
+}) {
+  const action = verifyMattermostActionContext(
+    payload.context?.token,
+    mattermostActionSecret
+  )?.action;
+  if (payload.callback_id === "acornops_approval_decision") {
+    return await handleApprovalDecisionSubmission({
+      payload,
+      mattermostActionSecret,
+      mattermostClient,
+      acornOpsClient,
+      logger
+    });
+  }
+  if (action === "request_approval_decision") {
+    return await handleApprovalDecisionRequest({
+      payload,
+      mattermostActionSecret,
+      botPublicBaseUrl,
+      mattermostClient
+    });
+  }
+  if (action === "run_issue_triage") {
+    return await handleIssueTriageAction({
+      payload,
+      mattermostActionSecret,
+      commandContextStore,
+      mattermostClient,
+      acornOpsClient,
+      acornOpsConsoleUrl,
+      runFollowerRegistry
+    });
+  }
+  return handleMattermostAction({
+    payload,
+    mattermostActionSecret,
+    commandContextStore
+  });
+}
+
 export function handleMattermostAction({
   payload,
   mattermostActionSecret,
   commandContextStore
 }) {
-  const context = payload.context ?? {};
-  if (mattermostActionSecret && context.secret !== mattermostActionSecret) {
+  const context = verifyMattermostActionContext(
+    payload.context?.token,
+    mattermostActionSecret
+  );
+  if (!context) {
     return actionFailure("This action is not authorized.");
   }
 
@@ -176,9 +218,12 @@ export async function handleApprovalDecisionRequest({
   botPublicBaseUrl,
   mattermostClient
 }) {
-  const context = payload.context ?? {};
+  const context = verifyMattermostActionContext(
+    payload.context?.token,
+    mattermostActionSecret
+  );
   const actingUserId = payload.user_id ?? payload.userId ?? "";
-  if (!mattermostActionSecret || context.secret !== mattermostActionSecret) {
+  if (!context) {
     return actionError("This approval action is not authorized.");
   }
   if (!actingUserId || actingUserId !== context.externalUserId) {
@@ -197,7 +242,7 @@ export async function handleApprovalDecisionRequest({
     return actionError("Mattermost approval confirmation is not configured.");
   }
 
-  const state = signApprovalDialogState({
+  const stateValue = {
     externalUserId: actingUserId,
     runId: context.runId,
     approvalId: context.approvalId,
@@ -209,7 +254,15 @@ export async function handleApprovalDecisionRequest({
     toolName: compactText(context.toolName || "write operation", 120),
     summary: compactText(context.summary, 500),
     expiresAt: compactText(context.expiresAt, 120)
-  }, mattermostActionSecret);
+  };
+  const approvalExpiry = Date.parse(context.expiresAt ?? "");
+  const state = signApprovalDialogState(
+    stateValue,
+    mattermostActionSecret,
+    Number.isFinite(approvalExpiry)
+      ? { expiresAt: Math.min(approvalExpiry, Date.now() + 15 * 60 * 1000) }
+      : {}
+  );
   const decisionLabel = context.decision === "approved" ? "Approve" : "Reject";
   const callbackUrl = `${botPublicBaseUrl.replace(/\/+$/, "")}/mattermost/actions`;
   const details = [
@@ -247,7 +300,9 @@ export async function handleApprovalDecisionSubmission({
   payload,
   mattermostActionSecret,
   mattermostClient,
-  acornOpsClient
+  acornOpsClient,
+  logger = console,
+  postUpdateAttempts = 3
 }) {
   const state = verifyApprovalDialogState(payload.state, mattermostActionSecret);
   const actingUserId = payload.user_id ?? payload.userId ?? "";
@@ -262,6 +317,7 @@ export async function handleApprovalDecisionSubmission({
     return dialogError("AcornOps approval decisions are not configured.");
   }
 
+  let status;
   try {
     const result = await acornOpsClient.decideRunApproval(
       { externalUserId: actingUserId },
@@ -269,33 +325,31 @@ export async function handleApprovalDecisionSubmission({
       state.approvalId,
       state.decision
     );
-    const status = result?.status ?? result?.approval?.status ?? state.decision;
-    await updateApprovalPost({
-      mattermostClient,
-      state,
-      status
-    });
-    return {
-      status: 200,
-      body: {},
-      suppressPost: true
-    };
+    status = result?.status ?? result?.approval?.status ?? state.decision;
   } catch (error) {
     const settledStatus = settledApprovalStatus(error);
     if (settledStatus) {
-      await updateApprovalPost({
-        mattermostClient,
-        state,
-        status: settledStatus
-      }).catch(() => {});
-      return {
-        status: 200,
-        body: {},
-        suppressPost: true
-      };
+      status = settledStatus;
+    } else {
+      return dialogError(approvalDecisionErrorMessage(error, state.decision));
     }
-    return dialogError(approvalDecisionErrorMessage(error, state.decision));
   }
+
+  try {
+    await updateApprovalPostWithRetry({
+      mattermostClient,
+      state,
+      status,
+      attempts: postUpdateAttempts
+    });
+  } catch (error) {
+    logger.error(`AcornOps recorded approval ${state.approvalId} as ${status}, but the Mattermost post could not be updated: ${error instanceof Error ? error.message : error}`);
+  }
+  return {
+    status: 200,
+    body: {},
+    suppressPost: true
+  };
 }
 
 async function updateApprovalPost({ mattermostClient, state, status }) {
@@ -320,30 +374,25 @@ async function updateApprovalPost({ mattermostClient, state, status }) {
   });
 }
 
-function signApprovalDialogState(value, secret) {
-  const encoded = Buffer.from(JSON.stringify(value)).toString("base64url");
-  const signature = createHmac("sha256", secret).update(encoded).digest("base64url");
-  return `${encoded}.${signature}`;
-}
-
-function verifyApprovalDialogState(value, secret) {
-  if (!value || !secret) {
-    return null;
+async function updateApprovalPostWithRetry({
+  mattermostClient,
+  state,
+  status,
+  attempts
+}) {
+  let lastError;
+  for (let attempt = 0; attempt < Math.max(1, attempts); attempt += 1) {
+    try {
+      await updateApprovalPost({ mattermostClient, state, status });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt + 1 < attempts) {
+        await delay(50 * (attempt + 1));
+      }
+    }
   }
-  const [encoded, signature, extra] = String(value).split(".");
-  if (!encoded || !signature || extra) {
-    return null;
-  }
-  const expected = createHmac("sha256", secret).update(encoded).digest("base64url");
-  if (!safeEqual(signature, expected)) {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
+  throw lastError;
 }
 
 function settledApprovalStatus(error) {
@@ -573,9 +622,12 @@ export async function handleIssueTriageAction({
   acornOpsConsoleUrl = "",
   runFollowerRegistry = null
 }) {
-  const context = payload.context ?? {};
+  const context = verifyMattermostActionContext(
+    payload.context?.token,
+    mattermostActionSecret
+  );
   const actingUserId = payload.user_id ?? payload.userId ?? "";
-  if (mattermostActionSecret && context.secret !== mattermostActionSecret) {
+  if (!context) {
     return actionFailure("This action is not authorized.");
   }
   if (!actingUserId || actingUserId !== context.externalUserId) {
@@ -664,7 +716,7 @@ function safeActionError(error) {
 }
 
 function issueTriageAttachments(payload, { route, botPublicBaseUrl, mattermostActionSecret }) {
-  if (!botPublicBaseUrl || !["issue.created.v1", "issue.reopened.v1"].includes(payload.type)) return undefined;
+  if (!botPublicBaseUrl || !mattermostActionSecret || !["issue.created.v1", "issue.reopened.v1"].includes(payload.type)) return undefined;
   const workspaceId = payload.workspaceId ?? payload.data?.workspaceId ?? "";
   const targetId = payload.targetId ?? payload.data?.targetId ?? "";
   const issueId = payload.subject?.id ?? payload.issueId ?? payload.data?.issueId ?? payload.data?.id ?? "";
@@ -678,13 +730,14 @@ function issueTriageAttachments(payload, { route, botPublicBaseUrl, mattermostAc
       integration: {
         url: `${botPublicBaseUrl.replace(/\/$/, "")}/mattermost/actions`,
         context: {
-          action: "run_issue_triage",
-          secret: mattermostActionSecret,
-          externalUserId: route.externalUserId,
-          workspaceId,
-          targetId,
-          issueId,
-          eventId: payload.id ?? ""
+          token: signMattermostActionContext({
+            action: "run_issue_triage",
+            externalUserId: route.externalUserId,
+            workspaceId,
+            targetId,
+            issueId,
+            eventId: payload.id ?? ""
+          }, mattermostActionSecret)
         }
       }
     }]
@@ -912,6 +965,10 @@ function safeEqual(left, right) {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function headerValue(headers, name) {

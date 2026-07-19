@@ -73,6 +73,7 @@ RUN_STREAM_RECONNECT_ATTEMPTS=3
 RUN_STREAM_RECONNECT_DELAY_MS=1000
 RUN_STREAM_FALLBACK_POLL_INTERVAL_MS=3000
 RUN_STREAM_FALLBACK_POLL_MAX_MS=180000
+WORKFLOW_FOLLOW_RETRY_DELAY_MS=3000
 ```
 
 ## Container Image
@@ -133,7 +134,7 @@ The Dockerfile installs dependencies inside the image from `package*.json`; host
 - Plain replies in a workflow thread post another message to the same workflow session with its persisted inputs and start a fresh execution. Workflow and chat threads each allow one active execution and both close with `!chat end`.
 - `!help` shows only the common workflow. `!help filters` shows supported filters and finite values; `!filters` is its compatibility alias. The full reference lives in `docs/wiki-mattermost-bot-commands.md`.
 - `!chat new [title]` creates a read-only troubleshooting thread. `!chat new --write [title]` first refreshes the selected workspace and requires effective `permissions.create_read_write_runs`; accepted threads persist `toolAccessMode: "read_write"` and label the Mattermost root as read-write. AcornOps remains authoritative and may still reject a message with `403` if permissions changed.
-- When a troubleshooting run or workflow execution requests approval, the follower shows the tool name, safe summary, expiry, and **Approve**/**Reject** buttons only when `BOT_PUBLIC_BASE_URL` and `MATTERMOST_ACTION_SECRET` are configured. The button verifies the action secret and exact originating user, then opens a confirmation-only dialog. Submission verifies signed immutable state and the user again before calling the run-scoped decision endpoint. Successful or settled decisions replace the bot-owned approval post and remove its buttons. Without callback configuration, the bot links to `ACORNOPS_CONSOLE_BASE_URL` as a fallback. Raw tool arguments are never rendered.
+- When a troubleshooting run or workflow execution requests approval, the follower shows the tool name, safe summary, expiry, and **Approve**/**Reject** buttons only when `BOT_PUBLIC_BASE_URL` and `MATTERMOST_ACTION_SECRET` are configured. Each button contains an expiring signed token but never the signing key. The callback verifies that token and the exact originating user, then opens a confirmation-only dialog with a separate short-lived signed state token. Submission verifies the state and user again before calling the run-scoped decision endpoint. Successful or settled decisions retry the bot-owned post update and remove its buttons; a post-update failure never changes or misreports the AcornOps decision. Without callback configuration, the bot links to `ACORNOPS_CONSOLE_BASE_URL` as a fallback. Raw tool arguments are never rendered.
 - If a chat answer is still running after the brief immediate polling window, the bot follows the run with AcornOps SSE and posts the final assistant answer back to the same Mattermost channel when it completes.
 - `!chat end` is valid inside a registered chat thread and closes only that chat. `!chat pause` and `!chat resume` are retired from the main UX because the main bot conversation stays available while chat threads remain open. `!ask <question>`, `!sessions`, `!session`, and `!messages` remain compatibility commands but are not part of the short help surface.
 - `!webhook create`, `!webhook connect`, `!webhook status`, `!webhook recreate`, and `!webhook disconnect` manage the current Mattermost user's user-level AcornOps alert route. `create` returns the delivery URL to paste into AcornOps console. `connect` claims console-created subscription metadata and signing secrets from AcornOps over authenticated TLS. `status` refreshes live AcornOps subscription state when available and never reveals signing secrets.
@@ -161,15 +162,16 @@ The Dockerfile installs dependencies inside the image from `package*.json`; host
 14. `!workspace 1` selects current workspace and clears current target/session state.
 15. `!targets` uses the current workspace and updates numbered generic target references; `!clusters` and `!vms` remain shortcuts.
 16. `!target 1`, `!cluster 1`, and `!vm 1` select exactly one current target and clear the previous target plus current session state.
-17. `!workflows` stores lightweight numbered references. `!workflow run` refreshes available definitions, validates inputs and target bindings, creates the workflow session with the exact union of step context grants, sends a post-derived `clientRequestId`, posts `**Workflow launched: <name>**`, persists the thread mapping, and follows the returned execution.
+17. `!workflows` stores lightweight numbered references. `!workflow run` refreshes available definitions, validates inputs and target bindings, persists a source-post launch reservation, creates or reuses its workflow session with the exact union of step context grants, sends the post-derived `clientRequestId`, posts `**Workflow launched: <name>**`, persists the thread mapping, and follows the returned execution. Concurrent or replayed delivery of the same Mattermost post reuses the same reservation and AcornOps session.
 18. `!chat new [title]` creates a read-only troubleshooting session. `!chat new --write [title]` refreshes workspace details, checks the effective `create_read_write_runs` permission, and creates a session whose thread persists read-write access mode.
 19. The runner posts the chat acknowledgement, creates the Mattermost root-thread post, and stores the returned `root_id` keyed by `channel_id + root_id`.
 20. Replies post session messages with the thread's persisted `toolAccessMode` and stable `clientMessageId` values derived from the Mattermost source post id when available.
 21. After posting a chat message, the bot polls the read-only run briefly, fetches session messages when the run completes, and renders the newest assistant reply for that run. The default response window is 15 poll attempts with a 1000 ms interval, configured by `CHAT_RUN_POLL_ATTEMPTS` and `CHAT_RUN_POLL_INTERVAL_MS`.
 22. If the run is still active after the response window, the bot records one active streamed run for that chat thread, returns a short acknowledgement in the thread, and starts `src/bot/chat/follower.js` in the background.
 23. Troubleshooting followers open `GET /api/v1/runs/{runId}/stream`. Workflow followers open `GET /api/v1/workflow-executions/{executionId}/stream`, persist the replay cursor, discover all step attempts, and follow execution-level terminal state. Approval requests, decisions, and terminal results stay in the same thread.
-24. If SSE disconnects before a terminal state, the follower checks the run or aggregate workflow execution, reconnects up to 3 times, then falls back to bounded polling. The reconnect and fallback defaults are controlled by `RUN_STREAM_RECONNECT_ATTEMPTS`, `RUN_STREAM_RECONNECT_DELAY_MS`, `RUN_STREAM_FALLBACK_POLL_INTERVAL_MS`, and `RUN_STREAM_FALLBACK_POLL_MAX_MS`.
-25. `src/bot/mattermost-client.js` posts responses with `POST /api/v4/posts`, including `root_id`, `props`, and attachment/action payloads when provided.
+24. If SSE disconnects before a terminal state, the follower checks the run or aggregate workflow execution, reconnects up to 3 times, then falls back to bounded polling. A still-active workflow remains registered and repeats that cycle after `WORKFLOW_FOLLOW_RETRY_DELAY_MS`; it is cleared only after terminal delivery or explicit thread cancellation. Replay cursors and approval dedupe markers advance only after required Mattermost posts succeed.
+25. Interactive button contexts contain only expiring HMAC-signed tokens. `MATTERMOST_ACTION_SECRET` remains server-side, signs a purpose-bound action token and a separate short-lived approval-dialog state token, and is required before the bot exposes any button.
+26. `src/bot/mattermost-client.js` posts responses with `POST /api/v4/posts`, including `root_id`, `props`, and attachment/action payloads when provided.
 
 ## Command Context
 
@@ -181,6 +183,7 @@ The store keeps:
 
 - the most recent workspace list as `{ id, name }` references for numbered commands;
 - the most recent workflow list as `{ id, name }` references for numbered commands;
+- up to 50 recent initial workflow launch reservations per user, keyed by the exact originating Mattermost post id and carrying its session/request/execution references;
 - the current workspace as `{ id, name }`;
 - the most recent generic target list and current generic target as `{ id, name, type, source }`, where `source` distinguishes generic target selections from compatibility cluster/VM selections for session routing;
 - the most recent cluster list and current cluster as `{ id, name }`;
@@ -195,14 +198,14 @@ The store keeps:
 
 Only one target can be selected at a time. Selecting a workspace clears remembered workflows plus the current target, cluster, VM, session, and latest run. Selecting a target, cluster, or VM clears the previous target-specific session and latest run. Each conversation thread follows at most one active streamed run; one user can keep multiple threads open at the same time.
 
-Postgres persistence makes command context, chat-thread lookup, login-triggered account validation state, webhook routes, active run records, and inbound event ids restart-resilient. Active SSE network followers are still process-local while running; on restart the active run record remains available for future recovery work, but no resume worker is implemented yet.
+Postgres persistence makes command context, workflow launch reservations, chat-thread lookup, login-triggered account validation state, webhook routes, active run records, and inbound event ids restart-resilient. Active SSE network followers are still process-local while running; on restart the active run record remains available for future recovery work, but no resume worker is implemented yet.
 
 ## Inbound HTTP
 
 The bot can run one built-in HTTP listener:
 
 - `GET /healthz` returns basic readiness.
-- `POST /mattermost/actions` handles interactive Mattermost buttons and approval-dialog submissions. Workspace selection, target selection, issue triage, and approvals verify the action secret and acting Mattermost user. Approval dialogs additionally carry signed immutable run/approval context; AcornOps independently enforces exact integration-link and client origin. Issue triage uses the target issues and recent chat activity APIs before linking to AcornOps or creating a threaded run.
+- `POST /mattermost/actions` handles interactive Mattermost buttons and approval-dialog submissions. Workspace selection, target selection, issue triage, and approvals verify an expiring action token signed by the server-only action secret plus the acting Mattermost user. Approval dialogs additionally carry purpose-bound, short-lived signed run/approval context; AcornOps independently enforces exact integration-link and client origin. Issue triage uses the target issues and recent chat activity APIs before linking to AcornOps or creating a threaded run.
 - `POST /acornops/webhooks/routes/:routeToken` handles signed AcornOps webhook deliveries. The route token identifies the Mattermost destination, and the handler verifies `AcornOps-Timestamp` plus `AcornOps-Signature`, rejects stale timestamps, requires and deduplicates `AcornOps-Event-Id`, and posts the alert to Mattermost.
 - Issue lifecycle events `issue.created.v1`, `issue.reopened.v1`, and `issue.resolved.v1` render as rich Mattermost issue alerts with title, emphasized severity, summary, and issue timestamps. Created and reopened alerts emphasize `lastSeenAt` and offer `Run Triage`; resolved alerts emphasize `resolvedAt` and include `lastSeenAt` when available. Other event types render as generic AcornOps info alerts with title and occurred timestamp fallback. Alert notices avoid ID-only workspace, target, issue, and subject lines.
 

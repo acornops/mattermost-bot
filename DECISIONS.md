@@ -1,5 +1,17 @@
 # Decision Log
 
+## 2026-07-19: Keep action keys server-side and preserve workflow delivery state until completion
+
+- Decision: Mattermost buttons carry only purpose-bound, expiring HMAC tokens. `MATTERMOST_ACTION_SECRET` never appears in post attachments or callback context. Approval confirmation uses a separate short-lived signed dialog-state purpose, and all buttons are omitted unless both callback URL and signing key are configured.
+- Reason: [Mattermost documents action context as confidential](https://developers.mattermost.com/integrate/plugins/interactive-messages/), but sending one long-lived global key in every callback still increases its blast radius if callback bodies, proxies, or logs are exposed. A signed per-action token provides integrity, purpose separation, and expiry without transmitting the key.
+- Consequence: Existing buttons created with the former raw-secret context become invalid after deployment. No emergency rotation is required solely because of the former confidential context, though normal secret-rotation practice still applies.
+- Decision: Initial workflow launches persist a bounded source-post-to-session reservation before posting the workflow message, and concurrent delivery of the same post is serialized within one bot process. Workflow stream cursors, approval dedupe markers, terminal delivery, and active-thread cleanup commit only after required Mattermost delivery succeeds. A non-terminal workflow repeats reconnect and polling cycles until explicit cancellation or terminal delivery.
+- Reason: AcornOps scopes `clientRequestId` idempotency to the workflow session, and Mattermost delivery can fail independently of AcornOps or SSE progress. Creating a new session or advancing local state before delivery loses idempotency, approvals, or final results.
+- Consequence: Postgres-backed bot context now includes up to 50 recent workflow launch reservations per user. Multi-replica coordination and follower recovery after a process restart remain separate work; within one running process, a workflow stays active through prolonged AcornOps outages.
+- Decision: An AcornOps approval decision and the Mattermost approval-post update are separate outcomes. The bot retries the post update, logs a remaining presentation failure, and still returns success once AcornOps records or confirms the settled decision.
+- Reason: A Mattermost outage cannot roll back an AcornOps decision and must not cause the bot to tell the user that AcornOps rejected a decision it already accepted.
+- Consequence: A temporarily stale approval post may remain after all update retries fail, but clicking it again is safe: AcornOps returns settled state and the bot retries the presentation update.
+
 ## 2026-07-18: Follow eligible workflow executions and confirm exact-origin approvals in Mattermost
 
 - Decision: Replace target findings and workspace investigations commands with workspace-wide `!issues`; trust AcornOps’ permission-filtered workflow list for active read-only, read-write, and approval-gated workflows; and follow each workflow message through its aggregate `executionId`. Every workflow message carries a hidden `clientRequestId` derived from the originating Mattermost post id and reused only for a retry of that same post.

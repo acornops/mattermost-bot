@@ -7,6 +7,7 @@ import {
   normalizeBotText,
   shouldRespondToPost
 } from "../src/bot/message.js";
+import { verifyMattermostActionContext } from "../src/bot/mattermost-actions.js";
 
 test("normalizeBotText removes leading bot mention", () => {
   assert.equal(normalizeBotText("@acorn-ops-bot status", "acorn-ops-bot"), "status");
@@ -468,31 +469,42 @@ test("handleBotMessage adds workspace selection actions when callback URL is con
   });
 
   assert.match(result.message, /AcornOps workspaces:/);
-  assert.deepEqual(result.attachments, [
+  const action = result.attachments[0].actions[0];
+  assert.equal(result.attachments[0].text, "Choose workspace");
+  assert.equal(action.id, "selectWorkspace1");
+  assert.equal(action.integration.url, "https://bot.example.com/mattermost/actions");
+  assert.deepEqual(Object.keys(action.integration.context), ["token"]);
+  assert.deepEqual(
+    verifyMattermostActionContext(action.integration.context.token, "action-secret"),
     {
-      text: "Choose workspace",
-      actions: [
-        {
-          id: "selectWorkspace1",
-          name: "1",
-          type: "button",
-          integration: {
-            url: "https://bot.example.com/mattermost/actions",
-            context: {
-              action: "select_workspace",
-              secret: "action-secret",
-              externalUserId: "mattermost-user-1",
-              contextGeneration: 0,
-              workspace: {
-                id: "workspace-1",
-                name: "Platform"
-              }
-            }
-          }
-        }
-      ]
+      action: "select_workspace",
+      externalUserId: "mattermost-user-1",
+      contextGeneration: 0,
+      workspace: {
+        id: "workspace-1",
+        name: "Platform"
+      }
     }
-  ]);
+  );
+});
+
+test("handleBotMessage does not expose unsigned actions when the action secret is missing", async () => {
+  const result = await handleBotMessageResult({
+    text: "!workspaces",
+    userId: "mattermost-user-1",
+    channelType: "D",
+    botPublicBaseUrl: "https://bot.example.com/",
+    acornOpsClient: {
+      async listWorkspaces() {
+        return {
+          items: [{ id: "workspace-1", name: "Platform" }]
+        };
+      }
+    }
+  });
+
+  assert.equal(typeof result, "string");
+  assert.match(result, /AcornOps workspaces/);
 });
 
 test("handleBotMessage creates one webhook route without exposing a signing secret", async () => {
@@ -1013,36 +1025,28 @@ test("handleBotMessage adds target selection actions when callback URL is config
   });
 
   assert.match(result.message, /AcornOps targets:/);
-  assert.deepEqual(result.attachments, [
+  const action = result.attachments[0].actions[0];
+  assert.equal(result.attachments[0].text, "Choose target");
+  assert.equal(action.id, "selectTarget1");
+  assert.equal(action.integration.url, "https://bot.example.com/mattermost/actions");
+  assert.deepEqual(Object.keys(action.integration.context), ["token"]);
+  assert.deepEqual(
+    verifyMattermostActionContext(action.integration.context.token, "action-secret"),
     {
-      text: "Choose target",
-      actions: [
-        {
-          id: "selectTarget1",
-          name: "1",
-          type: "button",
-          integration: {
-            url: "https://bot.example.com/mattermost/actions",
-            context: {
-              action: "select_target",
-              secret: "action-secret",
-              externalUserId: "mattermost-user-1",
-              contextGeneration: 0,
-              workspace: {
-                id: "workspace-1",
-                name: "Platform"
-              },
-              target: {
-                id: "target-1",
-                name: "payments-prod",
-                type: "kubernetes"
-              }
-            }
-          }
-        }
-      ]
+      action: "select_target",
+      externalUserId: "mattermost-user-1",
+      contextGeneration: 0,
+      workspace: {
+        id: "workspace-1",
+        name: "Platform"
+      },
+      target: {
+        id: "target-1",
+        name: "payments-prod",
+        type: "kubernetes"
+      }
     }
-  ]);
+  );
 });
 
 test("handleBotMessage creates chat sessions through generic target endpoint after target selection", async () => {
@@ -2197,6 +2201,101 @@ test("handleBotMessage launches a workflow with grants, quoted inputs, and selec
     executionId: "execution-1",
     messageId: "workflow-message-1"
   }]);
+});
+
+test("handleBotMessage reuses the reserved workflow session when the same post is retried", async () => {
+  const commandContextStore = selectedClusterContext();
+  const client = workflowClient();
+  let sessionCalls = 0;
+  const postedSessions = [];
+  client.createWorkflowSession = async () => {
+    sessionCalls += 1;
+    return { session: { id: `workflow-session-${sessionCalls}` } };
+  };
+  client.postWorkflowSessionMessage = async (_identity, sessionId, body) => {
+    postedSessions.push({ sessionId, clientRequestId: body.clientRequestId });
+    return {
+      message_id: "workflow-message-1",
+      run_id: "run-1",
+      executionId: "execution-1",
+      status: "queued"
+    };
+  };
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const result = await handleBotMessageResult({
+      text: '!workflow run 1 reason="check production pods"',
+      userId: "mattermost-user-1",
+      channelType: "D",
+      sourceMessageId: "mattermost-post-retried",
+      commandContextStore,
+      acornOpsClient: client
+    });
+    assert.equal(result.effects[0].session.id, "workflow-session-1");
+    assert.equal(result.effects[0].executionId, "execution-1");
+  }
+
+  assert.equal(sessionCalls, 1);
+  assert.deepEqual(postedSessions, [
+    {
+      sessionId: "workflow-session-1",
+      clientRequestId: "mm-post-mattermost-post-retried"
+    },
+    {
+      sessionId: "workflow-session-1",
+      clientRequestId: "mm-post-mattermost-post-retried"
+    }
+  ]);
+  assert.deepEqual(
+    commandContextStore.getWorkflowLaunch("mattermost-user-1", "mattermost-post-retried"),
+    {
+      sourceMessageId: "mattermost-post-retried",
+      clientRequestId: "mm-post-mattermost-post-retried",
+      workspaceId: "workspace-1",
+      workflowId: "cluster-triage",
+      sessionId: "workflow-session-1",
+      messageId: "workflow-message-1",
+      runId: "run-1",
+      executionId: "execution-1",
+      status: "queued"
+    }
+  );
+});
+
+test("handleBotMessage serializes concurrent deliveries of the same workflow post", async () => {
+  const commandContextStore = selectedClusterContext();
+  const client = workflowClient();
+  let sessionCalls = 0;
+  let messageCalls = 0;
+  client.createWorkflowSession = async () => {
+    sessionCalls += 1;
+    await new Promise((resolve) => setImmediate(resolve));
+    return { session: { id: "workflow-session-1" } };
+  };
+  client.postWorkflowSessionMessage = async () => {
+    messageCalls += 1;
+    return {
+      message_id: "workflow-message-1",
+      run_id: "run-1",
+      executionId: "execution-1",
+      status: "queued"
+    };
+  };
+  const request = () => handleBotMessageResult({
+    text: '!workflow run 1 reason="check production pods"',
+    userId: "mattermost-user-1",
+    channelType: "D",
+    sourceMessageId: "mattermost-post-concurrent",
+    commandContextStore,
+    acornOpsClient: client
+  });
+
+  const [first, second] = await Promise.all([request(), request()]);
+
+  assert.equal(sessionCalls, 1);
+  assert.equal(messageCalls, 1);
+  assert.equal(first.effects[0].executionId, "execution-1");
+  assert.deepEqual(second, first);
 });
 
 test("handleBotMessage reports AcornOps workflow 400 reasons", async () => {

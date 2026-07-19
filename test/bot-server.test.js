@@ -9,10 +9,15 @@ import {
   handleAcornOpsRouteWebhook,
   handleIssueTriageAction,
   handleMattermostAction,
+  handleMattermostActionPayload,
   hashSecret,
   postMattermostActionResponse,
   routeTokenFromPath
 } from "../src/bot/server.js";
+import {
+  signMattermostActionContext,
+  verifyMattermostActionContext
+} from "../src/bot/mattermost-actions.js";
 
 test("bot HTTP server can be constructed without listening when port is disabled", async () => {
   const botServer = createBotHttpServer({
@@ -35,15 +40,14 @@ test("Mattermost action selects workspace for the requesting user", () => {
   const result = handleMattermostAction({
     payload: {
       user_id: "user-1",
-      context: {
+      context: signedActionContext({
         action: "select_workspace",
-        secret: "action-secret",
         externalUserId: "user-1",
         workspace: {
           id: "workspace-1",
           name: "Platform"
         }
-      }
+      })
     },
     mattermostActionSecret: "action-secret",
     commandContextStore
@@ -63,16 +67,15 @@ test("Mattermost action selects target for the requesting user", () => {
   const result = handleMattermostAction({
     payload: {
       user_id: "user-1",
-      context: {
+      context: signedActionContext({
         action: "select_target",
-        secret: "action-secret",
         externalUserId: "user-1",
         target: {
           id: "target-1",
           name: "Prod cluster",
           type: "kubernetes"
         }
-      }
+      })
     },
     mattermostActionSecret: "action-secret",
     commandContextStore
@@ -116,10 +119,10 @@ test("Mattermost action rejects invalid secrets", () => {
   const result = handleMattermostAction({
     payload: {
       user_id: "user-1",
-      context: {
+      context: signedActionContext({
         action: "select_workspace",
-        secret: "wrong"
-      }
+        externalUserId: "user-1"
+      }, "wrong")
     },
     mattermostActionSecret: "action-secret",
     commandContextStore: createInMemoryCommandContextStore()
@@ -134,25 +137,27 @@ test("Mattermost action returns user-facing failures for invalid selections", ()
   const wrongUser = handleMattermostAction({
     payload: {
       user_id: "user-2",
-      context: {
+      context: signedActionContext({
         action: "select_target",
         externalUserId: "user-1",
         target: {
           id: "target-1"
         }
-      }
+      })
     },
+    mattermostActionSecret: "action-secret",
     commandContextStore: createInMemoryCommandContextStore()
   });
   const missingTarget = handleMattermostAction({
     payload: {
       user_id: "user-1",
-      context: {
+      context: signedActionContext({
         action: "select_target",
         externalUserId: "user-1",
         target: {}
-      }
+      })
     },
+    mattermostActionSecret: "action-secret",
     commandContextStore: createInMemoryCommandContextStore()
   });
 
@@ -174,7 +179,7 @@ test("Mattermost action rejects stale target buttons after workspace changes", (
   const result = handleMattermostAction({
     payload: {
       user_id: "user-1",
-      context: {
+      context: signedActionContext({
         action: "select_target",
         externalUserId: "user-1",
         workspace: {
@@ -186,8 +191,9 @@ test("Mattermost action rejects stale target buttons after workspace changes", (
           name: "Prod cluster",
           type: "kubernetes"
         }
-      }
+      })
     },
+    mattermostActionSecret: "action-secret",
     commandContextStore
   });
 
@@ -208,7 +214,7 @@ test("Mattermost action rejects stale buttons after context reset", () => {
   const result = handleMattermostAction({
     payload: {
       user_id: "user-1",
-      context: {
+      context: signedActionContext({
         action: "select_workspace",
         externalUserId: "user-1",
         contextGeneration: 0,
@@ -216,8 +222,9 @@ test("Mattermost action rejects stale buttons after context reset", () => {
           id: "workspace-1",
           name: "Platform"
         }
-      }
+      })
     },
+    mattermostActionSecret: "action-secret",
     commandContextStore
   });
 
@@ -252,9 +259,27 @@ test("approval buttons open user-bound confirmation dialogs for approve and reje
   assert.notEqual(dialogs[0].dialog.state, dialogs[1].dialog.state);
 });
 
+test("Mattermost callback dispatch resolves the action from its signed token", async () => {
+  const dialogs = [];
+  const result = await handleMattermostActionPayload({
+    payload: approvalActionPayload("approved"),
+    mattermostActionSecret: "action-secret",
+    botPublicBaseUrl: "https://bot.example.com",
+    commandContextStore: createInMemoryCommandContextStore(),
+    mattermostClient: {
+      async openDialog(dialog) {
+        dialogs.push(dialog);
+      }
+    }
+  });
+
+  assert.equal(result.suppressPost, true);
+  assert.equal(dialogs[0].dialog.callback_id, "acornops_approval_decision");
+});
+
 test("approval button rejects wrong secrets and cross-user clicks", async () => {
   const wrongSecret = await handleApprovalDecisionRequest({
-    payload: approvalActionPayload("approved", { secret: "wrong" }),
+    payload: approvalActionPayload("approved", {}, "wrong"),
     mattermostActionSecret: "action-secret",
     botPublicBaseUrl: "https://bot.example.com",
     mattermostClient: { async openDialog() {} }
@@ -325,6 +350,56 @@ test("signed approval submission records the decision and removes buttons", asyn
   assert.equal(result.suppressPost, true);
   assert.deepEqual(updates[0].props, {});
   assert.match(updates[0].message, /Approval approved/);
+});
+
+test("approval submission remains successful when only the Mattermost post update fails", async () => {
+  const dialogs = [];
+  const logs = [];
+  let decisions = 0;
+  await handleApprovalDecisionRequest({
+    payload: approvalActionPayload("approved"),
+    mattermostActionSecret: "action-secret",
+    botPublicBaseUrl: "https://bot.example.com",
+    mattermostClient: {
+      async openDialog(dialog) {
+        dialogs.push(dialog);
+      }
+    }
+  });
+
+  const result = await handleApprovalDecisionSubmission({
+    payload: {
+      callback_id: "acornops_approval_decision",
+      user_id: "user-1",
+      channel_id: "channel-1",
+      state: dialogs[0].dialog.state
+    },
+    mattermostActionSecret: "action-secret",
+    mattermostClient: {
+      async updatePost() {
+        throw new Error("Mattermost unavailable");
+      }
+    },
+    acornOpsClient: {
+      async decideRunApproval() {
+        decisions += 1;
+        return { status: "approved" };
+      }
+    },
+    logger: {
+      error(message) {
+        logs.push(message);
+      }
+    },
+    postUpdateAttempts: 2
+  });
+
+  assert.equal(decisions, 1);
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, {});
+  assert.equal(result.suppressPost, true);
+  assert.match(logs[0], /recorded approval approval-1 as approved/);
+  assert.match(logs[0], /Mattermost unavailable/);
 });
 
 test("approval submission rejects tampering and handles settled or revoked decisions", async () => {
@@ -545,9 +620,11 @@ test("created and reopened issue alerts include a Run Triage action", async () =
   });
 
   assert.equal(posts[0].attachments[0].actions[0].name, "Run Triage");
-  assert.deepEqual(posts[0].attachments[0].actions[0].integration.context, {
+  const actionContext = posts[0].attachments[0].actions[0].integration.context;
+  assert.deepEqual(Object.keys(actionContext), ["token"]);
+  assert.doesNotMatch(actionContext.token, /action-secret/);
+  assert.deepEqual(verifyMattermostActionContext(actionContext.token, "action-secret"), {
     action: "run_issue_triage",
-    secret: "action-secret",
     externalUserId: "user-1",
     workspaceId: "workspace-1",
     targetId: "cluster-1",
@@ -747,27 +824,25 @@ function triageActionPayload() {
   return {
     user_id: "user-1",
     channel_id: "channel-1",
-    context: {
+    context: signedActionContext({
       action: "run_issue_triage",
-      secret: "action-secret",
       externalUserId: "user-1",
       workspaceId: "workspace-1",
       targetId: "cluster-1",
       issueId: "issue-1",
       eventId: "event-1"
-    }
+    })
   };
 }
 
-function approvalActionPayload(decision, contextOverrides = {}) {
+function approvalActionPayload(decision, contextOverrides = {}, signingSecret = "action-secret") {
   return {
     user_id: "user-1",
     channel_id: "channel-1",
     trigger_id: "trigger-1",
     post_id: "approval-post-1",
-    context: {
+    context: signedActionContext({
       action: "request_approval_decision",
-      secret: "action-secret",
       externalUserId: "user-1",
       runId: "run-1",
       approvalId: "approval-1",
@@ -778,7 +853,13 @@ function approvalActionPayload(decision, contextOverrides = {}) {
       toolName: "restart_workload",
       summary: "Restart payments-api",
       ...contextOverrides
-    }
+    }, signingSecret)
+  };
+}
+
+function signedActionContext(value, secret = "action-secret") {
+  return {
+    token: signMattermostActionContext(value, secret)
   };
 }
 
