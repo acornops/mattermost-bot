@@ -114,6 +114,13 @@
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
 
+### 2026-07-19 - Full unpushed-change review and webhook delivery hardening
+
+- Goal: Review all 18 commits ahead of `origin/main`, fix every clear defect, repeat verification, then publish the branch.
+- Completed: Fixed webhook event deduplication so a failed Mattermost post releases both in-memory and Postgres event reservations and can be retried instead of being silently lost. Bound `Run Triage` action tokens to the alert's Mattermost channel and reject same-user cross-channel replay. Added regression coverage for delivery rollback, persistence rollback, and conversation binding.
+- Verification run: Baseline `./init.sh` passed with 170 tests. Focused server/context/Postgres verification passed with 37 tests. Final `./init.sh` passed with harness verification, lint, build, and all 172 tests. `git diff --check` passed. Live Mattermost readiness could not run because `localhost:8065` was not listening.
+- Known risks: The npm advisory lookup was not run because external transmission of repository dependency metadata was denied by the execution policy. Live Mattermost/AcornOps smoke, multi-replica workflow launch serialization, and restart-time follower recovery remain separate follow-ups.
+
 ### 2026-07-19 - B23 security, idempotency, and follower reliability review fixes
 
 - Goal: Resolve every finding from the post-implementation review of commit `9025340`.

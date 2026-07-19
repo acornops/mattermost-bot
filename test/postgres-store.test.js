@@ -131,6 +131,8 @@ test("Postgres command context store migrates, loads, and persists state", async
   );
   store.resetAccountContext("user-1");
   assert.equal(await store.rememberInboundEvent("event-2"), true);
+  await store.forgetInboundEvent("event-2");
+  assert.equal(await store.rememberInboundEvent("event-2"), true);
 
   await new Promise((resolve) => setImmediate(resolve));
 
@@ -141,6 +143,7 @@ test("Postgres command context store migrates, loads, and persists state", async
   assert.equal(queries.some((query) => query.params[1]?.workflowLaunches?.[0]?.sessionId === "workflow-session-1"), true);
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO bot_webhook_routes")), true);
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO bot_inbound_events")), true);
+  assert.equal(queries.some((query) => query.sql.includes("DELETE FROM bot_inbound_events WHERE event_id = $1")), true);
   assert.equal(queries.some((query) => query.sql.includes("DELETE FROM bot_chat_threads WHERE external_user_id = $1")), true);
   assert.equal(store.get("user-1").currentWorkspace, null);
   assert.equal(store.get("user-1").accountFingerprint, "fingerprint-1");

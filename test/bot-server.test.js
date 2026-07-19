@@ -504,6 +504,44 @@ test("AcornOps route webhook verifies signature, deduplicates, and posts to rout
   assert.match(posts[0].message, /Provider unavailable/);
 });
 
+test("AcornOps route webhook releases its event reservation when Mattermost posting fails", async () => {
+  const commandContextStore = createInMemoryCommandContextStore();
+  const routeToken = "route-token";
+  const signingSecret = "webhook-secret";
+  commandContextStore.upsertWebhookRoute("user-1", {
+    channelId: "channel-1",
+    routeTokenHash: hashSecret(routeToken),
+    subscriptions: [{ signingSecret }]
+  });
+  const input = {
+    routeToken,
+    ...signedWebhookInput({ id: "event-retry-1", type: "run.failed.v1" }, signingSecret),
+    commandContextStore
+  };
+
+  await assert.rejects(
+    handleAcornOpsRouteWebhook({
+      ...input,
+      mattermostClient: {
+        async createPost() {
+          throw new Error("Mattermost unavailable");
+        }
+      }
+    }),
+    /Mattermost unavailable/
+  );
+
+  const posts = [];
+  const retry = await handleAcornOpsRouteWebhook({
+    ...input,
+    mattermostClient: fakeMattermostClient(posts)
+  });
+
+  assert.equal(retry.status, 202);
+  assert.equal(retry.body.status, "posted");
+  assert.equal(posts.length, 1);
+});
+
 test("AcornOps route webhook formats issue lifecycle events with issue details", async () => {
   const posts = [];
   const commandContextStore = createInMemoryCommandContextStore();
@@ -629,8 +667,23 @@ test("created and reopened issue alerts include a Run Triage action", async () =
     workspaceId: "workspace-1",
     targetId: "cluster-1",
     issueId: "issue-1",
-    eventId: "event-issue-1"
+    eventId: "event-issue-1",
+    channelId: "channel-1"
   });
+});
+
+test("Run Triage rejects replay in a different Mattermost conversation", async () => {
+  const payload = triageActionPayload();
+  payload.channel_id = "channel-2";
+  const result = await handleIssueTriageAction({
+    payload,
+    mattermostActionSecret: "action-secret",
+    commandContextStore: createInMemoryCommandContextStore(),
+    mattermostClient: fakeMattermostClient(),
+    acornOpsClient: {}
+  });
+
+  assert.match(result.message, /does not belong to this Mattermost conversation/);
 });
 
 test("Run Triage links to a recent AcornOps cluster chat instead of creating another", async () => {
@@ -830,7 +883,8 @@ function triageActionPayload() {
       workspaceId: "workspace-1",
       targetId: "cluster-1",
       issueId: "issue-1",
-      eventId: "event-1"
+      eventId: "event-1",
+      channelId: "channel-1"
     })
   };
 }

@@ -319,6 +319,8 @@ test("command context tracks user-level webhook routes and inbound event ids", (
   assert.equal(store.getWebhookRouteByTokenHash("token-hash").externalUserId, "user-1");
   assert.equal(store.rememberInboundEvent("event-1"), true);
   assert.equal(store.rememberInboundEvent("event-1"), false);
+  assert.equal(store.forgetInboundEvent("event-1"), true);
+  assert.equal(store.rememberInboundEvent("event-1"), true);
   assert.equal(store.deleteWebhookRoute("user-1").channelId, "channel-1");
   assert.equal(store.getWebhookRoute("user-1"), null);
 });

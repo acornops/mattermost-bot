@@ -242,6 +242,14 @@ function wrapPersistentStore({ memory, db, logger }) {
     return result.rowCount > 0;
   };
 
+  store.forgetInboundEvent = async (eventId) => {
+    memory.forgetInboundEvent(eventId);
+    await db.query(
+      "DELETE FROM bot_inbound_events WHERE event_id = $1",
+      [eventId]
+    );
+  };
+
   store.close = async () => {
     if (typeof db.end === "function") {
       await db.end();

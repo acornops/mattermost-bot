@@ -443,6 +443,10 @@ export function createInMemoryCommandContextStore({ initialState = {} } = {}) {
       }
       inboundEvents.add(eventId);
       return true;
+    },
+
+    forgetInboundEvent(eventId) {
+      return inboundEvents.delete(eventId);
     }
   };
 }
@@ -625,6 +629,9 @@ export function createNullCommandContextStore() {
     },
     rememberInboundEvent() {
       return true;
+    },
+    forgetInboundEvent() {
+      return false;
     }
   };
 }

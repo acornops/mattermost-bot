@@ -597,16 +597,21 @@ export async function handleAcornOpsRouteWebhook({
     };
   }
 
-  await mattermostClient.createPost({
-    channelId: route.channelId,
-    rootId: route.rootId,
-    message: formatWebhookAlert(payload, { receivedAt: new Date().toISOString(), alertTimeZone }),
-    attachments: issueTriageAttachments(payload, {
-      route,
-      botPublicBaseUrl,
-      mattermostActionSecret
-    })
-  });
+  try {
+    await mattermostClient.createPost({
+      channelId: route.channelId,
+      rootId: route.rootId,
+      message: formatWebhookAlert(payload, { receivedAt: new Date().toISOString(), alertTimeZone }),
+      attachments: issueTriageAttachments(payload, {
+        route,
+        botPublicBaseUrl,
+        mattermostActionSecret
+      })
+    });
+  } catch (error) {
+    await commandContextStore.forgetInboundEvent?.(eventId);
+    throw error;
+  }
   return {
     status: 202,
     body: { status: "posted" }
@@ -632,6 +637,10 @@ export async function handleIssueTriageAction({
   }
   if (!actingUserId || actingUserId !== context.externalUserId) {
     return actionFailure("Only the Mattermost user who received this alert can run triage.");
+  }
+  const channelId = payload.channel_id ?? payload.channelId ?? "";
+  if (!channelId || (context.channelId && channelId !== context.channelId)) {
+    return actionFailure("This triage action does not belong to this Mattermost conversation.");
   }
   if (!acornOpsClient) {
     return actionFailure("AcornOps triage is not configured.");
@@ -671,7 +680,6 @@ export async function handleIssueTriageAction({
     });
     const runId = accepted.run_id ?? accepted.runId ?? "";
     const messageId = accepted.message_id ?? accepted.messageId ?? "";
-    const channelId = payload.channel_id ?? payload.channelId ?? "";
     const root = await mattermostClient.createPost({
       channelId,
       message: `**Triage started: ${issue.title || "AcornOps issue"}**`
@@ -736,7 +744,8 @@ function issueTriageAttachments(payload, { route, botPublicBaseUrl, mattermostAc
             workspaceId,
             targetId,
             issueId,
-            eventId: payload.id ?? ""
+            eventId: payload.id ?? "",
+            channelId: route.channelId
           }, mattermostActionSecret)
         }
       }
