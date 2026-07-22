@@ -139,7 +139,7 @@ After `!chat new`, reply in the generated Mattermost thread to send read-only as
 
 Every workflow launch or follow-up sends a required `clientRequestId` derived from its originating Mattermost post id. Initial launches also persist and reuse the source-post-to-session reservation, including concurrent delivery in one bot process. The id is reused only if that exact post is retried, is never shown to users, and prevents a transport retry from creating a duplicate execution.
 
-Workflow session-message requests contain exactly `content` and `clientRequestId`. Workflow inputs, context grants, and target bindings belong to workflow-session creation and are not repeated on message requests.
+Workflow session-message requests contain exactly `content` and `clientRequestId`. Session creation carries only the workspace and the workflow's exact `capabilityPolicy.contextGrants`. The bot renders declared `key=value` inputs into a bounded `Workflow parameters` section and resolves the selected target to an exact `@target[...]` reference in message content. It persists that launch target locally so later thread replies stay on the same target even if the user's global selection changes; AcornOps resolves resource bindings afresh for every execution.
 
 Created and reopened issue alerts delivered to Mattermost can include a **Run Triage** action. It is restricted to the Mattermost user who owns the alert route and either links to recent AcornOps cluster chat activity or starts a new read-only triage session in a dedicated Mattermost thread.
 

@@ -69,7 +69,7 @@ Declared workflow inputs use `key=value`. Quote values containing spaces:
 !workflow run 1 reason="check production pods"
 ```
 
-The bot supplies target bindings from the currently selected target; typed input cannot override them. After AcornOps accepts the launch, the bot posts `**Workflow launched: <name>**` as a new Mattermost root post. Streamed results and plain-text follow-ups stay in that thread and use the same workflow session.
+The bot validates current Workflow V2 `resourceRequirements`, renders declared inputs into the launch content, and replaces a target slot with the currently selected target's exact `@target[...]` reference. Required non-target placeholders such as `@chat[]` must be filled through the AcornOps console because Mattermost currently exposes only target selection. After AcornOps accepts the launch, the bot posts `**Workflow launched: <name>**` as a new Mattermost root post. Streamed results and plain-text follow-ups stay in that thread and use the same workflow session. The launch target is stored with the thread and reused in follow-up content even if the user's global target selection later changes.
 
 Each workflow thread allows one active execution at a time. Read-only, read-write, and approval-gated workflows returned by AcornOps use the same launch syntax; AcornOps remains authoritative for eligibility. A follow-up starts a fresh execution in the same workflow session.
 

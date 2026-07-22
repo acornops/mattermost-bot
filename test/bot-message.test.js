@@ -2147,7 +2147,7 @@ test("handleBotMessage lists workflows for the current workspace", async () => {
             id: "cluster-triage",
             name: "Cluster triage",
             description: "Inspect the selected cluster.",
-            policy: {
+            capabilityPolicy: {
               mode: "read_write",
               approvalRequirements: ["before_execution"]
             },
@@ -2192,7 +2192,11 @@ test("handleBotMessage launches a workflow with grants, quoted inputs, and selec
     workspaceId: "workspace-1",
     workflowInputs: {
       reason: "check production pods",
-      clusterId: "cluster-1"
+      __acornopsTarget: {
+        id: "cluster-1",
+        name: "Prod",
+        type: "kubernetes"
+      }
     },
     session: {
       id: "workflow-session-1"
@@ -2337,7 +2341,7 @@ test("handleBotMessage reports AcornOps workflow 409 reasons", async () => {
       JSON.stringify({
         error: {
           code: "WORKFLOW_TARGET_MENTION_MISMATCH",
-          message: "The control message must include @cluster[Prod] so the selected cluster is explicit."
+          message: "The control message must include @target[Prod] so the selected target is explicit."
         }
       })
     ].join(" "));
@@ -2353,11 +2357,11 @@ test("handleBotMessage reports AcornOps workflow 409 reasons", async () => {
 
   assert.equal(
     response,
-    "AcornOps could not start the workflow run (WORKFLOW_TARGET_MENTION_MISMATCH: The control message must include @cluster[Prod] so the selected cluster is explicit.)."
+    "AcornOps could not start the workflow run (WORKFLOW_TARGET_MENTION_MISMATCH: The control message must include @target[Prod] so the selected target is explicit.)."
   );
 });
 
-test("handleBotMessage routes workflow thread replies to the same session", async () => {
+test("handleBotMessage routes workflow replies with the launch target after global selection changes", async () => {
   const commandContextStore = selectedClusterContext();
   const thread = registerThreadChat(commandContextStore, {
     kind: "workflow",
@@ -2367,8 +2371,17 @@ test("handleBotMessage routes workflow thread replies to the same session", asyn
     workflowId: "cluster-triage",
     workspaceId: "workspace-1",
     workflowInputs: {
-      clusterId: "cluster-1"
+      __acornopsTarget: {
+        id: "cluster-1",
+        name: "Prod",
+        type: "kubernetes"
+      }
     }
+  });
+  commandContextStore.selectTarget("mattermost-user-1", {
+    id: "cluster-2",
+    name: "Staging",
+    type: "kubernetes"
   });
   const result = await handleBotMessageResult({
     text: "focus on failed pods",
@@ -2381,7 +2394,7 @@ test("handleBotMessage routes workflow thread replies to the same session", asyn
       async postWorkflowSessionMessage(identity, sessionId, body) {
         assert.deepEqual(identity, externalIdentity());
         assert.equal(sessionId, "workflow-session-1");
-        assert.equal(body.content, "focus on failed pods @cluster[Prod]");
+        assert.equal(body.content, "focus on failed pods @target[Prod]");
         assert.equal(body.clientRequestId, "mm-post-mattermost-post-2");
         assert.deepEqual(Object.keys(body).sort(), ["clientRequestId", "content"]);
         return {
@@ -2461,26 +2474,28 @@ function workflowClient() {
           id: "cluster-triage",
           name: "Cluster triage",
           status: "active",
-          starterPrompt: "Triage @cluster[Cluster name] using live evidence.",
+          prompt: "Triage @target[] using live evidence.",
           inputs: [{
             name: "reason",
+            label: "Reason",
             type: "text",
             required: true
           }],
-          policy: {
-            mode: "read_only",
-            approvalRequirements: []
-          },
-          steps: [{
-            requiredInputs: ["reason"],
-            contextGrants: ["workspace_metadata", "target_inventory"],
-            approvalRequired: false,
-            targetBinding: {
-              type: "selected_cluster",
-              targetType: "kubernetes",
-              inputName: "clusterId"
+          resourceRequirements: [{
+            type: "target",
+            minimum: 1,
+            maximum: 1,
+            requiredOperations: ["read"],
+            constraints: {
+              targetTypes: ["kubernetes"],
+              targetIds: []
             }
-          }]
+          }],
+          capabilityPolicy: {
+            mode: "read_only",
+            contextGrants: ["workspace_metadata", "target_inventory"],
+            approvalRequirements: []
+          }
         }]
       };
     },
@@ -2500,7 +2515,7 @@ function workflowClient() {
     async postWorkflowSessionMessage(identity, sessionId, body) {
       assert.deepEqual(identity, externalIdentity());
       assert.equal(sessionId, "workflow-session-1");
-      assert.equal(body.content, "Triage @cluster[Prod] using live evidence.");
+      assert.equal(body.content, "Triage @target[Prod] using live evidence.\n\nWorkflow parameters:\n- Reason: check production pods");
       assert.equal(body.clientRequestId, "mm-post-mattermost-post-1");
       assert.deepEqual(Object.keys(body).sort(), ["clientRequestId", "content"]);
       return {

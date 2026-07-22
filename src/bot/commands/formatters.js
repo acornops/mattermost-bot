@@ -80,8 +80,9 @@ export function formatWorkflowPage({ page, context, userId, userName }) {
     const name = workflow.name ?? workflow.id ?? "Unnamed workflow";
     const id = workflow.id && workflow.id !== name ? ` (${workflow.id})` : "";
     const description = singleLine(workflow.description ?? "");
-    const mode = workflow.policy?.mode === "read_write" ? "read-write" : "read-only";
-    const approvalRequired = (workflow.policy?.approvalRequirements ?? []).length > 0
+    const policy = workflow.capabilityPolicy ?? workflow.policy ?? {};
+    const mode = policy.mode === "read_write" ? "read-write" : "read-only";
+    const approvalRequired = (policy.approvalRequirements ?? []).length > 0
       || (workflow.steps ?? []).some((step) => step?.approvalRequired);
     const access = approvalRequired ? `${mode}, approval may be required` : mode;
     lines.push(`${index + 1}. ${name}${id} — ${access}${description ? ` — ${description}` : ""}`);

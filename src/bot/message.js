@@ -59,7 +59,8 @@ import {
 import {
   bindWorkflowTargetReference,
   parseWorkflowRunArguments,
-  prepareWorkflowLaunch
+  prepareWorkflowLaunch,
+  workflowTargetFromInputs
 } from "./commands/workflows.js";
 import { signMattermostActionContext } from "./mattermost-actions.js";
 
@@ -568,12 +569,10 @@ async function handleWorkflowThreadMessage({
 
   try {
     const context = commandContextStore.get(auth.identity.externalUserId);
-    const selectedTarget = workflowInputContainsTarget(
-      currentThread.workflowInputs,
-      context.currentTarget
-    )
-      ? context.currentTarget
-      : null;
+    const selectedTarget = workflowTargetFromInputs(currentThread.workflowInputs)
+      ?? (workflowInputContainsTarget(currentThread.workflowInputs, context.currentTarget)
+        ? context.currentTarget
+        : null);
     const result = await acornOpsClient.postWorkflowSessionMessage(
       auth.identity,
       currentThread.sessionId,

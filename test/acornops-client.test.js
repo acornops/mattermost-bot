@@ -390,7 +390,7 @@ test("workflow endpoints list, create sessions, and launch messages with externa
     approvedContextGrants: ["workspace_metadata", "target_inventory"]
   });
   await client.postWorkflowSessionMessage(externalIdentity(), "workflow-session-1", {
-    content: "Triage @cluster[Development Cluster].",
+    content: "Triage @target[Development Cluster].",
     clientRequestId: "mm-post-1"
   });
 
@@ -404,7 +404,7 @@ test("workflow endpoints list, create sessions, and launch messages with externa
     approvedContextGrants: ["workspace_metadata", "target_inventory"]
   });
   assert.deepEqual(JSON.parse(requests[2].init.body), {
-    content: "Triage @cluster[Development Cluster].",
+    content: "Triage @target[Development Cluster].",
     clientRequestId: "mm-post-1"
   });
   for (const request of requests) {

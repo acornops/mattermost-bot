@@ -2,9 +2,9 @@
 
 ## 2026-07-23: Keep workflow session-message bodies minimal
 
-- Decision: Send exactly `content` and `clientRequestId` to `POST /api/v1/workflow-sessions/{sessionId}/messages`. Keep workflow inputs, context grants, and target bindings on workflow-session creation; use persisted launch inputs locally only to render an exact selected-target reference in later free-text content when needed.
-- Reason: The current control plane validates workflow session-message bodies strictly and rejects stale launch-only fields. Repeating them also creates two possible sources of truth after the session has already captured immutable launch context.
-- Consequence: Existing workflow launch and follow-up behavior is preserved, while both request paths now conform to the same strict contract. This supersedes the 2026-07-18 implementation note that described sending `targetId` and `targetType` on the message request; target selection still occurs during session creation and exact references remain embedded in `content`.
+- Decision: Send exactly `content` and `clientRequestId` to `POST /api/v1/workflow-sessions/{sessionId}/messages`. Session creation sends only `workspaceId` and the exact `capabilityPolicy.contextGrants`. Render declared command inputs into launch content, represent the selected target as an exact `@target[...]` prompt reference, and persist target metadata only in the bot's thread record so follow-ups remain target-stable.
+- Reason: The current control plane validates workflow session-message bodies strictly, while Workflow V2 resolves typed prompt-resource bindings per message rather than at session creation. Repeating stale launch-only fields is invalid, but omitting inputs or assuming a target is session-bound silently loses operator intent.
+- Consequence: Launches and follow-ups conform to the strict content-only execution contract and retain the intended target. This supersedes the 2026-07-18 implementation note that described sending `targetId` and `targetType`, and corrects the earlier 2026-07-23 assumption that resource bindings were fixed at session creation.
 
 ## 2026-07-19: Keep action keys server-side and preserve workflow delivery state until completion
 

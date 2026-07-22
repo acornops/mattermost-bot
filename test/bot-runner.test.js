@@ -482,18 +482,19 @@ test("handlePostedEvent creates and follows a workflow thread with the exact roo
             name: "Cluster triage",
             status: "active",
             inputs: [],
-            starterPrompt: "Triage the selected cluster.",
-            policy: { mode: "read_only", approvalRequirements: [] },
-            steps: [{
-              requiredInputs: [],
+            prompt: "Triage @target[].",
+            resourceRequirements: [{
+              type: "target",
+              minimum: 1,
+              maximum: 1,
+              requiredOperations: ["read"],
+              constraints: { targetTypes: ["kubernetes"], targetIds: [] }
+            }],
+            capabilityPolicy: {
+              mode: "read_only",
               contextGrants: ["workspace_metadata", "target_inventory"],
-              approvalRequired: false,
-              targetBinding: {
-                type: "selected_cluster",
-                targetType: "kubernetes",
-                inputName: "clusterId"
-              }
-            }]
+              approvalRequirements: []
+            }
           }]
         };
       },
@@ -533,7 +534,13 @@ test("handlePostedEvent creates and follows a workflow thread with the exact roo
   const thread = commandContextStore.getChatThread("channel-1", "reply-2");
   assert.equal(thread.kind, "workflow");
   assert.equal(thread.workflowId, "cluster-triage");
-  assert.deepEqual(thread.workflowInputs, { clusterId: "cluster-1" });
+  assert.deepEqual(thread.workflowInputs, {
+    __acornopsTarget: {
+      id: "cluster-1",
+      name: "Prod",
+      type: "kubernetes"
+    }
+  });
   assert.deepEqual(started, [{
     kind: "workflow",
     identity: { externalUserId: "user-1" },
