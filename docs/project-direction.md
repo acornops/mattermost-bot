@@ -4,7 +4,7 @@
 
 Build a Mattermost ChatOps bot that authenticates Mattermost users to AcornOps and supports governed operations across AcornOps-managed Kubernetes and VM targets.
 
-The backend API is available in `/Users/ryangoh/Desktop/Development/acornops/control-plane`. The repository should keep the Mattermost bot-account prototype restartable while wiring backend-backed commands in small stages.
+The backend API is owned by the AcornOps `control-plane` repository. This repository should keep the Mattermost bot runtime restartable while wiring backend-backed commands in small stages.
 
 Historical learning stages already completed:
 

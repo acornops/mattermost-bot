@@ -391,10 +391,7 @@ test("workflow endpoints list, create sessions, and launch messages with externa
   });
   await client.postWorkflowSessionMessage(externalIdentity(), "workflow-session-1", {
     content: "Triage @cluster[Development Cluster].",
-    inputs: { clusterId: "cluster-1" },
-    clientRequestId: "mm-post-1",
-    targetId: "cluster-1",
-    targetType: "kubernetes"
+    clientRequestId: "mm-post-1"
   });
 
   assert.deepEqual(requests.map((request) => request.url), [
@@ -408,10 +405,7 @@ test("workflow endpoints list, create sessions, and launch messages with externa
   });
   assert.deepEqual(JSON.parse(requests[2].init.body), {
     content: "Triage @cluster[Development Cluster].",
-    inputs: { clusterId: "cluster-1" },
-    clientRequestId: "mm-post-1",
-    targetId: "cluster-1",
-    targetType: "kubernetes"
+    clientRequestId: "mm-post-1"
   });
   for (const request of requests) {
     assert.equal(request.init.headers.authorization, "Bearer chat-token");

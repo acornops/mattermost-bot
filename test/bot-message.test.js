@@ -2382,10 +2382,8 @@ test("handleBotMessage routes workflow thread replies to the same session", asyn
         assert.deepEqual(identity, externalIdentity());
         assert.equal(sessionId, "workflow-session-1");
         assert.equal(body.content, "focus on failed pods @cluster[Prod]");
-        assert.deepEqual(body.inputs, { clusterId: "cluster-1" });
         assert.equal(body.clientRequestId, "mm-post-mattermost-post-2");
-        assert.equal(body.targetId, "cluster-1");
-        assert.equal(body.targetType, "kubernetes");
+        assert.deepEqual(Object.keys(body).sort(), ["clientRequestId", "content"]);
         return {
           message_id: "workflow-message-2",
           run_id: "run-2",
@@ -2503,27 +2501,8 @@ function workflowClient() {
       assert.deepEqual(identity, externalIdentity());
       assert.equal(sessionId, "workflow-session-1");
       assert.equal(body.content, "Triage @cluster[Prod] using live evidence.");
-      assert.deepEqual(body.inputs, {
-        reason: "check production pods",
-        clusterId: "cluster-1"
-      });
       assert.equal(body.clientRequestId, "mm-post-mattermost-post-1");
-      assert.equal(body.targetId, "cluster-1");
-      assert.equal(body.targetType, "kubernetes");
-      assert.deepEqual({
-        content: body.content,
-        inputs: body.inputs,
-        targetId: body.targetId,
-        targetType: body.targetType
-      }, {
-        content: "Triage @cluster[Prod] using live evidence.",
-        inputs: {
-          reason: "check production pods",
-          clusterId: "cluster-1"
-        },
-        targetId: "cluster-1",
-        targetType: "kubernetes"
-      });
+      assert.deepEqual(Object.keys(body).sort(), ["clientRequestId", "content"]);
       return {
         message_id: "workflow-message-1",
         run_id: "run-1",

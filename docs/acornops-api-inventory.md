@@ -1,6 +1,6 @@
 # AcornOps API Inventory
 
-Initially checked on 2026-06-04 against `/Users/ryangoh/Desktop/Development/acornops/control-plane`.
+Initially checked on 2026-06-04 against a local checkout of the AcornOps `control-plane` repository; the current inventory is maintained against the synchronized public contract rather than a machine-specific path.
 
 This inventory is a maintained reference for CSIT bot work. The bot-accessible endpoints and account-link behavior were updated on 2026-07-18 from the current AcornOps external integration contract.
 
@@ -128,7 +128,7 @@ External-integration issues, workflows, and approvals used by the bot:
 - `GET /api/v1/workflow-executions/{executionId}/stream`
 - `POST /api/v1/runs/{runId}/approvals/{approvalId}/decision`
 
-Every external workflow message requires a `clientRequestId`. The Mattermost bot derives it from the source post id and reuses it only when retrying that exact post. The launch returns an `executionId`; the bot follows the replayable aggregate execution stream with `Last-Event-ID` so it can discover every step attempt and approval instead of assuming the first `run_id` is the whole workflow.
+Every external workflow message body contains exactly `content` and the required `clientRequestId`. The Mattermost bot derives the request id from the source post id and reuses it only when retrying that exact post. Inputs, context grants, and target bindings are supplied when the workflow session is created and are deliberately not repeated on message requests. The launch returns an `executionId`; the bot follows the replayable aggregate execution stream with `Last-Event-ID` so it can discover every step attempt and approval instead of assuming the first `run_id` is the whole workflow.
 
 Approval decisions require explicit linked-user confirmation. Mattermost actions are user-bound and signed, while AcornOps separately restricts decisions to the exact integration link and client that originated the run. The exact origin may reject after write permission is removed when AcornOps still permits it; no event or webhook is treated as approval.
 

@@ -581,12 +581,7 @@ async function handleWorkflowThreadMessage({
         content: selectedTarget
           ? bindWorkflowTargetReference(normalizedText, selectedTarget)
           : normalizedText,
-        inputs: currentThread.workflowInputs,
-        clientRequestId: workflowClientRequestId({ sourceMessageId }),
-        targetId: selectedTarget?.id,
-        targetType: selectedTarget
-          ? normalizeTargetType(selectedTarget.type)
-          : undefined
+        clientRequestId: workflowClientRequestId({ sourceMessageId })
       }
     );
     const runId = result.run_id ?? result.runId ?? "";
@@ -1255,10 +1250,7 @@ async function handleWorkflow({
           session.id,
           {
             content: launch.content,
-            inputs: launch.inputs,
-            clientRequestId,
-            targetId: context.currentTarget?.id,
-            targetType: normalizeTargetType(context.currentTarget?.type)
+            clientRequestId
           }
         );
         const runId = result.run_id ?? result.runId ?? "";

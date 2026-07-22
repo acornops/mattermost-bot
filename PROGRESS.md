@@ -2,7 +2,7 @@
 
 ## Current Verified State
 
-- Repository root directory: `/Users/ryangoh/Desktop/Development/csit`
+- Repository root: this checkout; no machine-specific path is required.
 - Current phase: official AcornOps Mattermost bot integration, production-oriented
 - Product direction: Mattermost ChatOps bot for authenticating users to AcornOps through the external integration account-link contract, then exposing AcornOps reads, eligible workflows, and confirmed run approvals in Mattermost
 - Local learning stack: K3s, kubectl, Helm evaluation, local Mattermost via Docker
@@ -13,6 +13,7 @@
 - Mattermost readiness verification path: `./scripts/verify-mattermost.sh`
 - Bot verification path: `./scripts/verify-bot.sh`
 - Docker image verification path: `./scripts/verify-docker.sh`
+- Latest verification: the 2026-07-23 contract-hardening sweep passed `./init.sh` with harness, lint, build, and all 172 tests.
 - Highest priority unfinished feature: none recorded.
 - Current blocker: live Mattermost/AcornOps smoke for the expanded external integration command surface still requires local services.
 
@@ -73,6 +74,7 @@
 - `!resources` uses the selected target. `!issues` lists workspace-wide issues with current search, status, severity, target, target-type, and namespace filters. Removed `!findings` and `!investigations` receive the generic unknown-command response.
 - `!workflows` lists every eligible active workflow with read-only/read-write and approval labels. `!workflow run <number|id> [key=value...]` validates declared string inputs, derives exact context grants, supplies selected target bindings, and launches without a separate write flag.
 - Accepted workflow launches create a Mattermost root post exactly like `**Workflow launched: Cluster triage**`. Every initial and follow-up message carries a post-derived `clientRequestId`; initial launches also persist and reuse a bounded source-post-to-session reservation. The aggregate replayable execution stream discovers each step and persists its `executionId`, current `runId`, and replay cursor only after required Mattermost delivery succeeds.
+- Workflow inputs, context grants, and target bindings are fixed when the workflow session is created. Initial and follow-up session-message bodies contain only `content` and `clientRequestId`, matching the strict current control-plane contract.
 - Workflow and chat threads each allow one active execution and both close with `!chat end`. Active read-write and approval-gated workflows returned by AcornOps are supported; draft/inactive workflows remain rejected defensively.
 - Workflow launch HTTP 400 responses surface AcornOps' safe error code and message. The current local smoke environment returns `AI_PROVIDER_CREDENTIAL_MISSING`; an AI provider API key must be configured in AcornOps AI Settings before a workflow can execute.
 - `!chat new [title]` creates a read-only troubleshooting thread. `!chat new --write [title]` refreshes the selected workspace's effective `create_read_write_runs` permission and creates a persisted read-write thread only when AcornOps permits it.
@@ -114,6 +116,12 @@
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
 
+### 2026-07-23 - Align strict Workflow message bodies with the integrated control plane
+
+- Fixed the independently reproduced bot-side contract defect that repeated launch-only Workflow inputs and target fields on session-message requests. Both launches and follow-ups now send exactly `content` and the required post-derived `clientRequestId`; session creation remains authoritative for inputs, grants, and target bindings.
+- Updated the current runtime, API inventory, README, decision, progress, and handoff artifacts to remove the stale request-shape and browser-only approval claims. Machine-specific current-state paths were replaced with portable repository references.
+- Focused workflow contract tests passed, and final `./init.sh` passed with harness verification, lint, build, and all 172 tests. Live Mattermost/AcornOps smoke remains the release-time integration gate.
+
 ### 2026-07-19 - Full unpushed-change review and webhook delivery hardening
 
 - Goal: Review all 18 commits ahead of `origin/main`, fix every clear defect, repeat verification, then publish the branch.
@@ -139,7 +147,7 @@ Session log entries are historical. Superseded risks and decisions are corrected
 ### 2026-07-18 - Fix workflow target-reference HTTP 409
 
 - Investigated `!workflow run 1` returning a generic HTTP 409. The bot successfully created the workflow session, but AcornOps rejected its first message with `WORKFLOW_TARGET_MENTION_MISMATCH` because the bot sent the template placeholder `@cluster[Cluster name]` instead of the selected target's exact reference.
-- Updated workflow launch and follow-up messages to render the selected target reference, send explicit target id/type bindings, and surface safe AcornOps HTTP 409 code/message details.
+- Updated workflow launch and follow-up messages to render the selected target reference and, at that time, resend explicit target id/type bindings. The 2026-07-23 strict-contract hardening supersedes the latter: message bodies now contain only `content` and `clientRequestId`, while target bindings remain fixed at session creation.
 - Focused workflow message, client-contract, and prompt-binding tests passed; bot lint passed.
 - Live verification reused the failed workflow session and sent `@cluster[Development Cluster]`; AcornOps returned HTTP 202 with a queued workflow execution. The local bot container was restarted and reconnected to Mattermost.
 - Final `./init.sh` reached 128 passing tests out of 150 but remains failing on 22 pre-existing B23 migration assertions and removed-command tests. B23 remains in progress and must not be marked passing until the suite is reconciled.

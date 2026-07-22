@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-07-23: Keep workflow session-message bodies minimal
+
+- Decision: Send exactly `content` and `clientRequestId` to `POST /api/v1/workflow-sessions/{sessionId}/messages`. Keep workflow inputs, context grants, and target bindings on workflow-session creation; use persisted launch inputs locally only to render an exact selected-target reference in later free-text content when needed.
+- Reason: The current control plane validates workflow session-message bodies strictly and rejects stale launch-only fields. Repeating them also creates two possible sources of truth after the session has already captured immutable launch context.
+- Consequence: Existing workflow launch and follow-up behavior is preserved, while both request paths now conform to the same strict contract. This supersedes the 2026-07-18 implementation note that described sending `targetId` and `targetType` on the message request; target selection still occurs during session creation and exact references remain embedded in `content`.
+
 ## 2026-07-19: Keep action keys server-side and preserve workflow delivery state until completion
 
 - Decision: Mattermost buttons carry only purpose-bound, expiring HMAC tokens. `MATTERMOST_ACTION_SECRET` never appears in post attachments or callback context. Approval confirmation uses a separate short-lived signed dialog-state purpose, and all buttons are omitted unless both callback URL and signing key are configured.

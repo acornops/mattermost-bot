@@ -322,7 +322,7 @@ export class AcornOpsClient {
   async postWorkflowSessionMessage(
     identity,
     sessionId,
-    { content, inputs = {}, clientRequestId, targetId, targetType }
+    { content, clientRequestId }
   ) {
     if (!String(clientRequestId ?? "").trim()) {
       throw new Error("clientRequestId is required for external workflow messages.");
@@ -330,7 +330,7 @@ export class AcornOpsClient {
     return this.postExternalResource(
       identity,
       `/api/v1/workflow-sessions/${encodeURIComponent(sessionId)}/messages`,
-      { content, inputs, clientRequestId, targetId, targetType }
+      { content, clientRequestId }
     );
   }
 
