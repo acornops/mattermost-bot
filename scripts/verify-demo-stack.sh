@@ -45,6 +45,7 @@ grep -q -- '--volumes' "${ROOT_DIR}/scripts/demo/reset.sh"
 grep -q -- '--confirm' "${ROOT_DIR}/scripts/demo/reset.sh"
 grep -q 'previous_release' "${ROOT_DIR}/scripts/demo/activate-release.sh"
 grep -q 'pg_dump' "${ROOT_DIR}/scripts/demo/backup.sh"
+grep -q 'demo_kubectl get nodes --no-headers -o wide' "${ROOT_DIR}/scripts/demo/common.sh"
 
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
   docker compose \

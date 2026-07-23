@@ -118,8 +118,8 @@ demo_kubectl() {
 }
 
 demo_node_ip() {
-  demo_kubectl get nodes \
-    -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}'
+  demo_kubectl get nodes --no-headers -o wide |
+    awk 'NR == 1 { print $6 }'
 }
 
 demo_docker_gateway() {
