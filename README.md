@@ -52,9 +52,14 @@ This repository does not own:
 - management console UI
 - execution-engine or llm-gateway behavior
 - Kubernetes or VM agent runtime behavior
-- production deployment orchestration, image pinning, environment templates, or operator runbooks
+- reusable AcornOps production deployment orchestration, platform image pinning,
+  or full-stack operator runbooks
 
 Use `acornops-workspace` for coordinated multi-repo changes, and `acornops-deployment` for full-stack local, VM, and Kubernetes deployment tracks.
+
+The narrow exception is this repository's standalone Mattermost demo. It owns
+the demo-only Mattermost and bot Compose project and may reuse the private
+AcornOps demo VM without becoming part of the AcornOps platform release.
 
 ## Contracts
 
@@ -248,11 +253,42 @@ Do not combine the task-managed Mattermost stack with another Mattermost instanc
 - Treat channel responses as potentially visible to the whole channel. Login remains direct-message-only; read and assistant commands are intentionally channel-capable.
 - Rotate service tokens through AcornOps control-plane procedures and restart the bot runtime after secret updates.
 
+## Standalone Demo Deployment
+
+The public demo profile runs Mattermost, Mattermost Postgres, bot Postgres, and
+the bot as one independently managed Docker Compose project. The existing demo
+k3s Traefik and cert-manager edge routes:
+
+```text
+https://mattermost.demo.acornops.dev     -> Docker port 8065
+https://mattermost-bot.demo.acornops.dev -> Docker port 8077
+```
+
+Start from an ignored owner-readable `env/demo/.env.demo` based on
+`env/demo/.env.example`:
+
+```bash
+task demo:doctor
+task demo:deploy
+task demo:verify
+task demo:status
+```
+
+The high ports bind only to Docker's private bridge gateway; they are not
+published on the VM's public interface.
+
+`task demo:down` preserves persistent data and ingress. `task demo:reset`
+deletes only this fixed Compose project's volumes, generated bot token, and
+dedicated ingress namespace, and requires an explicit destructive task.
+The GitHub deployment workflow is manual-only until the first deployment and
+rollback have both passed.
+
 ## Documentation
 
 Primary docs:
 
 - [`AGENTS.md`](AGENTS.md)
+- [`docs/demo-deployment.md`](docs/demo-deployment.md)
 - [`docs/bot-runtime.md`](docs/bot-runtime.md)
 - [`docs/wiki-mattermost-bot-commands.md`](docs/wiki-mattermost-bot-commands.md)
 - [`docs/bot-integrations.md`](docs/bot-integrations.md)

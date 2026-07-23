@@ -13,9 +13,10 @@
 - Mattermost readiness verification path: `./scripts/verify-mattermost.sh`
 - Bot verification path: `./scripts/verify-bot.sh`
 - Docker image verification path: `./scripts/verify-docker.sh`
-- Latest verification: the 2026-07-23 seeded local-stack work passed `task validate` with harness, Compose validation, lint, build, and all 177 tests; live `task local-smoke` also passed against Mattermost, the bot, seeded data, and AcornOps.
-- Highest priority unfinished feature: none recorded.
-- Current blocker: none for local stack startup; the broader authenticated command/approval/webhook smoke matrix still requires interactive user linking and scenario-specific AcornOps data.
+- Demo deployment verification path: `./scripts/verify-demo-stack.sh`
+- Latest verification: the 2026-07-23 standalone demo deployment implementation passes static Compose/script verification and `task validate` with all 177 tests. The read-only target VM preflight passed with about 12 GiB available memory and 47 GiB free disk.
+- Highest priority unfinished feature: `B25`, the standalone public Mattermost integration demo.
+- Current blocker: no implementation blocker; live rollout needs the matching demo-infra client registration, DNS, GitHub environment secrets, and acceptance smoke.
 
 ## Completed
 
@@ -54,7 +55,7 @@
 
 ## In Progress
 
-- None.
+- `B25`: Deploy a standalone Mattermost integration demo.
 
 ## Known Issues
 
