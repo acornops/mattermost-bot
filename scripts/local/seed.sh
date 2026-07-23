@@ -10,7 +10,7 @@ local_load_env
 
 username="${LOCAL_MATTERMOST_USERNAME:-dev}"
 email="${LOCAL_MATTERMOST_USER_EMAIL:-dev@acornops.local}"
-password="${LOCAL_MATTERMOST_USER_PASSWORD:-devpassword}"
+password="${LOCAL_MATTERMOST_USER_PASSWORD:-devpass}"
 team="${LOCAL_MATTERMOST_TEAM:-csit-lab}"
 team_display="${LOCAL_MATTERMOST_TEAM_DISPLAY_NAME:-CSIT Lab}"
 channel="${LOCAL_MATTERMOST_CHANNEL:-chatops-lab}"

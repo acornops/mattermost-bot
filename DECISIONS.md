@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-07-23: Standardize the seeded development password
+
+- Decision: Use `devpass` as the default seeded Mattermost developer password, matching the AcornOps local development identity.
+- Reason: A shared local-only password reduces friction when switching between Mattermost and AcornOps during integration demos.
+- Consequence: The local-only Mattermost profile lowers its password minimum to seven characters. Existing persistent local stacks adopt the new password on the next `task local-up`; operators who override `LOCAL_MATTERMOST_USER_PASSWORD` are unaffected. Production deployments must retain their own stronger authentication policy.
+
 ## 2026-07-23: Keep workflow session-message bodies minimal
 
 - Decision: Send exactly `content` and `clientRequestId` to `POST /api/v1/workflow-sessions/{sessionId}/messages`. Session creation sends only `workspaceId` and the exact `capabilityPolicy.contextGrants`. Render declared command inputs into launch content, represent the selected target as an exact `@target[...]` prompt reference, and persist target metadata only in the bot's thread record so follow-ups remain target-stable.

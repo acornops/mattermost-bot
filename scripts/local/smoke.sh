@@ -57,7 +57,7 @@ if [[ "${SEED_MATTERMOST_DATA:-true}" == "true" ]]; then
   node "${SCRIPT_DIR}/smoke-chat.mjs" \
     "${MATTERMOST_SITE_URL:-http://localhost:8065}" \
     "${LOCAL_MATTERMOST_USER_EMAIL:-dev@acornops.local}" \
-    "${LOCAL_MATTERMOST_USER_PASSWORD:-devpassword}" \
+    "${LOCAL_MATTERMOST_USER_PASSWORD:-devpass}" \
     "${LOCAL_MATTERMOST_TEAM:-csit-lab}" \
     "${LOCAL_MATTERMOST_CHANNEL:-chatops-lab}" \
     "${LOCAL_MATTERMOST_BOT_USERNAME:-acorn-ops-bot}" \

@@ -16,7 +16,7 @@ task local-smoke
 
 The stack includes Mattermost Team Edition 11.7.0, a dedicated Mattermost Postgres database, the AcornOps bot, and its Postgres state store. `task local-up` seeds a local administrator, `csit-lab` team, `chatops-lab` channel, `acorn-ops-bot` bot account, memberships, and bot access token by default. Every seed operation is safe to repeat.
 
-The default login is `dev@acornops.local` / `devpassword`. Generated secret state lives only in ignored `.local/state/runtime.env` with mode `0600`. To customize the stack, edit ignored `env/local/.env.local` after its first automatic creation. To opt out of seeding, run `task local-up SEED_MATTERMOST_DATA=false` and supply a bot token yourself.
+The default login is `dev@acornops.local` / `devpass`, matching the AcornOps local development login. The local-only Mattermost profile lowers its password minimum to seven characters so that exact credential is accepted; do not carry that policy into a production Mattermost deployment. Generated secret state lives only in ignored `.local/state/runtime.env` with mode `0600`. To customize the stack, edit ignored `env/local/.env.local` after its first automatic creation. To opt out of seeding, run `task local-up SEED_MATTERMOST_DATA=false` and supply a bot token yourself.
 
 Useful lifecycle commands:
 

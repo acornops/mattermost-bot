@@ -117,6 +117,10 @@
 
 Session log entries are historical. Superseded risks and decisions are corrected in later entries and in the Current Verified State above.
 
+### 2026-07-23 - Standardize the local demo password
+
+- Changed the default seeded Mattermost developer password from `devpassword` to `devpass` so it matches the AcornOps local development login. Mattermost's default eight-character minimum rejected that exact credential, so the local-only Compose profile now sets the minimum to seven; the idempotent seed path updates an existing persistent user's password after Mattermost restarts with that profile. The first repeated-start smoke also exposed a stale bot WebSocket after Mattermost recreation, so `local-up` now force-recreates the bot after Mattermost is healthy.
+
 ### 2026-07-23 - Align strict Workflow message bodies with the integrated control plane
 
 - Fixed the independently reproduced bot-side contract defect that repeated unsupported Workflow input and target fields on session-message requests. Both launches and follow-ups send exactly `content` and the required post-derived `clientRequestId`. The later production-readiness sweep clarified the ownership model: session creation is authoritative only for workspace, pinned workflow version, and approved context grants; inputs and prompt-resource references are conveyed in content and resolved for each execution.

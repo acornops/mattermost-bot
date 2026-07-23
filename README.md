@@ -160,7 +160,7 @@ task local-smoke
 Open `http://localhost:8065` and sign in with:
 
 - email: `dev@acornops.local`
-- password: `devpassword`
+- password: `devpass`
 - team/channel: `csit-lab` / `chatops-lab`
 - bot: `@acorn-ops-bot`
 

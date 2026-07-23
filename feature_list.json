@@ -697,7 +697,7 @@
         ]
       },
       "evidence": "Implemented and live-verified on 2026-07-23. Mattermost 11.7.0 built and ran natively on macOS arm64 from the official Team Edition archive with published SHA-256 verification. First seed created the dev administrator, csit-lab team, chatops-lab channel, acorn-ops-bot account, memberships, and an ignored mode-0600 token; a second seed reused all entities and the token. local-down/local-up preserved state. local-reset removed only the project volumes and generated token, after which local-up recreated and reseeded the stack. task local-smoke passed Mattermost, bot, and AcornOps health, seeded-entity checks, and a real !help command/reply WebSocket round trip. Final task validate passed Compose validation, lint, build, and all 177 tests.",
-      "notes": "The stack intentionally leaves AcornOps platform lifecycle and data to acornops-deployment. SEED_MATTERMOST_DATA=false supports manual token setups, and CHECK_ACORNOPS=false supports intentionally isolated bot smoke. The generated bot token is never printed or committed."
+      "notes": "The stack intentionally leaves AcornOps platform lifecycle and data to acornops-deployment. SEED_MATTERMOST_DATA=false supports manual token setups, and CHECK_ACORNOPS=false supports intentionally isolated bot smoke. The generated bot token is never printed or committed. On 2026-07-23, the seeded developer password was standardized on devpass to match the AcornOps local development identity. The local-only Mattermost profile lowers its minimum password length to seven so that exact credential is accepted; the next local-up updates existing persistent users."
     }
   ]
 }
