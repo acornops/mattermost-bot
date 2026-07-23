@@ -1,0 +1,115 @@
+name: Deploy Mattermost demo
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: mattermost-demo-vm
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-task@v2
+      - run: task validate
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: demo
+    permissions:
+      contents: read
+    env:
+      SSH_SERVER: ${{ secrets.DEMO_DEPLOYMENT_SSH_SERVER }}
+      SSH_USER: ${{ secrets.DEMO_DEPLOYMENT_SSH_USER }}
+      MATTERMOST_POSTGRES_PASSWORD: ${{ secrets.DEMO_MATTERMOST_POSTGRES_PASSWORD }}
+      BOT_POSTGRES_PASSWORD: ${{ secrets.DEMO_BOT_POSTGRES_PASSWORD }}
+      MATTERMOST_ADMIN_PASSWORD: ${{ secrets.DEMO_MATTERMOST_ADMIN_PASSWORD }}
+      MATTERMOST_USER_PASSWORD: ${{ secrets.DEMO_MATTERMOST_USER_PASSWORD }}
+      MATTERMOST_BOT_INITIAL_PASSWORD: ${{ secrets.DEMO_MATTERMOST_BOT_INITIAL_PASSWORD }}
+      EXTERNAL_INTEGRATION_SERVICE_TOKEN: ${{ secrets.DEMO_EXTERNAL_INTEGRATION_SERVICE_TOKEN }}
+      MATTERMOST_ACTION_SECRET: ${{ secrets.DEMO_MATTERMOST_ACTION_SECRET }}
+      DEPLOYMENT_ROOT: /opt/acornops-mattermost-demo
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEMO_DEPLOYMENT_SSH_KEY }}
+        run: |
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "${SSH_PRIVATE_KEY}" > ~/.ssh/id_ed25519
+          chmod 0600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${SSH_SERVER}" >> ~/.ssh/known_hosts
+
+      - name: Prepare release bundle and environment
+        run: |
+          git archive --format=tar.gz --output=/tmp/mattermost-demo-release.tar.gz HEAD
+          umask 077
+          {
+            printf 'MATTERMOST_VERSION=11.7.0\n'
+            printf 'MATTERMOST_SITE_URL=https://mattermost.demo.acornops.dev\n'
+            printf 'BOT_PUBLIC_BASE_URL=https://mattermost-bot.demo.acornops.dev\n'
+            printf 'ACORNOPS_API_BASE_URL=https://api.demo.acornops.dev\n'
+            printf 'ACORNOPS_CONSOLE_BASE_URL=https://console.demo.acornops.dev\n'
+            printf 'MATTERMOST_PORT=8065\n'
+            printf 'BOT_HTTP_PORT=8077\n'
+            printf 'MATTERMOST_POSTGRES_DB=mattermost\n'
+            printf 'MATTERMOST_POSTGRES_USER=mmuser\n'
+            printf 'MATTERMOST_POSTGRES_PASSWORD=%s\n' "${MATTERMOST_POSTGRES_PASSWORD}"
+            printf 'BOT_POSTGRES_DB=acornops_bot\n'
+            printf 'BOT_POSTGRES_USER=acornops_bot\n'
+            printf 'BOT_POSTGRES_PASSWORD=%s\n' "${BOT_POSTGRES_PASSWORD}"
+            printf 'DEMO_MATTERMOST_ADMIN_USERNAME=demo-admin\n'
+            printf 'DEMO_MATTERMOST_ADMIN_EMAIL=demo-admin@acornops.dev\n'
+            printf 'DEMO_MATTERMOST_ADMIN_PASSWORD=%s\n' "${MATTERMOST_ADMIN_PASSWORD}"
+            printf 'DEMO_MATTERMOST_USERNAME=demo\n'
+            printf 'DEMO_MATTERMOST_USER_EMAIL=demo@acornops.dev\n'
+            printf 'DEMO_MATTERMOST_USER_PASSWORD=%s\n' "${MATTERMOST_USER_PASSWORD}"
+            printf 'DEMO_MATTERMOST_TEAM=acornops-demo\n'
+            printf "DEMO_MATTERMOST_TEAM_DISPLAY_NAME='AcornOps Demo'\n"
+            printf 'DEMO_MATTERMOST_CHANNEL=chatops\n'
+            printf "DEMO_MATTERMOST_CHANNEL_DISPLAY_NAME='ChatOps'\n"
+            printf 'MATTERMOST_BOT_USERNAME=acorn-ops-bot\n'
+            printf 'DEMO_MATTERMOST_BOT_EMAIL=acorn-ops-bot@acornops.dev\n'
+            printf 'DEMO_MATTERMOST_BOT_INITIAL_PASSWORD=%s\n' "${MATTERMOST_BOT_INITIAL_PASSWORD}"
+            printf 'EXTERNAL_INTEGRATION_SERVICE_TOKEN=%s\n' "${EXTERNAL_INTEGRATION_SERVICE_TOKEN}"
+            printf 'MATTERMOST_ACTION_SECRET=%s\n' "${MATTERMOST_ACTION_SECRET}"
+            printf 'BOT_ALERT_TIME_ZONE=Asia/Singapore\n'
+          } > /tmp/mattermost-demo.env
+
+      - name: Upload release
+        env:
+          RELEASE_ID: ${{ github.sha }}
+        run: |
+          ssh "${SSH_USER}@${SSH_SERVER}" \
+            "sudo install -d -m 0755 '${DEPLOYMENT_ROOT}/releases/${RELEASE_ID}' '${DEPLOYMENT_ROOT}/shared'"
+          scp /tmp/mattermost-demo-release.tar.gz /tmp/mattermost-demo.env \
+            "${SSH_USER}@${SSH_SERVER}:/tmp/"
+          ssh "${SSH_USER}@${SSH_SERVER}" \
+            "sudo tar -xzf /tmp/mattermost-demo-release.tar.gz -C '${DEPLOYMENT_ROOT}/releases/${RELEASE_ID}' && sudo install -m 0600 /tmp/mattermost-demo.env '${DEPLOYMENT_ROOT}/shared/demo.env' && sudo rm -f /tmp/mattermost-demo-release.tar.gz /tmp/mattermost-demo.env"
+
+      - name: Acquire shared VM deployment lease
+        id: deployment_lock
+        env:
+          LOCK_TOKEN: mattermost-bot:${{ github.run_id }}:${{ github.run_attempt }}
+        run: |
+          ssh "${SSH_USER}@${SSH_SERVER}" \
+            "sudo bash -s -- acquire '${LOCK_TOKEN}'" < scripts/demo/deploy-lock.sh
+
+      - name: Activate and verify release
+        env:
+          RELEASE_ID: ${{ github.sha }}
+        run: |
+          ssh "${SSH_USER}@${SSH_SERVER}" \
+            "sudo '${DEPLOYMENT_ROOT}/releases/${RELEASE_ID}/scripts/demo/activate-release.sh' '${DEPLOYMENT_ROOT}' '${DEPLOYMENT_ROOT}/shared/demo.env' '${DEPLOYMENT_ROOT}/shared/runtime.env'"
+
+      - name: Release shared VM deployment lease
+        if: always() && steps.deployment_lock.outcome == 'success'
+        env:
+          LOCK_TOKEN: mattermost-bot:${{ github.run_id }}:${{ github.run_attempt }}
+        run: |
+          ssh "${SSH_USER}@${SSH_SERVER}" \
+            "sudo bash -s -- release '${LOCK_TOKEN}'" < scripts/demo/deploy-lock.sh

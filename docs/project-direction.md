@@ -57,6 +57,15 @@ Historical learning stages already completed:
 - Whether active-run recovery workers are needed to resume SSE followers after a bot restart.
 - What deployment coordination is required for safe multi-replica processing of Mattermost events and run followers.
 
+## Demo Deployment Boundary
+
+The public AcornOps demo runs Mattermost, its database, bot Postgres, and the
+bot as one standalone Docker Compose project owned by this repository. It may
+share the disposable AcornOps demo VM, k3s Traefik, and cert-manager edge, but
+it is not part of the AcornOps platform Helm release. `demo-infra` owns only
+the shared host, public edge, external-integration client registration, and
+cross-repository deployment coordination.
+
 ## Official References
 
 - K3s quick start: https://docs.k3s.io/quick-start

@@ -54,3 +54,44 @@ tasks:
     cmds:
       - ./init.sh
       - ./scripts/verify-local-stack.sh
+      - ./scripts/verify-demo-stack.sh
+
+  demo:doctor:
+    desc: Validate standalone Mattermost demo prerequisites
+    cmds:
+      - ./scripts/demo/doctor.sh {{default "env/demo/.env.demo" .DEMO_ENV_FILE}}
+
+  demo:deploy:
+    desc: Build, deploy, seed, expose, and verify the standalone Mattermost demo
+    cmds:
+      - ./scripts/demo/deploy.sh {{default "env/demo/.env.demo" .DEMO_ENV_FILE}}
+
+  demo:verify:
+    desc: Verify the live standalone Mattermost demo
+    cmds:
+      - ./scripts/demo/verify.sh {{default "env/demo/.env.demo" .DEMO_ENV_FILE}}
+
+  demo:status:
+    desc: Show Mattermost demo containers and ingress state
+    cmds:
+      - ./scripts/demo/status.sh {{default "env/demo/.env.demo" .DEMO_ENV_FILE}}
+
+  demo:logs:
+    desc: Show recent Mattermost demo logs
+    cmds:
+      - ./scripts/demo/logs.sh {{default "env/demo/.env.demo" .DEMO_ENV_FILE}}
+
+  demo:down:
+    desc: Stop Mattermost demo containers while preserving data and ingress
+    cmds:
+      - ./scripts/demo/down.sh {{default "env/demo/.env.demo" .DEMO_ENV_FILE}}
+
+  demo:backup:
+    desc: Back up Mattermost databases and persistent files with a short application pause
+    cmds:
+      - ./scripts/demo/backup.sh {{default "env/demo/.env.demo" .DEMO_ENV_FILE}}
+
+  demo:reset:
+    desc: Delete Mattermost demo containers, volumes, ingress, and generated token
+    cmds:
+      - ./scripts/demo/reset.sh {{default "env/demo/.env.demo" .DEMO_ENV_FILE}} --confirm

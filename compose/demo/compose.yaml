@@ -1,0 +1,164 @@
+name: acornops-mattermost-demo
+
+services:
+  mattermost-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${MATTERMOST_POSTGRES_DB:-mattermost}
+      POSTGRES_USER: ${MATTERMOST_POSTGRES_USER:-mmuser}
+      POSTGRES_PASSWORD: ${MATTERMOST_POSTGRES_PASSWORD:?set MATTERMOST_POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - mattermost-postgres-data:/var/lib/postgresql/data
+
+  bot-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${BOT_POSTGRES_DB:-acornops_bot}
+      POSTGRES_USER: ${BOT_POSTGRES_USER:-acornops_bot}
+      POSTGRES_PASSWORD: ${BOT_POSTGRES_PASSWORD:?set BOT_POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - bot-postgres-data:/var/lib/postgresql/data
+
+  mattermost-volume-init:
+    image: alpine:3.22
+    user: root
+    command: ["sh", "-c", "chown -R 2000:2000 /mattermost"]
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - mattermost-config:/mattermost/config
+      - mattermost-data:/mattermost/data
+      - mattermost-logs:/mattermost/logs
+      - mattermost-plugins:/mattermost/plugins
+      - mattermost-client-plugins:/mattermost/client/plugins
+      - mattermost-bleve-indexes:/mattermost/bleve-indexes
+
+  mattermost:
+    image: acornops/mattermost-demo:${MATTERMOST_VERSION:-11.7.0}
+    build:
+      context: ../..
+      dockerfile: compose/local/Dockerfile.mattermost
+      args:
+        MATTERMOST_VERSION: ${MATTERMOST_VERSION:-11.7.0}
+    restart: unless-stopped
+    init: true
+    depends_on:
+      mattermost-postgres:
+        condition: service_healthy
+      mattermost-volume-init:
+        condition: service_completed_successfully
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://${MATTERMOST_POSTGRES_USER:-mmuser}:${MATTERMOST_POSTGRES_PASSWORD:?set MATTERMOST_POSTGRES_PASSWORD}@mattermost-postgres:5432/${MATTERMOST_POSTGRES_DB:-mattermost}?sslmode=disable&connect_timeout=10
+      MM_BLEVESETTINGS_INDEXDIR: /mattermost/bleve-indexes
+      MM_SERVICESETTINGS_SITEURL: ${MATTERMOST_SITE_URL:-https://mattermost.demo.acornops.dev}
+      MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
+      MM_SERVICESETTINGS_ENABLEBOTACCOUNTCREATION: "true"
+      MM_SERVICESETTINGS_ENABLEUSERACCESSTOKENS: "true"
+      MM_EMAILSETTINGS_SENDEMAILNOTIFICATIONS: "false"
+      MM_EMAILSETTINGS_ENABLESIGNUPWITHEMAIL: "false"
+      MM_FILESETTINGS_DRIVERNAME: local
+      MM_LOGSETTINGS_CONSOLELEVEL: INFO
+      MM_CALLSPLUGINSETTINGS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD", "/mattermost/bin/mmctl", "system", "status", "--local"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${DEMO_BIND_ADDRESS:-0.0.0.0}:${MATTERMOST_PORT:-8065}:8065"
+    volumes:
+      - mattermost-config:/mattermost/config
+      - mattermost-data:/mattermost/data
+      - mattermost-logs:/mattermost/logs
+      - mattermost-plugins:/mattermost/plugins
+      - mattermost-client-plugins:/mattermost/client/plugins
+      - mattermost-bleve-indexes:/mattermost/bleve-indexes
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  mattermost-bot:
+    image: acornops-mattermost-bot:${BOT_IMAGE_TAG:-demo}
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      labels:
+        org.opencontainers.image.revision: ${BOT_IMAGE_REVISION:-unknown}
+    restart: unless-stopped
+    init: true
+    depends_on:
+      bot-postgres:
+        condition: service_healthy
+      mattermost:
+        condition: service_healthy
+    extra_hosts:
+      - "api.demo.acornops.dev:host-gateway"
+    environment:
+      MATTERMOST_URL: http://mattermost:8065
+      MATTERMOST_BOT_TOKEN: ${MATTERMOST_BOT_TOKEN:-}
+      MATTERMOST_BOT_USERNAME: ${MATTERMOST_BOT_USERNAME:-acorn-ops-bot}
+      ACORNOPS_API_BASE_URL: ${ACORNOPS_API_BASE_URL:-https://api.demo.acornops.dev}
+      ACORNOPS_CONSOLE_BASE_URL: ${ACORNOPS_CONSOLE_BASE_URL:-https://console.demo.acornops.dev}
+      EXTERNAL_INTEGRATION_SERVICE_TOKEN: ${EXTERNAL_INTEGRATION_SERVICE_TOKEN:?set EXTERNAL_INTEGRATION_SERVICE_TOKEN}
+      BOT_DATABASE_URL: postgres://${BOT_POSTGRES_USER:-acornops_bot}:${BOT_POSTGRES_PASSWORD:?set BOT_POSTGRES_PASSWORD}@bot-postgres:5432/${BOT_POSTGRES_DB:-acornops_bot}
+      BOT_HTTP_HOST: 0.0.0.0
+      BOT_HTTP_PORT: ${BOT_HTTP_PORT:-8077}
+      BOT_PUBLIC_BASE_URL: ${BOT_PUBLIC_BASE_URL:-https://mattermost-bot.demo.acornops.dev}
+      MATTERMOST_ACTION_SECRET: ${MATTERMOST_ACTION_SECRET:?set MATTERMOST_ACTION_SECRET}
+      BOT_ALERT_TIME_ZONE: ${BOT_ALERT_TIME_ZONE:-Asia/Singapore}
+      CHAT_RUN_POLL_ATTEMPTS: ${CHAT_RUN_POLL_ATTEMPTS:-15}
+      CHAT_RUN_POLL_INTERVAL_MS: ${CHAT_RUN_POLL_INTERVAL_MS:-1000}
+      RUN_STREAM_RECONNECT_ATTEMPTS: ${RUN_STREAM_RECONNECT_ATTEMPTS:-3}
+      RUN_STREAM_RECONNECT_DELAY_MS: ${RUN_STREAM_RECONNECT_DELAY_MS:-1000}
+      RUN_STREAM_FALLBACK_POLL_INTERVAL_MS: ${RUN_STREAM_FALLBACK_POLL_INTERVAL_MS:-3000}
+      RUN_STREAM_FALLBACK_POLL_MAX_MS: ${RUN_STREAM_FALLBACK_POLL_MAX_MS:-180000}
+      WORKFLOW_FOLLOW_RETRY_DELAY_MS: ${WORKFLOW_FOLLOW_RETRY_DELAY_MS:-3000}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:'+process.env.BOT_HTTP_PORT+'/healthz').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${DEMO_BIND_ADDRESS:-0.0.0.0}:${BOT_HTTP_PORT:-8077}:${BOT_HTTP_PORT:-8077}"
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+volumes:
+  mattermost-postgres-data:
+  bot-postgres-data:
+  mattermost-config:
+  mattermost-data:
+  mattermost-logs:
+  mattermost-plugins:
+  mattermost-client-plugins:
+  mattermost-bleve-indexes:

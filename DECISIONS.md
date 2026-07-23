@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-07-23: Keep the public Mattermost demo external but bot-owned
+
+- Decision: Own the demo-only Mattermost, Mattermost Postgres, bot Postgres, bot, seeding, ingress adapter, deployment workflow, and rollback lifecycle in this repository. Reuse the demo VM and its k3s Traefik/cert-manager edge without adding Mattermost to the AcornOps platform Helm release or demo-infra Ansible roles.
+- Reason: Mattermost and its bot form one independently deployable external integration. Co-locating them on the disposable demo VM avoids another host while preserving a separate release, state, and teardown boundary.
+- Consequence: `demo-infra` still registers the external integration client, owns the shared VM and public edge, and coordinates mutations with a host lease. Co-location is an operational convenience rather than a security boundary. The public demo Compose profile fails closed on secrets, disables open signup and Calls, persists both databases, and exposes high ports only as Traefik backends.
+
 ## 2026-07-23: Standardize the seeded development password
 
 - Decision: Use `devpass` as the default seeded Mattermost developer password, matching the AcornOps local development identity.
