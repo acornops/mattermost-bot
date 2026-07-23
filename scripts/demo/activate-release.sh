@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-release_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+release_dir="$(cd -P "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 deployment_root="${1:?usage: activate-release.sh DEPLOYMENT_ROOT ENV_FILE RUNTIME_ENV_FILE}"
 env_file="${2:?usage: activate-release.sh DEPLOYMENT_ROOT ENV_FILE RUNTIME_ENV_FILE}"
 runtime_env_file="${3:?usage: activate-release.sh DEPLOYMENT_ROOT ENV_FILE RUNTIME_ENV_FILE}"

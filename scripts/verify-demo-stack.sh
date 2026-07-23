@@ -41,10 +41,16 @@ grep -q 'restart: unless-stopped' "${ROOT_DIR}/compose/demo/compose.yaml"
 grep -q 'ENABLESIGNUPWITHEMAIL: "false"' "${ROOT_DIR}/compose/demo/compose.yaml"
 grep -q 'mattermost.demo.acornops.dev' "${ROOT_DIR}/deploy/demo/kubernetes/ingress.yaml.tpl"
 grep -q 'mattermost-bot.demo.acornops.dev' "${ROOT_DIR}/deploy/demo/kubernetes/ingress.yaml.tpl"
+if grep -q 'DEMO_BIND_ADDRESS:-0.0.0.0' "${ROOT_DIR}/compose/demo/compose.yaml"; then
+  echo "ERROR: Demo backend ports must never default to wildcard binding." >&2
+  exit 1
+fi
 grep -q -- '--volumes' "${ROOT_DIR}/scripts/demo/reset.sh"
 grep -q -- '--confirm' "${ROOT_DIR}/scripts/demo/reset.sh"
 grep -q 'previous_release' "${ROOT_DIR}/scripts/demo/activate-release.sh"
+grep -q 'cd -P' "${ROOT_DIR}/scripts/demo/activate-release.sh"
 grep -q 'pg_dump' "${ROOT_DIR}/scripts/demo/backup.sh"
+grep -q 'demo_compose start mattermost mattermost-bot' "${ROOT_DIR}/scripts/demo/backup.sh"
 grep -q 'demo_kubectl get nodes --no-headers -o wide' "${ROOT_DIR}/scripts/demo/common.sh"
 grep -q '/api/v1/auth/config' "${ROOT_DIR}/scripts/demo/verify.sh"
 
