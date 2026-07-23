@@ -15,8 +15,29 @@ backup_root="${DEMO_BACKUP_DIR:-/opt/acornops-mattermost-demo/backups}"
 backup_dir="${backup_root}/$(date -u +%Y%m%dT%H%M%SZ)"
 install -d -m 0700 "${backup_dir}"
 
+wait_for_service_healthy() {
+  local service="$1"
+  local container_id
+  local status
+  local attempt
+  container_id="$(demo_compose ps -q "${service}")"
+  [[ -n "${container_id}" ]] || demo_fail "Could not find the ${service} container after backup."
+  for ((attempt = 1; attempt <= 60; attempt += 1)); do
+    status="$(docker inspect \
+      --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+      "${container_id}")"
+    [[ "${status}" == "healthy" || "${status}" == "running" ]] && return
+    sleep 2
+  done
+  demo_fail "${service} did not become healthy after backup."
+}
+
 restart_apps() {
-  demo_compose up -d --wait mattermost mattermost-bot >/dev/null
+  # `start` preserves the exact containers, images, environment, and private
+  # port bindings. `up` could recreate them from incomplete operator env.
+  demo_compose start mattermost mattermost-bot >/dev/null
+  wait_for_service_healthy mattermost
+  wait_for_service_healthy mattermost-bot
 }
 trap restart_apps EXIT
 
