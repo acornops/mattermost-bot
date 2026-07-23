@@ -1,0 +1,95 @@
+services:
+  mattermost-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${MATTERMOST_POSTGRES_DB:-mattermost}
+      POSTGRES_USER: ${MATTERMOST_POSTGRES_USER:-mmuser}
+      POSTGRES_PASSWORD: ${MATTERMOST_POSTGRES_PASSWORD:-mmuser_password_local_only}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - mattermost-postgres-data:/var/lib/postgresql/data
+
+  mattermost-volume-init:
+    image: alpine:3.22
+    user: root
+    command: ["sh", "-c", "chown -R 2000:2000 /mattermost"]
+    volumes:
+      - mattermost-config:/mattermost/config
+      - mattermost-data:/mattermost/data
+      - mattermost-logs:/mattermost/logs
+      - mattermost-plugins:/mattermost/plugins
+      - mattermost-client-plugins:/mattermost/client/plugins
+      - mattermost-bleve-indexes:/mattermost/bleve-indexes
+
+  mattermost:
+    image: acornops/mattermost-local:${MATTERMOST_VERSION:-11.7.0}
+    build:
+      context: .
+      dockerfile: compose/local/Dockerfile.mattermost
+      args:
+        MATTERMOST_VERSION: ${MATTERMOST_VERSION:-11.7.0}
+    depends_on:
+      mattermost-postgres:
+        condition: service_healthy
+      mattermost-volume-init:
+        condition: service_completed_successfully
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://${MATTERMOST_POSTGRES_USER:-mmuser}:${MATTERMOST_POSTGRES_PASSWORD:-mmuser_password_local_only}@mattermost-postgres:5432/${MATTERMOST_POSTGRES_DB:-mattermost}?sslmode=disable&connect_timeout=10
+      MM_BLEVESETTINGS_INDEXDIR: /mattermost/bleve-indexes
+      MM_SERVICESETTINGS_SITEURL: ${MATTERMOST_SITE_URL:-http://localhost:8065}
+      MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
+      MM_SERVICESETTINGS_ENABLEBOTACCOUNTCREATION: "true"
+      MM_SERVICESETTINGS_ENABLEUSERACCESSTOKENS: "true"
+      MM_SERVICESETTINGS_ALLOWEDUNTRUSTEDINTERNALCONNECTIONS: host.docker.internal
+      MM_EMAILSETTINGS_SENDEMAILNOTIFICATIONS: "false"
+      MM_EMAILSETTINGS_ENABLESIGNUPWITHEMAIL: "true"
+      MM_FILESETTINGS_DRIVERNAME: local
+      MM_LOGSETTINGS_CONSOLELEVEL: INFO
+    healthcheck:
+      test: ["CMD", "/mattermost/bin/mmctl", "system", "status", "--local"]
+      interval: 5s
+      timeout: 10s
+      retries: 60
+      start_period: 30s
+    ports:
+      - "${MATTERMOST_PORT:-8065}:8065"
+    volumes:
+      - mattermost-config:/mattermost/config
+      - mattermost-data:/mattermost/data
+      - mattermost-logs:/mattermost/logs
+      - mattermost-plugins:/mattermost/plugins
+      - mattermost-client-plugins:/mattermost/client/plugins
+      - mattermost-bleve-indexes:/mattermost/bleve-indexes
+
+  mattermost-bot:
+    depends_on:
+      bot-postgres:
+        condition: service_healthy
+      mattermost:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:'+process.env.BOT_HTTP_PORT+'/healthz').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  mattermost-postgres-data:
+  mattermost-config:
+  mattermost-data:
+  mattermost-logs:
+  mattermost-plugins:
+  mattermost-client-plugins:
+  mattermost-bleve-indexes:

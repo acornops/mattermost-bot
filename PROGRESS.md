@@ -13,9 +13,9 @@
 - Mattermost readiness verification path: `./scripts/verify-mattermost.sh`
 - Bot verification path: `./scripts/verify-bot.sh`
 - Docker image verification path: `./scripts/verify-docker.sh`
-- Latest verification: the 2026-07-23 production-readiness contract sweep passed `./init.sh` with harness, lint, build, and all 175 tests.
+- Latest verification: the 2026-07-23 seeded local-stack work passed `task validate` with harness, Compose validation, lint, build, and all 177 tests; live `task local-smoke` also passed against Mattermost, the bot, seeded data, and AcornOps.
 - Highest priority unfinished feature: none recorded.
-- Current blocker: live Mattermost/AcornOps smoke for the expanded external integration command surface still requires local services.
+- Current blocker: none for local stack startup; the broader authenticated command/approval/webhook smoke matrix still requires interactive user linking and scenario-specific AcornOps data.
 
 ## Completed
 
@@ -50,6 +50,7 @@
 - `B21`: Enable permission-gated read-write chat runs.
 - `B22`: Launch issue triage from webhook alerts.
 - `B23`: Align issues, workflows, approvals, and response UX with the current external integration contract.
+- `B24`: Add a seeded task-managed local Mattermost bot stack.
 
 ## In Progress
 
@@ -575,3 +576,11 @@ Session log entries are historical. Superseded risks and decisions are corrected
 - Completed: Stopped constructing a separate identity object in `src/bot/runner.js`; the runner now passes the observed `post.user_id` once as `userId`. `src/bot/message.js` no longer accepts a compatibility identity parameter and derives `{ externalUserId }` directly from `userId`. Removed the runner-only identity helper and renamed test helpers to the provider-neutral external identity shape.
 - Verification run: Focused `node --test test/bot-message.test.js test/bot-runner.test.js test/acornops-client.test.js` passed with 61 tests. Final `./init.sh` passed with harness verification, lint, build, and 79 tests.
 - Known risks: None beyond the existing live-smoke gap for the context-plus-chat path.
+
+### 2026-07-23 - Seeded task-managed local Mattermost bot stack
+
+- Goal: Give the bot repository the same easy `task local-up`, `local-down`, and `local-reset` lifecycle as `acornops-deployment`, including optional automatic Mattermost test-data seeding.
+- Completed: Added a Taskfile, local Compose overlay, native amd64/arm64 Mattermost Team Edition image build with published SHA-256 verification, separate Mattermost Postgres, persistent bot Postgres, explicit volume initialization, ignored local environment/runtime state, and idempotent `mmctl --local` seed automation for the admin user, team, channel, bot account, memberships, and bot token. Added doctor, status, logs, smoke, down, and reset commands. The smoke test now verifies Mattermost, bot, and AcornOps health, checks every seeded entity, and performs a real mentioned `!help` command/reply over the Mattermost WebSocket before cleaning up the smoke posts.
+- Verification run: Baseline `./init.sh` passed with 175 tests. Runtime verification passed on macOS arm64 after a clean image build from the official Mattermost 11.7.0 arm64 archive. Repeated seed passed without rotating the token. `local-down`/`local-up` preserved data and token. `local-reset` removed only the bot stack's named volumes and generated token, and the next `local-up` recreated and reseeded everything. Final `task local-smoke` passed with all four services healthy, and final `task validate` passed with harness, Compose validation, lint, build, and all 177 tests.
+- Known risks: The local external integration token must match a configured AcornOps client for authenticated bot commands. The task stack deliberately does not own or reset AcornOps platform data. Production still uses deployment-owned images and orchestration rather than this local Mattermost image.
+- Next best action: use the running stack at `http://localhost:8065` to complete the remaining interactive account-link, read/write workflow, approval, and webhook smoke scenarios.

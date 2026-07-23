@@ -284,3 +284,15 @@
 - Decision: Accept bot commands without a leading slash only, keep `login` direct-message-only, and allow authenticated read/read-only assistant commands from direct messages or channel mentions.
 - Reason: The Mattermost bot-account experience should be conversational and should not look like a slash-command integration. Non-login commands are explicitly allowed in mentioned channels by the requested command model.
 - Consequence: Slash-prefixed commands return guidance to retry without `/`. The process-local command context now tracks current workspace plus exactly one selected target: either a Kubernetes cluster or a VM. Selecting a workspace clears target and session context; selecting a cluster clears VM and session context; selecting a VM clears cluster and session context.
+
+## 2026-07-23: Own a seeded local Mattermost lifecycle in the bot repository
+
+- Decision: Provide `task local-up`, `local-seed`, `local-smoke`, `local-down`, and `local-reset` in this repository. The local stack owns Mattermost, its Postgres database, bot Postgres, and the bot, while AcornOps remains independently owned by `acornops-deployment`.
+- Reason: Bot contributors need a repeatable one-command test environment with no manual user, team, channel, bot, membership, or token setup. Keeping the AcornOps platform independent avoids duplicate ownership and accidental platform-data resets.
+- Consequence: Seeding is enabled by default but can be disabled with `SEED_MATTERMOST_DATA=false`. Generated tokens live only in ignored owner-readable runtime state. `local-down` preserves data; `local-reset` removes only this Compose project's volumes and generated token. Local smoke checks AcornOps by default but supports `CHECK_ACORNOPS=false` for intentional isolated bot work.
+
+## 2026-07-23: Build local Mattermost from checksum-verified official release archives
+
+- Decision: Build the development Mattermost image from the official Team Edition release archive selected by Docker `TARGETARCH`, and verify Mattermost's published SHA-256 file during the image build.
+- Reason: The official Mattermost 11.7.0 container image is amd64-only and failed on this Apple Silicon Docker runtime without emulation support, while Mattermost publishes native amd64 and arm64 server archives.
+- Consequence: The local stack works natively on amd64 and arm64 and preserves the separate application/database topology. The repo-local image is development-only; production image selection remains the deployment repository's responsibility.

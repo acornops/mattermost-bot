@@ -147,6 +147,47 @@ Only `!login` is direct-message-only. Authenticated read, threaded assistant, an
 
 ## Local Development
 
+The supported full local bot workflow mirrors `acornops-deployment`:
+
+```bash
+task doctor
+task local-up
+task local-smoke
+```
+
+`task local-up` starts Mattermost 11.7.0, Mattermost Postgres, bot Postgres, and the bot. By default it also idempotently creates the local administrator, team, channel, bot account, and bot access token. The Mattermost image is built for the host's native Docker architecture from Mattermost's official Team Edition release archive and verifies the published SHA-256 checksum, so the same task works on amd64 Linux and Apple Silicon without relying on x86 emulation.
+
+Open `http://localhost:8065` and sign in with:
+
+- email: `dev@acornops.local`
+- password: `devpassword`
+- team/channel: `csit-lab` / `chatops-lab`
+- bot: `@acorn-ops-bot`
+
+The generated bot token is written with owner-only permissions to ignored `.local/state/runtime.env`; it is never printed or committed. Customize non-secret defaults in `env/local/.env.local`, which is bootstrapped from `env/local/.env.example` on first startup.
+
+Lifecycle commands:
+
+```bash
+task local-ps       # show status
+task local-logs     # follow Mattermost and bot logs
+task local-seed     # safely re-run the idempotent seed
+task local-down     # stop containers and preserve data
+task local-reset    # stop containers and delete local bot/Mattermost data
+```
+
+To start without seed automation, use `task local-up SEED_MATTERMOST_DATA=false` and provide `MATTERMOST_BOT_TOKEN` in the local env file; pass the same flag to `task local-smoke` to skip seeded-entity checks. `task local-smoke` normally checks Mattermost, the bot, AcornOps, all seeded entities, and a real `!help` command/reply round trip. For isolated bot work when AcornOps is intentionally down, use `task local-smoke CHECK_ACORNOPS=false`.
+
+The AcornOps platform remains owned by `acornops-deployment` and should be started separately from the workspace root:
+
+```bash
+task --taskfile acornops-deployment/Taskfile.yml local-up
+```
+
+The bot local stack uses ports `8065` (Mattermost) and `8077` (bot callbacks), while the default AcornOps control plane is expected at port `8081` and the console at `http://console.acornops.localhost:8088`.
+
+### Standalone runtime development
+
 Install dependencies:
 
 ```bash
@@ -183,24 +224,17 @@ Run the container with runtime environment injected at start:
 docker run --rm --env-file .env acornops-mattermost-bot:local
 ```
 
-Run with Docker Compose:
+Run only the bot and its Postgres with Docker Compose against an already-running Mattermost:
 
 ```bash
 docker compose up --build
 ```
 
-Compose starts a bundled `bot-postgres` service and defaults `BOT_DATABASE_URL` to that database. It also defaults `MATTERMOST_URL` to `http://host.docker.internal:8065`, `ACORNOPS_API_BASE_URL` to `http://host.docker.internal:8081`, `BOT_PUBLIC_BASE_URL` to `http://host.docker.internal:8080`, and `BOT_ALERT_TIME_ZONE` to `Asia/Singapore`, which lets Mattermost and AcornOps containers reach the bot callback listener through Docker Desktop and renders alerts in SGT by default. Keep `MATTERMOST_BOT_TOKEN` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN` in your local `.env` or shell environment.
+Base Compose starts a bundled `bot-postgres` service and defaults `BOT_DATABASE_URL` to that database. Keep `MATTERMOST_BOT_TOKEN` and `EXTERNAL_INTEGRATION_SERVICE_TOKEN` in your local `.env` or shell environment.
 
 The image installs dependencies from `package*.json` inside Docker. It does not copy host `node_modules` and does not bake local `.env` files into the image. It exposes the optional bot HTTP port for Mattermost actions and AcornOps webhooks; the listener only binds when `BOT_HTTP_PORT` is non-zero.
 
-The local Mattermost and AcornOps services are not started by this repository. For full-platform local bring-up, use:
-
-```bash
-cd ../acornops-deployment
-task local-up
-```
-
-Do not run overlapping local stacks on the same host ports.
+Do not combine the task-managed Mattermost stack with another Mattermost instance on port `8065`.
 
 ## Production Notes
 

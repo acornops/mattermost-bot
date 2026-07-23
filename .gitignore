@@ -3,3 +3,5 @@
 .env.local
 node_modules/
 tmp/
+.local/
+env/local/.env.local

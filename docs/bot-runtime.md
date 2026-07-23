@@ -10,6 +10,16 @@ The first scaffold intentionally avoided Express, Fastify, TypeScript, queues, o
 
 ## Local Commands
 
+For the complete seeded Mattermost + bot + Postgres development stack:
+
+```sh
+task doctor
+task local-up
+task local-smoke
+```
+
+Use `task local-down` to preserve local state, or `task local-reset` to remove the bot and Mattermost Compose volumes plus the ignored generated bot token. The seed is enabled by default and can be disabled with `SEED_MATTERMOST_DATA=false`. See `docs/local-environment.md` for credentials, ports, and the complete lifecycle.
+
 Install project dependencies:
 
 ```sh

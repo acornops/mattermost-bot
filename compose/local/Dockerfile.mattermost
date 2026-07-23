@@ -1,0 +1,54 @@
+FROM debian:bookworm-slim AS download
+
+ARG MATTERMOST_VERSION=11.7.0
+ARG TARGETARCH
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp/mattermost-release
+RUN archive="mattermost-team-${MATTERMOST_VERSION}-linux-${TARGETARCH}.tar.gz" \
+    && curl --fail --location --remote-name "https://releases.mattermost.com/${MATTERMOST_VERSION}/${archive}" \
+    && curl --fail --location --remote-name "https://releases.mattermost.com/${MATTERMOST_VERSION}/${archive}.sha256" \
+    && sha256sum --check "${archive}.sha256" \
+    && tar --extract --gzip --file "${archive}"
+
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+      ca-certificates \
+      media-types \
+      poppler-utils \
+      tidy \
+      tzdata \
+      unrtf \
+      wv \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 2000 mattermost \
+    && useradd --uid 2000 --gid 2000 --home-dir /mattermost --shell /usr/sbin/nologin mattermost
+
+COPY --from=download --chown=2000:2000 /tmp/mattermost-release/mattermost /mattermost
+
+RUN mkdir -p \
+      /mattermost/bleve-indexes \
+      /mattermost/client/plugins \
+      /mattermost/config \
+      /mattermost/data \
+      /mattermost/logs \
+      /mattermost/plugins \
+    && chown -R 2000:2000 /mattermost
+
+ENV MM_INSTALL_TYPE=docker \
+    MM_SERVICESETTINGS_ENABLELOCALMODE=true \
+    PATH=/mattermost/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
+USER mattermost
+WORKDIR /mattermost
+
+EXPOSE 8065 8067 8074 8075
+VOLUME ["/mattermost/config", "/mattermost/data", "/mattermost/logs", "/mattermost/plugins", "/mattermost/client/plugins"]
+HEALTHCHECK --interval=30s --timeout=10s CMD ["/mattermost/bin/mmctl", "system", "status", "--local"]
+CMD ["/mattermost/bin/mattermost"]

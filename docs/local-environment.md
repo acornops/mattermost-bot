@@ -2,7 +2,43 @@
 
 This project began by learning the local platform before building the ChatOps bot.
 
-Do not make `./init.sh` install or start Mattermost automatically. Mattermost may create persistent Docker volumes, so those steps stay explicit.
+`./init.sh` validates configuration but intentionally does not start Docker services. Persistent local services remain explicit through Task commands.
+
+## Current Mattermost Bot Stack
+
+From the repository root:
+
+```sh
+task doctor
+task local-up
+task local-smoke
+```
+
+The stack includes Mattermost Team Edition 11.7.0, a dedicated Mattermost Postgres database, the AcornOps bot, and its Postgres state store. `task local-up` seeds a local administrator, `csit-lab` team, `chatops-lab` channel, `acorn-ops-bot` bot account, memberships, and bot access token by default. Every seed operation is safe to repeat.
+
+The default login is `dev@acornops.local` / `devpassword`. Generated secret state lives only in ignored `.local/state/runtime.env` with mode `0600`. To customize the stack, edit ignored `env/local/.env.local` after its first automatic creation. To opt out of seeding, run `task local-up SEED_MATTERMOST_DATA=false` and supply a bot token yourself.
+
+Useful lifecycle commands:
+
+```sh
+task local-ps
+task local-logs
+task local-seed
+task local-down
+task local-reset
+```
+
+`local-down` preserves databases, uploads, configuration, and the generated token. `local-reset` removes the local Compose volumes and generated token so the next `local-up` performs a clean seed.
+
+`task local-smoke` verifies both HTTP health and a real Mattermost channel command/reply round trip. It checks the AcornOps control plane at `http://localhost:8081` by default; use `CHECK_ACORNOPS=false` only for intentionally isolated bot work. If seed automation was disabled, also pass `SEED_MATTERMOST_DATA=false` to skip checks for the standard seeded entities.
+
+Mattermost's official application container is amd64-only for this release. The repo-local development image instead downloads the matching official amd64 or arm64 Team Edition archive, verifies Mattermost's published SHA-256 file, and installs it into a Debian runtime with the same UID and document-conversion utilities. This keeps the local workflow native on Apple Silicon while preserving the separate Mattermost/Postgres topology.
+
+Start the AcornOps platform independently through `acornops-deployment`; this repository does not reset or own its data:
+
+```sh
+task --taskfile ../acornops-deployment/Taskfile.yml local-up
+```
 
 ## Historical K3s First Pass
 
@@ -73,7 +109,7 @@ Cleanup:
 kubectl delete namespace csit-lab
 ```
 
-## Mattermost First Pass
+## Historical Mattermost First Pass
 
 Use the official Mattermost container docs as the source of truth:
 
@@ -88,7 +124,7 @@ Local evaluation targets:
 - A dedicated `acorn-ops-bot` bot account can be created.
 - A test command can be sent through the chosen integration style.
 
-Chosen local path for `L03`: official Mattermost Docker Compose deployment without the included NGINX reverse proxy.
+The original `L03` learning path used an external official Mattermost Docker checkout without NGINX. It is retained below for historical evidence; use the task-managed stack above for current development.
 
 This path is still local familiarisation, but it is closer to production than the preview image because it uses the official multi-container deployment with a separate database container and Mattermost application container. The local setup skips NGINX and TLS for now so the server is reachable at `http://localhost:8065`.
 
@@ -212,12 +248,13 @@ sudo rm -rf ./volumes
 ./init.sh
 ./scripts/verify-harness.sh
 ./scripts/verify-bot.sh
+./scripts/verify-local-stack.sh
 ```
 
-For local services, use the readiness scripts separately:
+For running local services, use the task smoke test:
 
 ```sh
-./scripts/verify-mattermost.sh
+task local-smoke
 ```
 
-`./init.sh` intentionally does not install or start Mattermost or Docker containers.
+`./init.sh` intentionally does not start Mattermost or Docker containers.

@@ -18,3 +18,7 @@ Dockerfile
 .cache
 tmp
 coverage
+compose
+env
+.local
+Taskfile.yml

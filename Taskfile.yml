@@ -1,0 +1,56 @@
+version: '3'
+
+vars:
+  ENV_LOCAL: '{{default "env/local/.env.local" .ENV_LOCAL}}'
+
+tasks:
+  doctor:
+    desc: Validate local Mattermost bot prerequisites
+    cmds:
+      - ./scripts/local/doctor.sh {{.ENV_LOCAL}}
+
+  local-up:
+    desc: Start Mattermost, seed local test data, and start the bot with Postgres
+    env:
+      SEED_MATTERMOST_DATA: '{{default "true" .SEED_MATTERMOST_DATA}}'
+    cmds:
+      - ./scripts/local/up.sh {{.ENV_LOCAL}}
+
+  local-seed:
+    desc: Idempotently seed the local Mattermost user, team, channel, bot, and bot token
+    cmds:
+      - ./scripts/local/seed.sh {{.ENV_LOCAL}}
+
+  local-ps:
+    desc: Show local Mattermost bot stack status
+    cmds:
+      - ./scripts/local/ps.sh {{.ENV_LOCAL}}
+
+  local-logs:
+    desc: Follow local Mattermost and bot logs
+    cmds:
+      - ./scripts/local/logs.sh {{.ENV_LOCAL}}
+
+  local-smoke:
+    desc: Verify Mattermost, seeded data, bot callbacks, and AcornOps readiness
+    env:
+      CHECK_ACORNOPS: '{{default "true" .CHECK_ACORNOPS}}'
+      SEED_MATTERMOST_DATA: '{{default "true" .SEED_MATTERMOST_DATA}}'
+    cmds:
+      - ./scripts/local/smoke.sh {{.ENV_LOCAL}}
+
+  local-down:
+    desc: Stop the local Mattermost bot stack while preserving data
+    cmds:
+      - ./scripts/local/down.sh {{.ENV_LOCAL}}
+
+  local-reset:
+    desc: Reset the local Mattermost bot stack and wipe its data and generated token
+    cmds:
+      - ./scripts/local/reset.sh {{.ENV_LOCAL}}
+
+  validate:
+    desc: Run repository and local-stack static validation
+    cmds:
+      - ./init.sh
+      - ./scripts/verify-local-stack.sh

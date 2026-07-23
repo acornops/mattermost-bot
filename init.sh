@@ -8,6 +8,7 @@ echo "Phase: official AcornOps Mattermost bot integration"
 echo
 
 "${ROOT_DIR}/scripts/verify-harness.sh"
+"${ROOT_DIR}/scripts/verify-local-stack.sh"
 "${ROOT_DIR}/scripts/verify-bot.sh"
 
 cat <<'MSG'
