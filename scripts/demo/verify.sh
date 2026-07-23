@@ -46,6 +46,6 @@ demo_compose exec -T mattermost-bot \
 
 demo_step "Checking AcornOps API reachability from the bot container."
 demo_compose exec -T mattermost-bot node -e \
-  'fetch(process.env.ACORNOPS_API_BASE_URL+"/health").then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))'
+  'fetch(process.env.ACORNOPS_API_BASE_URL+"/api/v1/auth/config").then((response)=>{if(!response.ok){console.error("AcornOps readiness returned HTTP "+response.status);process.exit(1)}}).catch((error)=>{console.error("AcornOps readiness failed: "+error.message);process.exit(1)})'
 
 demo_ok "Mattermost demo verification passed."

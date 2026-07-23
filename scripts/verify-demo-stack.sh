@@ -46,6 +46,7 @@ grep -q -- '--confirm' "${ROOT_DIR}/scripts/demo/reset.sh"
 grep -q 'previous_release' "${ROOT_DIR}/scripts/demo/activate-release.sh"
 grep -q 'pg_dump' "${ROOT_DIR}/scripts/demo/backup.sh"
 grep -q 'demo_kubectl get nodes --no-headers -o wide' "${ROOT_DIR}/scripts/demo/common.sh"
+grep -q '/api/v1/auth/config' "${ROOT_DIR}/scripts/demo/verify.sh"
 
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
   docker compose \
