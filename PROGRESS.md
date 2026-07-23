@@ -14,9 +14,9 @@
 - Bot verification path: `./scripts/verify-bot.sh`
 - Docker image verification path: `./scripts/verify-docker.sh`
 - Demo deployment verification path: `./scripts/verify-demo-stack.sh`
-- Latest verification: the 2026-07-23 standalone demo deployment implementation passes static Compose/script verification and `task validate` with all 177 tests. The read-only target VM preflight passed with about 12 GiB available memory and 47 GiB free disk.
+- Latest verification: on 2026-07-23, the standalone demo was deployed to the shared VM. Mattermost, the bot, and both Postgres services are healthy; public TLS, a real `!help` round trip, bot-to-AcornOps readiness, idempotent redeployment, private-only backend bindings, and a 54 MiB recovery backup all passed. Final `task validate` passed with all 177 tests.
 - Highest priority unfinished feature: `B25`, the standalone public Mattermost integration demo.
-- Current blocker: no implementation blocker; live rollout needs the matching demo-infra client registration, DNS, GitHub environment secrets, and acceptance smoke.
+- Current blocker: no deployment blocker. The remaining B25 work is the interactive account-link, actions, workflow, approval, and signed-webhook acceptance matrix.
 
 ## Completed
 

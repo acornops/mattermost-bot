@@ -717,8 +717,8 @@
           "Verify public TLS, service health, a real !help round trip, AcornOps reachability, account linking, actions, workflows, approvals, webhooks, restarts, and redeployment."
         ]
       },
-      "evidence": "Implementation is in progress on 2026-07-23. The read-only VM preflight found 15 GiB RAM with about 12 GiB available, 47 GiB free disk, low load, healthy k3s v1.35.5+k3s1, and a deployed AcornOps Helm release. Static demo Compose and script validation plus the full 177-test repository suite pass locally.",
-      "notes": "The bot repository owns the external demo workload. demo-infra owns the shared VM, public edge, AcornOps client registration, and cross-repository deployment coordination. Live deployment evidence is required before this feature can be marked passing."
+      "evidence": "Deployed and infrastructure-verified on 2026-07-23. The shared VM runs healthy Mattermost 11.7.0, Mattermost Postgres 16, bot Postgres 16, and the commit-addressed bot image. Valid public TLS serves mattermost.demo.acornops.dev and mattermost-bot.demo.acornops.dev through the existing k3s Traefik edge, while direct public connections to 8065 and 8077 are refused. The manual workflow passed validation, shared-lease acquisition, idempotent seed, public/backend health, a real !help round trip, bot-to-AcornOps readiness, release promotion, and lease release. A second 54 MiB recovery backup preserved the exact container ids, images, and private bridge bindings, and the complete post-backup smoke passed. Static validation and all 177 tests also pass.",
+      "notes": "The bot repository owns the external demo workload. demo-infra owns the shared VM, public edge, AcornOps client registration, and cross-repository deployment coordination. B25 remains active until the interactive account-link, actions, workflow, approval, and signed-webhook acceptance matrix is complete."
     }
   ]
 }
